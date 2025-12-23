@@ -1,0 +1,1353 @@
+// autotrader-wallet-mode.js
+// Rewritten for FULL WALLET MODE (no per-user Telegram identity)
+
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import { Telegraf } from "telegraf";
+import { Connection } from "@solana/web3.js";
+import pino from "pino";
+
+// Ensure fetch exists in Node <18 (optional)
+import nodeFetch from "node-fetch";
+if (typeof global.fetch !== "function") global.fetch = nodeFetch;
+
+import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
+import User from "./models/User.js";
+import bot from "./src/telegram/bot.js";
+
+import ChannelSettings from "./models/ChannelSettings.js";
+import SignalChannel from "./models/SignalChannel.js";
+import ProcessedSignal from "./models/ProcessedSignal.js";
+
+
+
+function isUserApprovedForChannel(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+
+  const sub = user.subscribedChannels.find(
+    c => c.channelId === channelId
+  );
+
+  return (
+    sub &&
+    sub.enabled === true &&
+    sub.status === "approved"
+  );
+}
+
+
+
+dotenv.config();
+
+function isChannelEnabledForUser(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+  return user.subscribedChannels.some(
+    (c) => c.channelId === channelId && c.enabled === true
+  );
+}
+
+
+// ========= Config =========
+const LOG = pino({ level: process.env.LOG_LEVEL || "info" });
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const RPC_URL = process.env.RPC_URL;
+const MONGO_URI = process.env.MONGO_URI;
+const FEE_WALLET = process.env.FEE_WALLET;
+const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_ID || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "15000", 10);
+
+if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
+if (!MONGO_URI) throw new Error("MONGO_URI is required");
+if (!RPC_URL) throw new Error("RPC_URL is required");
+
+
+const connection = new Connection(RPC_URL, "confirmed");
+
+// ===================================================
+// ✅ AUTO CHANNEL DISCOVERY (my_chat_member)
+// ===================================================
+bot.on("my_chat_member", async (ctx) => {
+  try {
+    const update = ctx.update.my_chat_member;
+    const chat = update.chat;
+
+    // Only channels matter
+    if (chat.type !== "channel") return;
+
+    const status = update.new_chat_member.status;
+
+   // Bot added to channel
+
+if (status === "administrator" || status === "member") {
+
+  await SignalChannel.findOneAndUpdate(
+    { channelId: String(chat.id) },
+    {
+      channelId: String(chat.id),
+      title: chat.title || "Unnamed Channel",
+      username: chat.username || null,
+      status: "active",
+      connectedAt: new Date(),
+    },
+    { upsert: true }
+  );
+
+  LOG.info(
+    { channelId: chat.id, title: chat.title },
+    "Channel auto-connected via admin add"
+  );
+}
+
+    // Bot removed from channel
+    if (status === "left") {
+      await SignalChannel.updateOne(
+        { channelId: String(chat.id) },
+        { $set: { status: "inactive" } }
+      );
+
+      LOG.warn(
+        { channelId: chat.id, title: chat.title },
+        "Channel disconnected (bot removed)"
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "my_chat_member handler failed");
+  }
+});
+
+
+// ===================================================
+// 🔐 CLAIM CHANNEL (owner verification)
+// Usage inside channel:
+// /claim_channel WALLET_ADDRESS
+// ===================================================
+bot.on("channel_post", async (ctx) => {
+  try {
+    const text = ctx.channelPost?.text;
+    if (!text?.startsWith("/claim_channel")) return;
+
+    const chat = ctx.chat;
+    const walletAddress = text.split(" ")[1];
+
+    if (!walletAddress) {
+      return ctx.telegram.sendMessage(
+        chat.id,
+        "❌ Usage: /claim_channel <WALLET_ADDRESS>"
+      );
+    }
+
+    const botMember = await ctx.telegram.getChatMember(
+      chat.id,
+      ctx.botInfo.id
+    );
+
+    if (botMember.status !== "administrator") {
+      return ctx.telegram.sendMessage(
+        chat.id,
+        "❌ Bot must be an admin to claim this channel."
+      );
+    }
+
+    const channel = await SignalChannel.findOne({
+      channelId: String(chat.id),
+    });
+
+    if (!channel) {
+      return ctx.telegram.sendMessage(
+        chat.id,
+        "❌ Channel not registered. Add bot as admin first."
+      );
+    }
+
+    if (channel.ownerWallet) {
+      return ctx.telegram.sendMessage(
+        chat.id,
+        `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
+      );
+    }
+
+    channel.ownerWallet = walletAddress;
+    channel.claimedAt = new Date();
+    await channel.save();
+
+    ctx.telegram.sendMessage(
+      chat.id,
+      `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
+    );
+  } catch (err) {
+    console.error("claim_channel error:", err);
+  }
+});
+
+
+// ===================================================
+// ✅ APPROVE WALLET FOR CHANNEL
+// Usage: /approve_wallet <WALLET_ADDRESS>
+// Channel owner/admin only
+// ENFORCES:
+// - Wallet requested this channel
+// - Wallet is linked to Telegram
+// - Telegram user is a member of the channel
+// ===================================================
+bot.command("approve_wallet", async (ctx) => {
+  try {
+    const chat = ctx.chat;
+    if (!chat || chat.type !== "channel") {
+      return ctx.reply("❌ Use this command inside the channel.");
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const walletAddress = args[0];
+    if (!walletAddress) {
+      return ctx.reply("❌ Usage: /approve_wallet <WALLET_ADDRESS>");
+    }
+
+    // --------------------------------------------------
+    // ADMIN CHECK
+    // --------------------------------------------------
+    const admins = await ctx.telegram.getChatAdministrators(chat.id);
+    const isAdmin = admins.some((a) => a.user.id === ctx.from.id);
+    if (!isAdmin) {
+      return ctx.reply("❌ Only channel admins can approve wallets.");
+    }
+
+    // --------------------------------------------------
+    // LOAD CHANNEL
+    // --------------------------------------------------
+    const channel = await SignalChannel.findOne({
+      channelId: String(chat.id),
+    });
+
+    if (!channel) {
+      return ctx.reply("❌ Channel is not registered.");
+    }
+
+    // --------------------------------------------------
+    // LOAD USER BY WALLET + REQUEST
+    // --------------------------------------------------
+    const user = await User.findOne({
+      walletAddress,
+      "subscribedChannels.channelId": String(chat.id),
+    });
+
+    if (!user) {
+      return ctx.reply("❌ Wallet has not requested this channel.");
+    }
+
+    // --------------------------------------------------
+    // STEP 2.1 — Telegram must be linked
+    // --------------------------------------------------
+    if (!user.telegram?.userId) {
+      return ctx.reply(
+        "❌ Cannot approve wallet.\n\nUser has NOT linked a Telegram account."
+      );
+    }
+
+    // --------------------------------------------------
+    // STEP 2.2 — Telegram must be channel member
+    // --------------------------------------------------
+    let member;
+    try {
+      member = await ctx.telegram.getChatMember(
+        chat.id,
+        Number(user.telegram.userId)
+      );
+    } catch (err) {
+      return ctx.reply(
+        "❌ Cannot approve wallet.\n\nTelegram user is not found in this channel."
+      );
+    }
+
+    if (!["creator", "administrator", "member"].includes(member.status)) {
+      return ctx.reply(
+        `❌ Cannot approve wallet.\n\nUser @${
+          user.telegram.username || "unknown"
+        } is NOT a channel subscriber.`
+      );
+    }
+
+    // --------------------------------------------------
+    // STEP 2.3 — APPROVE
+    // --------------------------------------------------
+    await User.updateOne(
+      {
+        walletAddress,
+        "subscribedChannels.channelId": String(chat.id),
+      },
+      {
+        $set: {
+          "subscribedChannels.$.status": "approved",
+          "subscribedChannels.$.approvedAt": new Date(),
+        },
+      }
+    );
+
+    // --------------------------------------------------
+    // NOTIFY USER (DM)
+    // --------------------------------------------------
+    try {
+      await ctx.telegram.sendMessage(
+        user.telegram.userId,
+        `✅ *Approved!*\n\nYou can now trade signals from:\n📢 *${chat.title}*`,
+        { parse_mode: "Markdown" }
+      );
+    } catch {
+      // DM may fail if user blocked bot — ignore
+    }
+
+    // --------------------------------------------------
+    // CONFIRM IN CHANNEL
+    // --------------------------------------------------
+    return ctx.reply(`✅ Wallet approved:\n${walletAddress}`);
+  } catch (err) {
+    console.error("approve_wallet error:", err);
+    return ctx.reply("❌ Approval failed.");
+  }
+});
+
+// ===================================================
+// ❌ REJECT WALLET FOR CHANNEL
+// ===================================================
+bot.command("reject_wallet", async (ctx) => {
+  try {
+    const chat = ctx.chat;
+    if (!chat || chat.type !== "channel") {
+      return ctx.reply("❌ Use this command inside the channel.");
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const walletAddress = args[0];
+    if (!walletAddress) {
+      return ctx.reply("❌ Usage: /reject_wallet <WALLET_ADDRESS>");
+    }
+
+    // Check admin
+    const admins = await ctx.telegram.getChatAdministrators(chat.id);
+    const isAdmin = admins.some(a => a.user.id === ctx.from.id);
+    if (!isAdmin) {
+      return ctx.reply("❌ Only channel admins can reject wallets.");
+    }
+
+    const user = await User.findOne({
+      walletAddress,
+      "subscribedChannels.channelId": String(chat.id),
+    });
+
+    if (!user) {
+      return ctx.reply("❌ Wallet has not requested this channel.");
+    }
+
+    // Update status → rejected
+    await User.updateOne(
+      {
+        walletAddress,
+        "subscribedChannels.channelId": String(chat.id),
+      },
+      {
+        $set: {
+          "subscribedChannels.$.status": "rejected",
+        },
+      }
+    );
+
+    // 🔔 Notify user via Telegram DM
+    if (user.telegram?.userId) {
+      const msg =
+`❌ *Request Rejected*
+
+Your request to trade signals from:
+
+📢 *${chat.title}*
+
+has been rejected by the channel owner.
+
+If you believe this is a mistake, please contact the channel admin.`;
+
+      await ctx.telegram.sendMessage(
+        user.telegram.userId,
+        msg,
+        { parse_mode: "Markdown" }
+      );
+    }
+
+    ctx.reply(`🚫 Wallet rejected:\n${walletAddress}`);
+  } catch (err) {
+    console.error("reject_wallet error:", err);
+    ctx.reply("❌ Rejection failed.");
+  }
+});
+
+
+
+// ===================================================
+// 📋 LIST PENDING WALLET REQUESTS (Telegram identity)
+// ===================================================
+bot.command("list_requests", async (ctx) => {
+  try {
+    const chat = ctx.chat;
+    if (!chat || chat.type !== "channel") {
+      return ctx.reply("❌ Use this command inside the channel.");
+    }
+
+    // Admin check
+    const admins = await ctx.telegram.getChatAdministrators(chat.id);
+    const isAdmin = admins.some(a => a.user.id === ctx.from.id);
+    if (!isAdmin) {
+      return ctx.reply("❌ Only admins can view requests.");
+    }
+
+    const users = await User.find({
+      subscribedChannels: {
+        $elemMatch: {
+          channelId: String(chat.id),
+          status: "pending",
+        },
+      },
+    });
+
+    if (!users.length) {
+      return ctx.reply("✅ No pending requests.");
+    }
+
+    const list = users.map((u) => {
+      if (u.telegram?.username) {
+        return `• @${u.telegram.username}`;
+      }
+
+      if (u.telegram?.userId) {
+        return `• telegram_id:${u.telegram.userId}`;
+      }
+
+      // fallback (should be rare)
+      return `• wallet:${u.walletAddress}`;
+    }).join("\n");
+
+    ctx.reply(
+      `🕒 Pending access requests:\n\n${list}`
+    );
+
+  } catch (err) {
+    console.error("list_requests error:", err);
+    ctx.reply("❌ Failed to load requests.");
+  }
+});
+
+
+// ===================================================
+// 🔗 LINK TELEGRAM ↔ WALLET
+// Usage (private chat with bot):
+// /link_wallet <ONE_TIME_CODE>
+// ===================================================
+bot.command("link_wallet", async (ctx) => {
+  try {
+    // Must be private chat
+    if (ctx.chat.type !== "private") {
+      return ctx.reply("❌ Please DM me to link your wallet.");
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const code = args[0];
+
+    if (!code) {
+      return ctx.reply("❌ Usage: /link_wallet <CODE>");
+    }
+
+    // Find user by pending link code
+    const user = await User.findOne({
+      "telegram.linkCode": code,
+      "telegram.linkedAt": null,
+    });
+
+    if (!user) {
+      return ctx.reply("❌ Invalid or expired link code.");
+    }
+
+    // Link telegram info
+    user.telegram = {
+      userId: String(ctx.from.id),
+      username: ctx.from.username || null,
+      firstName: ctx.from.first_name || null,
+      linkedAt: new Date(),
+    };
+
+    // Clear code
+    user.telegram.linkCode = null;
+
+    await user.save();
+
+    await ctx.reply(
+      `✅ Wallet linked successfully!\n\n` +
+      `Wallet: ${user.walletAddress}\n` +
+      `Telegram: @${ctx.from.username || "no_username"}`
+    );
+  } catch (err) {
+    console.error("link_wallet error:", err);
+    ctx.reply("❌ Failed to link wallet.");
+  }
+});
+
+
+// ========= MongoDB =========
+mongoose
+  .connect(MONGO_URI)
+  .then(async () => {
+    LOG.info("Connected to MongoDB");
+    await loadChannels();
+    LOG.info("Initial channel list loaded");
+  })
+  .catch((err) => {
+    LOG.error(err, "MongoDB Error");
+    process.exit(1);
+  });
+
+// ========= Dynamic Channel Management =========
+let CHANNELS = [];
+
+async function loadChannels() {
+  try {
+    const rows = await SignalChannel.find({
+      status: "active",
+    }).lean();
+
+    CHANNELS = rows.map((c) => String(c.channelId));
+
+    LOG.info(
+      { channels: CHANNELS },
+      "Loaded allowed channels from DB"
+    );
+  } catch (err) {
+    LOG.error(err, "Failed to load channels from DB");
+    CHANNELS = [];
+  }
+}
+
+const CHANNEL_REFRESH_MS = parseInt(process.env.CHANNEL_REFRESH_MS || "300000", 10);
+const channelRefreshHandle = setInterval(() => {
+  loadChannels().catch((err) => LOG.error({ err }, "Periodic channel reload failed"));
+}, CHANNEL_REFRESH_MS);
+
+// ========= Utils =========
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function isMapLike(x) {
+  return x && typeof x.get === "function" && typeof x.set === "function";
+}
+function looksLikeMint(s) {
+  return typeof s === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
+}
+
+// ===== USER_TOGGLE helpers =====
+function isChannelEnabled(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+
+  return user.subscribedChannels.some(
+    (c) => c.channelId === channelId && c.enabled === true
+  );
+}
+
+function getProfileForChannel(channelProfiles, channel) {
+  if (!channelProfiles) return null;
+  if (isMapLike(channelProfiles)) return channelProfiles.get(channel) || null;
+  return channelProfiles[channel] || null;
+}
+function setProfileForChannel(channelProfiles, channel, profile) {
+  if (!channelProfiles) return;
+  if (isMapLike(channelProfiles)) channelProfiles.set(channel, profile);
+  else channelProfiles[channel] = profile;
+}
+function deleteProfileForChannel(channelProfiles, channel) {
+  if (!channelProfiles) return false;
+  if (isMapLike(channelProfiles)) {
+    if (channelProfiles.has(channel)) {
+      channelProfiles.delete(channel);
+      return true;
+    }
+    return false;
+  } else {
+    if (channelProfiles[channel]) {
+      delete channelProfiles[channel];
+      return true;
+    }
+    return false;
+  }
+}
+
+// ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
+const BACKEND_BASE =
+  process.env.BACKEND_BASE ||
+  process.env.VITE_API_BASE ||
+  "http://localhost:4000";
+
+async function saveTradeToBackend({
+  walletAddress,
+  mint,
+  solAmount,
+  entryPrice,
+  exitPrice,
+  buyTxid,
+  sellTxid,
+  sourceChannel,
+  reason,
+  tradeType = "auto",
+}) {
+  try {
+    const base = BACKEND_BASE.replace(/\/$/, "");
+    const endpoint = `${base}/api/trades/record`;
+
+    const payload = {
+      walletAddress: String(walletAddress),
+      tradeType,
+      tokenMint: mint,
+      amountSol: solAmount || 0,
+      amountToken: 0,
+      entryPrice: entryPrice || 0,
+      exitPrice: exitPrice || 0,
+      buyTxid: buyTxid || null,
+      sellTxid: sellTxid || null,
+      status: "closed",
+      source: "telegram", // source is still channel-originated
+      params: { sourceChannel, reason },
+      state: {},
+      createdAt: new Date().toISOString(),
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      LOG.error({ status: res.status, body: text, walletAddress, mint }, "saveTradeToBackend failed");
+    } else {
+      LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
+    }
+  } catch (err) {
+    LOG.error({ err, walletAddress, mint }, "saveTradeToBackend error");
+  }
+}
+
+// ========= Centralized monitoring (wallet keyed) =========
+const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, highest, lastPrice, intervalId }>
+
+async function ensureMonitor(mint) {
+  if (monitored.has(mint)) return monitored.get(mint);
+  const state = {
+    mint,
+    users: new Map(),
+    entryPrices: new Map(),
+    highest: null,
+    lastPrice: null,
+    intervalId: null,
+  };
+
+  const loop = async () => {
+    try {
+      const price = await getCurrentPrice(mint);
+      if (typeof price !== "number" || Number.isNaN(price)) {
+        LOG.warn({ mint, price }, "invalid price from getCurrentPrice");
+        return;
+      }
+      state.lastPrice = price;
+      if (state.highest === null || price > state.highest) state.highest = price;
+
+      for (const [walletAddress, info] of Array.from(state.users.entries())) {
+        try {
+          await monitorUser(mint, price, walletAddress, info, state);
+        } catch (err) {
+          LOG.error({ err, mint, walletAddress }, "monitorUser error");
+        }
+      }
+
+      if (state.users.size === 0) {
+        LOG.info({ mint }, "no users left — stopping monitor");
+        if (state.intervalId) clearInterval(state.intervalId);
+        monitored.delete(mint);
+      }
+    } catch (err) {
+      LOG.error({ err, mint }, "monitor loop error");
+    }
+  };
+
+  state.intervalId = setInterval(() => {
+    loop().catch((err) => LOG.error({ err, mint }, "monitor loop async error"));
+  }, POLL_INTERVAL_MS);
+
+  loop().catch((err) => LOG.error({ err, mint }, "initial monitor tick error"));
+
+  monitored.set(mint, state);
+  LOG.info({ mint }, "monitor started");
+  return state;
+}
+
+async function monitorUser(mint, price, walletAddress, info, state) {
+  const { walletAddress: waFromInfo, profile, buyTxid, solAmount, entryPrice: storedEntryPrice, sourceChannel } = info;
+
+  // prefer explicit stored entry price in state.entryPrices, else the entry included in info
+  const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
+  if (!entry) return;
+  const change = ((price - entry) / entry) * 100;
+
+  if (typeof info.tpStage === "undefined") info.tpStage = 0;
+
+  // Stop-loss
+  if (change <= -profile.stopLossPercent) {
+    LOG.info({ walletAddress, mint, change }, "stop-loss hit — selling all");
+    try {
+      const sellRes = await safeSellAll(walletAddress, mint);
+      const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+      const exitPrice = price;
+
+      await saveTradeToBackend({
+        walletAddress,
+        mint,
+        solAmount,
+        entryPrice: entry,
+        exitPrice,
+        buyTxid,
+        sellTxid,
+        sourceChannel,
+        reason: "stop_loss",
+      });
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint }, "sellAll failed on stop-loss");
+    }
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+    return;
+  }
+
+  // TP1 — partial
+  if (info.tpStage < 1 && change >= profile.tp1Percent) {
+    LOG.info({ walletAddress, mint, change }, "TP1 reached — partial sell");
+    try {
+      await safeSellPartial(walletAddress, mint, profile.tp1SellPercent);
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint }, "sellPartial TP1 failed");
+    }
+    profile.stopLossPercent = 0;
+    info.tpStage = 1;
+    return;
+  }
+
+  // TP2 — partial
+  if (info.tpStage < 2 && change >= profile.tp2Percent) {
+    LOG.info({ walletAddress, mint, change }, "TP2 reached — partial sell");
+    try {
+      await safeSellPartial(walletAddress, mint, profile.tp2SellPercent);
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint }, "sellPartial TP2 failed");
+    }
+    profile.stopLossPercent = profile.tp2Percent;
+    info.tpStage = 2;
+    return;
+  }
+
+  // TP3 — sell all
+  if (info.tpStage < 3 && change >= profile.tp3Percent) {
+    LOG.info({ walletAddress, mint, change }, "TP3 reached — sell all");
+    try {
+      const sellRes = await safeSellAll(walletAddress, mint);
+      const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+      const exitPrice = price;
+
+      await saveTradeToBackend({
+        walletAddress,
+        mint,
+        solAmount,
+        entryPrice: entry,
+        exitPrice,
+        buyTxid,
+        sellTxid,
+        sourceChannel,
+        reason: "tp3",
+      });
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint }, "sellAll TP3 failed");
+    }
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+    return;
+  }
+
+  // Trailing (only after TP1)
+  if (info.tpStage >= 1 && state.highest) {
+    const drop = ((state.highest - price) / state.highest) * 100;
+    if (drop >= profile.trailingPercent) {
+      LOG.info({ walletAddress, mint, drop }, "trailing stop hit — sell all");
+      try {
+        const sellRes = await safeSellAll(walletAddress, mint);
+        const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+        const exitPrice = price;
+
+        await saveTradeToBackend({
+          walletAddress,
+          mint,
+          solAmount,
+          entryPrice: entry,
+          exitPrice,
+          buyTxid,
+          sellTxid,
+          sourceChannel,
+          reason: "trailing",
+        });
+      } catch (err) {
+        LOG.error({ err, walletAddress, mint }, "sellAll trailing failed");
+      }
+      state.users.delete(walletAddress);
+      state.entryPrices.delete(walletAddress);
+      return;
+    }
+  }
+}
+
+// ========= Safe wrappers =========
+async function safeExecuteSwap(opts, retries = 3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await executeSwap(opts);
+    } catch (err) {
+      LOG.warn({ err, attempt: i + 1, opts: { wallet: opts.wallet, mint: opts.mint } }, "swap failed — retrying");
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+async function safeSellPartial(walletAddress, mint, percent, retries = 2) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await sellPartial({ wallet: walletAddress, mint, percent });
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint, percent, attempt: i + 1 }, "sellPartial failed");
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+async function safeSellAll(walletAddress, mint, retries = 2) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await sellAll({ wallet: walletAddress, mint });
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint, attempt: i + 1 }, "sellAll failed");
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+// ========= Trade execution for multi-channel users (wallet-based) =========
+async function executeUserTrade(user, mint, sourceChannel) {
+  if (!user || user.active === false) return;
+
+ 
+// 🔒 STEP 3: ENFORCE CHANNEL APPROVAL
+// ===================================================
+const sub = user.subscribedChannels?.find(
+  (s) => String(s.channelId) === String(sourceChannel)
+);
+
+if (!sub) {
+  LOG.info(
+    { wallet: user.walletAddress, channel: sourceChannel },
+    "Wallet not subscribed to channel"
+  );
+  return;
+}
+
+if (sub.enabled !== true) {
+  LOG.info(
+    { wallet: user.walletAddress, channel: sourceChannel },
+    "Channel disabled by user"
+  );
+  return;
+}
+
+if (sub.status !== "approved") {
+  LOG.warn(
+    {
+      wallet: user.walletAddress,
+      channel: sourceChannel,
+      status: sub.status,
+    },
+    "Trade blocked: wallet not approved by channel owner"
+  );
+  return;
+}
+
+  const solAmount = user.solPerTrade || 0.01;
+  if (solAmount <= 0) {
+    LOG.warn(`Invalid solPerTrade for user ${user.walletAddress}`);
+    return;
+  }
+
+  LOG.info({ wallet: user.walletAddress, mint, solAmount, sourceChannel }, "Executing multi-channel BUY");
+
+  let buyTxid;
+  try {
+    buyTxid = await safeExecuteSwap({
+      wallet: user.walletAddress,
+      mint,
+      solAmount,
+      side: "buy",
+      feeWallet: FEE_WALLET,
+    });
+  } catch (err) {
+    LOG.error({ err, wallet: user.walletAddress }, "Buy failed");
+    return;
+  }
+
+  let entryPrice = null;
+  try {
+    entryPrice = await getCurrentPrice(mint);
+  } catch (err) {
+    LOG.warn({ err }, "Failed to fetch entry price");
+  }
+
+  const state = await ensureMonitor(mint);
+
+  // store user info keyed by walletAddress
+  state.users.set(String(user.walletAddress), {
+    walletAddress: user.walletAddress,
+    tpStage: 0,
+    profile: {
+      tp1Percent: user.tp1 || 10,
+      tp1SellPercent: user.tp1SellPercent || 50,
+      tp2Percent: user.tp2 || 20,
+      tp2SellPercent: user.tp2SellPercent || 25,
+      tp3Percent: user.tp3 || 30,
+      tp3SellPercent: user.tp3SellPercent || 25,
+      stopLossPercent: user.stopLoss || 6,
+      trailingPercent: user.trailingDistance || 5,
+    },
+    buyTxid,
+    solAmount,
+    entryPrice,
+    sourceChannel,
+  });
+
+  if (entryPrice) state.entryPrices.set(user.walletAddress, entryPrice);
+  if (!state.highest && entryPrice) state.highest = entryPrice;
+
+  LOG.info({ wallet: user.walletAddress, mint }, "User added to monitor for multi-channel trading");
+}
+
+// ======= Step A: lightweight Express server for bot APIs =======
+import expressModule from "express"; // avoid name clash
+import cors from "cors";
+
+const app = expressModule();
+app.use(expressModule.json());
+app.use(cors());
+
+// configurable port
+const BOT_API_PORT = Number(process.env.BOT_API_PORT || 8081);
+
+// health check endpoint
+app.get("/bot-health", (req, res) => {
+  res.json({ ok: true, startedAt: new Date().toISOString() });
+});
+
+// ========= Wallet-based Active Positions API (internal bot API) =========
+app.get("/api/active-positions/wallet/:walletAddress", async (req, res) => {
+  try {
+    const wallet = String(req.params.walletAddress);
+    const user = await User.findOne({ walletAddress: wallet });
+    if (!user) return res.json({ positions: [] });
+
+    const positions = [];
+    for (const [mint, state] of monitored.entries()) {
+      const info = state.users.get(wallet);
+      if (!info) continue;
+
+      const entry = info.entryPrice || 0;
+      const current = state.lastPrice || entry;
+      const diffPct = entry > 0 ? (((current - entry) / entry) * 100).toFixed(2) : "0";
+      const solPerTrade = info.solAmount || user.solPerTrade || 0.01;
+
+      positions.push({
+        mint,
+        entryPrice: entry,
+        currentPrice: current,
+        changePercent: diffPct,
+        pnlSol: ((current - entry) * solPerTrade).toFixed(6),
+        tpStage: info.tpStage,
+        wallet,
+      });
+    }
+
+    return res.json({ positions });
+  } catch (err) {
+    console.error("active-positions API error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+// ================= TEST ENDPOINT — create fake open position =================
+app.post("/test-open", async (req, res) => {
+  try {
+    const { wallet, mint } = req.body;
+
+    if (!wallet || !mint) {
+      return res.status(400).json({ error: "wallet & mint required" });
+    }
+
+    // Create a fake monitor entry if not existing
+    if (!monitored.has(mint)) {
+      monitored.set(mint, {
+        lastPrice: 0.50,
+        users: new Map(),
+        entryPrices: new Map(),
+      });
+    }
+
+    const state = monitored.get(mint);
+
+    const entry = 0.40;
+    const current = 0.50;
+
+    state.lastPrice = current;
+
+    state.users.set(wallet, {
+      entryPrice: entry,
+      solAmount: 0.01,
+      tpStage: 1,
+    });
+
+    state.entryPrices.set(wallet, entry);
+
+    res.json({
+      ok: true,
+      created: {
+        wallet,
+        mint,
+        entryPrice: entry,
+        currentPrice: current,
+        tpStage: 1,
+      },
+    });
+  } catch (err) {
+    console.error("test-open error:", err);
+    res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// ========= Step C: Manual Sell API (frontend-triggered, wallet-based) =========
+app.post("/api/manual-sell", async (req, res) => {
+  try {
+    const { walletAddress, mint } = req.body;
+
+    if (!walletAddress || !mint) {
+      return res.status(400).json({ error: "missing_parameters" });
+    }
+
+    const user = await User.findOne({ walletAddress: String(walletAddress) });
+    if (!user) {
+      return res.status(404).json({ error: "user_not_found" });
+    }
+
+    const wallet = user.walletAddress;
+    if (!wallet) {
+      return res.status(400).json({ error: "no_wallet_registered" });
+    }
+
+    // Is this token currently being monitored?
+    const state = monitored.get(mint);
+    const info = state?.users?.get(String(wallet));
+
+    let entryPrice = null;
+    if (info && info.entryPrice) entryPrice = info.entryPrice;
+
+    // Execute 100% sell
+    let sellRes;
+    try {
+      sellRes = await safeSellAll(wallet, mint);
+    } catch (err) {
+      console.error("manual sell error:", err);
+      return res.status(500).json({ error: "sell_failed" });
+    }
+
+    const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+
+    // Fetch exit price
+    let exitPrice = 0;
+    try {
+      exitPrice = await getCurrentPrice(mint);
+    } catch {}
+
+    // Save trade to backend DB
+    await saveTradeToBackend({
+      walletAddress: wallet,
+      mint,
+      solAmount: user.solPerTrade || 0.01,
+      entryPrice,
+      exitPrice,
+      buyTxid: null,
+      sellTxid,
+      sourceChannel: "manual_frontend",
+      reason: "manual_sell_web",
+      tradeType: "manual",
+    });
+
+    // Remove from monitoring
+    if (state) {
+      state.users.delete(String(wallet));
+      state.entryPrices.delete(wallet);
+    }
+
+    return res.json({
+      ok: true,
+      tx: sellTxid,
+      exitPrice,
+    });
+  } catch (err) {
+    console.error("manual-sell API error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+// start server (non-blocking)
+app.listen(BOT_API_PORT, () => {
+  LOG.info({ port: BOT_API_PORT }, `Bot internal API listening on port ${BOT_API_PORT}`);
+});
+
+// ========= Admin channel management commands via Telegram (keep admin only) =========
+bot.start((ctx) => {
+  ctx.reply("AutoTrader (wallet-mode). Admins: use /admin_addchannel, /admin_removechannel, /admin_channels.");
+});
+
+bot.command("users", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("Unauthorized");
+  const users = await User.find({});
+  const out = users.map((u) => `${u.walletAddress} active:${u.active}`).slice(0, 50);
+  ctx.reply(out.join("\n") || "No users");
+});
+
+bot.command("admin_addchannel", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const parts = ctx.message.text.split(" ").filter(Boolean);
+  if (parts.length !== 2) return ctx.reply("Usage: /admin_addchannel @channel");
+  const raw = parts[1].replace(/^@/, "");
+
+  let doc = await ChannelSettings.findById("global");
+  if (!doc) doc = new ChannelSettings({ _id: "global", channels: [] });
+
+  if (doc.channels.includes(raw)) return ctx.reply("⚠️ Channel already exists.");
+
+  doc.channels.push(raw);
+  await doc.save();
+  await loadChannels();
+  ctx.reply(`✅ Added @${raw} to allowed channels.`);
+});
+
+bot.command("admin_removechannel", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const parts = ctx.message.text.split(" ").filter(Boolean);
+  if (parts.length !== 2) return ctx.reply("Usage: /admin_removechannel @channel");
+  const raw = parts[1].replace(/^@/, "");
+
+  const doc = await ChannelSettings.findById("global");
+  if (!doc) return ctx.reply("⚠️ No channels configured yet.");
+
+  doc.channels = doc.channels.filter((c) => c !== raw);
+  await doc.save();
+  await loadChannels();
+  ctx.reply(`✅ Removed @${raw} from allowed channels.`);
+});
+
+bot.command("admin_channels", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const doc = await ChannelSettings.findById("global");
+  const list = doc?.channels?.length ? doc.channels.map((c) => "@" + c).join(", ") : "No channels configured.";
+  ctx.reply("📢 Current allowed channels: " + list);
+});
+
+// ========= Channel self-connect handler (Option 4) =========
+
+
+// ===================================================
+// CHANNEL POST HANDLER (CONNECT + TRADE EXECUTION)
+// ===================================================
+bot.on("channel_post", async (ctx) => {
+  try {
+    const post = ctx.update.channel_post;
+    if (!post || !post.text) return;
+
+    const text = post.text.trim();
+    const channelId = String(post.chat.id); // -100xxxx
+    const title = post.chat.title || "Unnamed Channel";
+
+    // --------------------------------------------------
+    // /connect → register channel
+    // --------------------------------------------------
+    if (text === "/connect") {
+      await SignalChannel.findOneAndUpdate(
+        { channelId },
+        {
+          channelId,
+          title,
+          status: "active",
+          connectedAt: new Date(),
+        },
+        { upsert: true }
+      );
+
+      LOG.info({ channelId, title }, "✅ Channel connected via /connect");
+      return;
+    }
+
+    // --------------------------------------------------
+    // 🔒 STEP 3 — HARD BLOCK UNAPPROVED WALLETS
+    // --------------------------------------------------
+
+    // 1️⃣ Users who ENABLED this channel
+    const users = await User.find({
+      "subscribedChannels.channelId": channelId,
+      "subscribedChannels.enabled": true,
+    });
+
+    if (!users.length) {
+      LOG.warn({ channelId }, "⚠️ No subscribed users — skipping signal");
+      return;
+    }
+
+    // 2️⃣ ONLY APPROVED wallets
+    const approvedUsers = users.filter((u) =>
+      u.subscribedChannels.some(
+        (c) =>
+          c.channelId === channelId &&
+          c.status === "approved" &&
+          c.enabled === true
+      )
+    );
+
+    if (!approvedUsers.length) {
+      LOG.warn({ channelId }, "⛔ Signal blocked — no APPROVED wallets");
+      return;
+    }
+
+    // --------------------------------------------------
+    // 🚀 EXECUTE TRADES (SAFE)
+    // --------------------------------------------------
+    for (const user of approvedUsers) {
+      LOG.info(
+        {
+          wallet: user.walletAddress,
+          channelId,
+        },
+        "🚀 Executing trade for APPROVED wallet"
+      );
+
+      // 🔥 CALL EXISTING TRADE ENGINE
+      // executeTradeForUser(user, text);
+    }
+  } catch (err) {
+    LOG.error({ err }, "❌ channel_post handler error");
+  }
+});
+
+
+// ========= Signal handler: supports multiple channels (channel -> mint) =========
+bot.on("message", async (ctx) => {
+  try {
+    if (!ctx.message || !ctx.message.text) return;
+
+    let chatUser = null;
+    if (ctx.message.sender_chat && ctx.message.sender_chat.username) {
+      chatUser = ctx.message.sender_chat.username;
+    } else if (ctx.chat && ctx.chat.username) {
+      chatUser = ctx.chat.username;
+    } else if (ctx.chat && ctx.chat.title) {
+      chatUser = ctx.chat.title;
+    } else {
+      return; // Not a channel message
+    }
+
+    const cleaned = chatUser.replace(/^@/, "");
+
+    // Skip if channel isn't allowed
+    if (!CHANNELS.includes(cleaned)) {
+      LOG.debug({ from: cleaned }, "Channel not allowed");
+      return;
+    }
+
+    // Extract mint address from message text
+    const text = ctx.message.text;
+    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+    if (!mintMatch) return;
+    const mint = mintMatch[0];
+    if (!looksLikeMint(mint)) return;
+
+    LOG.info({ mint, from: cleaned }, "signal detected");
+
+    // Find users subscribed to this channel (by walletAddress stored in DB)
+
+    const users = await User.find({
+  subscribedChannels: {
+    $elemMatch: {
+      channelId: cleaned,
+      enabled: true,   // 👈 USER_TOGGLE enforced here
+    },
+  },
+  active: { $ne: false },
+}).lean();
+
+
+    if (!users || users.length === 0) {
+      LOG.warn(`No users subscribed to channel: ${cleaned}`);
+      return;
+    }
+
+    LOG.info(`Executing trades for ${users.length} subscribed users...`);
+
+    for (const user of users) {
+      // user is DB document with walletAddress
+      executeUserTrade(user, mint, cleaned).catch((err) =>
+        LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
+      );
+    }
+  } catch (err) {
+    LOG.error({ err }, "message handler error");
+  }
+});
+
+// ========= Start bot =========
+bot.launch({
+  allowedUpdates: [
+    "message",
+    "channel_post",
+    "my_chat_member", // ✅ THIS IS THE FIX
+  ],
+}).then(() => {
+  LOG.info("Bot launched (wallet-mode)");
+});
+
+process.once("SIGINT", () => {
+  bot.stop("SIGINT");
+  clearInterval(channelRefreshHandle);
+});
+
+process.once("SIGTERM", () => {
+  bot.stop("SIGTERM");
+  clearInterval(channelRefreshHandle);
+});
+
+
+// ========= Named exports (for other modules to import) =========
+export { bot, ensureMonitor, monitored, safeSellAll };
+
+export default { bot, ensureMonitor, monitored, safeSellAll };
+
