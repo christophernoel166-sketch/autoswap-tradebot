@@ -7,8 +7,8 @@ node_modules/
 # ENV FILES (SECRETS)
 # ================================
 .env
-.env.local
-.env.production
+.env.*
+!.env.example
 
 # ================================
 # BUILDS
@@ -20,19 +20,33 @@ build/
 # OS FILES
 # ================================
 .DS_Store
+Thumbs.db
 
 # ================================
-# WALLETS / SECRETS (CRITICAL)
+# WALLET / PRIVATE KEYS ONLY
 # ================================
-*.json
 devnet-wallet.json
 main-wallet.json
+positions.json
 
 # ================================
 # LOGS
 # ================================
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+# ================================
+# FRONTEND BUILDS
+# ================================
+user-frontend/vite-project/dist/
+
+# ================================
+# DO NOT IGNORE THESE (IMPORTANT)
+# ================================
+!package.json
+!package-lock.json
+!user-frontend/vite-project/package.json
+!user-frontend/vite-project/package-lock.json
