@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import pino from "pino";
 import { createApiServer } from "./src/api/server.js";
-import "./bot/telegramBot.js"; // Telegram bot starts on import
+
 
 dotenv.config();
 
