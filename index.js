@@ -3,10 +3,29 @@ import mongoose from "mongoose";
 import pino from "pino";
 import { createApiServer } from "./src/api/server.js";
 
-
 dotenv.config();
 
 const log = pino({ level: "info" });
+
+let mongoConnected = false;
+
+/**
+ * Track MongoDB connection state
+ */
+mongoose.connection.on("connected", () => {
+  mongoConnected = true;
+  log.info("✅ MongoDB connection state: connected");
+});
+
+mongoose.connection.on("disconnected", () => {
+  mongoConnected = false;
+  log.warn("⚠️ MongoDB connection state: disconnected");
+});
+
+mongoose.connection.on("error", (err) => {
+  mongoConnected = false;
+  log.error("❌ MongoDB connection error:", err);
+});
 
 async function main() {
   log.info("🚀 Starting Unified Solana Trader...");
@@ -24,9 +43,25 @@ async function main() {
 
   // Start Express + Socket.io API Server
   try {
-    const { listen } = createApiServer({
+    const { app, listen } = createApiServer({
       port: process.env.PORT || 4000,
     });
+
+    /**
+     * Health check endpoint
+     * Used by Railway, uptime monitors, and debugging
+     */
+    app.get("/health", (_req, res) => {
+      const mongoState = mongoose.connection.readyState === 1;
+
+      res.status(mongoState ? 200 : 503).json({
+        ok: mongoState,
+        mongo: mongoState ? "connected" : "disconnected",
+        uptime: process.uptime(),
+        timestamp: Date.now(),
+      });
+    });
+
     listen();
     log.info(`🌐 API Server is running on port ${process.env.PORT || 4000}`);
   } catch (err) {
