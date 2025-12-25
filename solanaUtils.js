@@ -1,13 +1,10 @@
 // solanaUtils.js
-// Helper utilities for Solana auto-trading bot
-// Handles Jupiter quotes, swap execution, and partial/full sells.
+// Safe, lazy Solana utilities (Railway-friendly)
 
 import {
   Connection,
   PublicKey,
-  Transaction,
   VersionedTransaction,
-  SystemProgram,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
 import { createJupiterApiClient } from "@jup-ag/api";
@@ -15,11 +12,24 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const RPC_URL = process.env.RPC_URL || "https://api.mainnet-beta.solana.com";
 const SLIPPAGE_BPS = Number(process.env.SLIPPAGE_BPS || 100);
-const connection = new Connection(RPC_URL, "confirmed");
 
-// Initialize Jupiter client
+// 🔒 LAZY connection (IMPORTANT)
+let connection = null;
+
+function getConnection() {
+  if (!connection) {
+    const rpc = process.env.RPC_URL;
+    if (!rpc || !rpc.startsWith("http")) {
+      throw new Error("RPC_URL is missing or invalid");
+    }
+    connection = new Connection(rpc, "confirmed");
+    console.log("✅ Solana RPC connected");
+  }
+  return connection;
+}
+
+// Jupiter client (safe at import)
 const jupiter = createJupiterApiClient({
   baseUrl: "https://quote-api.jup.ag/v6",
   defaultHeaders: { "x-api-user": "mainnet" },
@@ -28,146 +38,106 @@ const jupiter = createJupiterApiClient({
 /////////////////////// QUOTE FETCH ///////////////////////
 export async function getQuote(inputMint, outputMint, amountLamports) {
   try {
-    const quote = await jupiter.quoteGet({
+    return await jupiter.quoteGet({
       inputMint,
       outputMint,
       amount: amountLamports,
       slippageBps: SLIPPAGE_BPS,
       restrictIntermediateTokens: true,
-      onlyDirectRoutes: false,
     });
-    return quote;
   } catch (err) {
-    console.error("[utils:getQuote] Error fetching quote:", err?.message ?? err);
+    console.error("[getQuote]", err?.message ?? err);
     return null;
   }
 }
 
 /////////////////////// SWAP EXECUTION ///////////////////////
 export async function executeSwap(wallet, quote) {
-  try {
-    const swapReq = {
-      swapRequest: {
-        quoteResponse: quote,
-        userPublicKey: wallet.publicKey.toBase58(),
-        wrapAndUnwrapSol: true,
-        dynamicComputeUnitLimit: true,
-        asLegacyTransaction: true,
-      },
-    };
-    const swapRes = await jupiter.swapPost(swapReq);
-    if (!swapRes || !swapRes.swapTransaction) throw new Error("No swap transaction returned from Jupiter");
+  const conn = getConnection();
 
-    const swapBuf = Buffer.from(swapRes.swapTransaction, "base64");
-    const tx = VersionedTransaction.deserialize(swapBuf);
-    tx.sign([wallet]);
-    const txid = await connection.sendTransaction(tx, { skipPreflight: true });
-    console.log("✅ Swap executed:", txid);
-    return txid;
-  } catch (err) {
-    console.error("[utils:executeSwap] Error executing swap:", err?.message ?? err);
-    throw err;
-  }
+  const swapRes = await jupiter.swapPost({
+    swapRequest: {
+      quoteResponse: quote,
+      userPublicKey: wallet.publicKey.toBase58(),
+      wrapAndUnwrapSol: true,
+      asLegacyTransaction: true,
+    },
+  });
+
+  const tx = VersionedTransaction.deserialize(
+    Buffer.from(swapRes.swapTransaction, "base64")
+  );
+
+  tx.sign([wallet]);
+  return await conn.sendTransaction(tx, { skipPreflight: true });
 }
 
-/////////////////////// CURRENT PRICE FETCH ///////////////////////
-export async function getCurrentPrice(mintAddress) {
+/////////////////////// PRICE FETCH ///////////////////////
+export async function getCurrentPrice(mint) {
   try {
     const quote = await jupiter.quoteGet({
-      inputMint: "So11111111111111111111111111111111111111112", // SOL
-      outputMint: mintAddress,
-      amount: Math.floor(1 * LAMPORTS_PER_SOL),
+      inputMint: "So11111111111111111111111111111111111111112",
+      outputMint: mint,
+      amount: LAMPORTS_PER_SOL,
     });
-    if (!quote || !quote.outAmount) throw new Error("No valid quote for price check");
-    const price = 1 / (Number(quote.outAmount) / LAMPORTS_PER_SOL);
-    console.log(`[utils:getCurrentPrice] ${mintAddress} ≈ ${price.toFixed(6)} SOL`);
-    return price;
+
+    return 1 / (Number(quote.outAmount) / LAMPORTS_PER_SOL);
   } catch (err) {
-    console.error("[utils:getCurrentPrice] Error:", err?.message ?? err);
+    console.error("[getCurrentPrice]", err?.message ?? err);
     return null;
   }
 }
 
 /////////////////////// SELL PARTIAL ///////////////////////
 export async function sellPartial(wallet, mint, percent) {
-  try {
-    const resp = await connection.getTokenAccountsByOwner(wallet.publicKey, { mint: new PublicKey(mint) });
-    if (!resp?.value?.length) throw new Error("No token account found.");
-    const first = resp.value[0];
-    const bal = await connection.getTokenAccountBalance(first.pubkey);
-    const sellAmountRaw = Math.floor((Number(bal.value.amount) * percent) / 100);
+  const conn = getConnection();
 
-    if (sellAmountRaw <= 0) throw new Error("Nothing to sell for given percent.");
+  const accounts = await conn.getTokenAccountsByOwner(
+    wallet.publicKey,
+    { mint: new PublicKey(mint) }
+  );
 
-    const quote = await jupiter.quoteGet({
-      inputMint: mint,
-      outputMint: "So11111111111111111111111111111111111111112", // SOL
-      amount: sellAmountRaw,
-      slippageBps: SLIPPAGE_BPS,
-      restrictIntermediateTokens: true,
-    });
+  if (!accounts.value.length) throw new Error("No token account");
 
-    const swapReq = {
-      swapRequest: {
-        quoteResponse: quote,
-        userPublicKey: wallet.publicKey.toBase58(),
-        wrapAndUnwrapSol: true,
-        dynamicComputeUnitLimit: true,
-        asLegacyTransaction: true,
-      },
-    };
+  const bal = await conn.getTokenAccountBalance(accounts.value[0].pubkey);
+  const sellAmount = Math.floor(
+    (Number(bal.value.amount) * percent) / 100
+  );
 
-    const swapRes = await jupiter.swapPost(swapReq);
-    const swapBuf = Buffer.from(swapRes.swapTransaction, "base64");
-    const tx = VersionedTransaction.deserialize(swapBuf);
-    tx.sign([wallet]);
-    const txid = await connection.sendTransaction(tx, { skipPreflight: true });
-    console.log(`✅ Partial sell (${percent}%) txid:`, txid);
-    return txid;
-  } catch (err) {
-    console.error("[utils:sellPartial] Error:", err?.message ?? err);
-    throw err;
-  }
+  if (sellAmount <= 0) throw new Error("Nothing to sell");
+
+  const quote = await jupiter.quoteGet({
+    inputMint: mint,
+    outputMint: "So11111111111111111111111111111111111111112",
+    amount: sellAmount,
+    slippageBps: SLIPPAGE_BPS,
+  });
+
+  return executeSwap(wallet, quote);
 }
 
 /////////////////////// SELL ALL ///////////////////////
 export async function sellAll(wallet, mint) {
-  try {
-    const resp = await connection.getTokenAccountsByOwner(wallet.publicKey, { mint: new PublicKey(mint) });
-    if (!resp?.value?.length) throw new Error("No token account found.");
-    const first = resp.value[0];
-    const bal = await connection.getTokenAccountBalance(first.pubkey);
-    const sellAmountRaw = Number(bal.value.amount);
+  const conn = getConnection();
 
-    if (sellAmountRaw <= 0) throw new Error("No balance to sell.");
+  const accounts = await conn.getTokenAccountsByOwner(
+    wallet.publicKey,
+    { mint: new PublicKey(mint) }
+  );
 
-    const quote = await jupiter.quoteGet({
-      inputMint: mint,
-      outputMint: "So11111111111111111111111111111111111111112",
-      amount: sellAmountRaw,
-      slippageBps: SLIPPAGE_BPS,
-      restrictIntermediateTokens: true,
-    });
+  if (!accounts.value.length) throw new Error("No token account");
 
-    const swapReq = {
-      swapRequest: {
-        quoteResponse: quote,
-        userPublicKey: wallet.publicKey.toBase58(),
-        wrapAndUnwrapSol: true,
-        dynamicComputeUnitLimit: true,
-        asLegacyTransaction: true,
-      },
-    };
+  const bal = await conn.getTokenAccountBalance(accounts.value[0].pubkey);
+  const amount = Number(bal.value.amount);
 
-    const swapRes = await jupiter.swapPost(swapReq);
-    const swapBuf = Buffer.from(swapRes.swapTransaction, "base64");
-    const tx = VersionedTransaction.deserialize(swapBuf);
-    tx.sign([wallet]);
-    const txid = await connection.sendTransaction(tx, { skipPreflight: true });
-    console.log("✅ Full sell txid:", txid);
-    return txid;
-  } catch (err) {
-    console.error("[utils:sellAll] Error:", err?.message ?? err);
-    throw err;
-  }
+  if (amount <= 0) throw new Error("No balance");
+
+  const quote = await jupiter.quoteGet({
+    inputMint: mint,
+    outputMint: "So11111111111111111111111111111111111111112",
+    amount,
+    slippageBps: SLIPPAGE_BPS,
+  });
+
+  return executeSwap(wallet, quote);
 }
