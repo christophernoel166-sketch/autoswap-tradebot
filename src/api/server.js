@@ -29,13 +29,47 @@ export function createApiServer() {
   app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
   app.use(express.json());
 
-  // Attach socket.io
+  // Attach socket.io to requests
   app.use((req, _res, next) => {
     req.io = io;
     next();
   });
 
-  // API ROUTES
+  /**
+   * ============================
+   * ROOT ROUTE (IMPORTANT)
+   * ============================
+   * Prevents "Cannot GET /"
+   * Confirms app is alive
+   */
+  app.get("/", (_req, res) => {
+    res.status(200).json({
+      service: "autoswap-tradebot",
+      status: "running",
+      message: "API is live",
+      health: "/api/health",
+      timestamp: Date.now(),
+    });
+  });
+
+  /**
+   * ============================
+   * HEALTH CHECK (Railway)
+   * ============================
+   */
+  app.get("/api/health", (_req, res) => {
+    res.status(200).json({
+      ok: true,
+      uptime: process.uptime(),
+      timestamp: Date.now(),
+    });
+  });
+
+  /**
+   * ============================
+   * API ROUTES
+   * ============================
+   */
   app.use("/api/trades", tradesApi);
   app.use("/api/trades/record", tradeRecordRoute);
   app.use("/api/users", usersApi);
@@ -51,27 +85,28 @@ export function createApiServer() {
   app.use("/api/channels", channelsRoutes);
   app.use("/api/admin", adminChannels);
 
-  // ✅ HEALTH CHECK (Railway depends on this)
-  app.get("/api/health", (_req, res) => {
-    res.status(200).json({
-      ok: true,
-      uptime: process.uptime(),
-      timestamp: Date.now(),
-    });
-  });
-
+  /**
+   * ============================
+   * NOTE: Socket.io
+   * ============================
+   */
   io.on("connection", (socket) => {
     console.log("🔌 socket connected:", socket.id);
   });
 
+  /**
+   * ============================
+   * START SERVER
+   * ============================
+   */
   function listen() {
     const port = Number(process.env.PORT);
     if (!port) {
-      throw new Error("PORT is not defined (Railway requires process.env.PORT)");
+      throw new Error("PORT is not defined (Railway injects process.env.PORT)");
     }
 
     server.listen(port, "0.0.0.0", () => {
-      console.log(`✅ API server listening on PORT ${port}`);
+      console.log(`✅ API server listening on port ${port}`);
     });
   }
 
