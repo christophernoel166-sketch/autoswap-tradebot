@@ -1,25 +1,89 @@
+// config.js
 import dotenv from "dotenv";
+
 dotenv.config();
 
+/**
+ * Helper: require env variable
+ */
+function requireEnv(name) {
+  const value = process.env[name];
+  if (!value) {
+    throw new Error(`❌ Missing required environment variable: ${name}`);
+  }
+  return value;
+}
+
+/**
+ * Helper: optional env with default
+ */
+function optionalEnv(name, def = null) {
+  return process.env[name] ?? def;
+}
+
+/**
+ * Validate Solana RPC URL
+ */
+function validateRpcUrl(url) {
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
+    throw new Error(
+      `❌ RPC_URL must start with http:// or https:// (got: ${url})`
+    );
+  }
+  return url;
+}
+
 export const config = {
-  env: process.env.NODE_ENV || "development",
+  // ===================================================
+  // ENV
+  // ===================================================
+  env: optionalEnv("NODE_ENV", "development"),
 
-  // Telegram
-  telegramToken: process.env.TELEGRAM_BOT_TOKEN,
-
-  // MongoDB
-  mongoUri: process.env.MONGO_URI || "mongodb://localhost:27017/solana-tradebot",
-
-  // Solana / trading
-  solana: {
-    rpcUrl: process.env.RPC_URL || "https://api.devnet.solana.com",
-    slippageBps: Number(process.env.SLIPPAGE_BPS || 100), // 1% default
-    feeWallet: process.env.FEE_WALLET || null, // optional SOL fee receiver
+  // ===================================================
+  // TELEGRAM
+  // ===================================================
+  telegram: {
+    token: requireEnv("TELEGRAM_BOT_TOKEN"),
   },
 
-  // Polling interval for auto-trade updates
-  pollIntervalMs: Number(process.env.POLL_INTERVAL_MS || 15000),
+  // ===================================================
+  // DATABASE
+  // ===================================================
+  mongo: {
+    uri: requireEnv("MONGO_URI"),
+    dbName: optionalEnv("DB_NAME", "solana_tradebot"),
+  },
 
-  // Admins (optional)
-  admins: process.env.BOT_ADMINS ? process.env.BOT_ADMINS.split(",") : [],
+  // ===================================================
+  // SOLANA
+  // ===================================================
+  solana: {
+    rpcUrl: validateRpcUrl(
+      optionalEnv("RPC_URL", "https://api.mainnet-beta.solana.com")
+    ),
+    slippageBps: Number(optionalEnv("SLIPPAGE_BPS", 100)),
+    feeWallet: optionalEnv("FEE_WALLET", null),
+  },
+
+  // ===================================================
+  // TRADING ENGINE
+  // ===================================================
+  polling: {
+    intervalMs: Number(optionalEnv("POLL_INTERVAL_MS", 15_000)),
+  },
+
+  // ===================================================
+  // ADMINS
+  // ===================================================
+  admins: optionalEnv("BOT_ADMINS", "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean),
 };
+
+console.log("✅ Config loaded:", {
+  env: config.env,
+  mongo: "OK",
+  telegram: "OK",
+  solanaRpc: config.solana.rpcUrl,
+});
