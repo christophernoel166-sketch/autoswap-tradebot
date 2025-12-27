@@ -4,21 +4,28 @@ import dotenv from "dotenv";
 dotenv.config();
 
 /**
- * Helper: require env variable
+ * ===================================================
+ * Helpers
+ * ===================================================
+ */
+
+/**
+ * Require an environment variable (fail fast)
  */
 function requireEnv(name) {
   const value = process.env[name];
-  if (!value) {
+  if (!value || value.trim() === "") {
     throw new Error(`❌ Missing required environment variable: ${name}`);
   }
   return value;
 }
 
 /**
- * Helper: optional env with default
+ * Optional env with default
  */
 function optionalEnv(name, def = null) {
-  return process.env[name] ?? def;
+  const value = process.env[name];
+  return value !== undefined && value !== "" ? value : def;
 }
 
 /**
@@ -27,36 +34,49 @@ function optionalEnv(name, def = null) {
 function validateRpcUrl(url) {
   if (!url.startsWith("http://") && !url.startsWith("https://")) {
     throw new Error(
-      `❌ RPC_URL must start with http:// or https:// (got: ${url})`
+      `❌ Invalid RPC_URL: must start with http:// or https:// (got "${url}")`
     );
   }
   return url;
 }
 
+/**
+ * ===================================================
+ * CONFIG
+ * ===================================================
+ */
 export const config = {
-  // ===================================================
-  // ENV
-  // ===================================================
+  // -----------------------------------------------
+  // ENVIRONMENT
+  // -----------------------------------------------
   env: optionalEnv("NODE_ENV", "development"),
 
-  // ===================================================
-  // TELEGRAM
-  // ===================================================
-  telegram: {
-    token: requireEnv("TELEGRAM_BOT_TOKEN"),
+  // -----------------------------------------------
+  // SERVER / API
+  // -----------------------------------------------
+  server: {
+    port: Number(optionalEnv("PORT", 4000)),
   },
 
-  // ===================================================
+  // -----------------------------------------------
   // DATABASE
-  // ===================================================
+  // -----------------------------------------------
   mongo: {
     uri: requireEnv("MONGO_URI"),
     dbName: optionalEnv("DB_NAME", "solana_tradebot"),
   },
 
-  // ===================================================
+  // -----------------------------------------------
+  // TELEGRAM BOT
+  // (Only required if bot is enabled)
+  // -----------------------------------------------
+  telegram: {
+    token: optionalEnv("TELEGRAM_BOT_TOKEN", null),
+  },
+
+  // -----------------------------------------------
   // SOLANA
-  // ===================================================
+  // -----------------------------------------------
   solana: {
     rpcUrl: validateRpcUrl(
       optionalEnv("RPC_URL", "https://api.mainnet-beta.solana.com")
@@ -65,25 +85,31 @@ export const config = {
     feeWallet: optionalEnv("FEE_WALLET", null),
   },
 
-  // ===================================================
+  // -----------------------------------------------
   // TRADING ENGINE
-  // ===================================================
-  polling: {
-    intervalMs: Number(optionalEnv("POLL_INTERVAL_MS", 15_000)),
+  // -----------------------------------------------
+  trading: {
+    pollIntervalMs: Number(optionalEnv("POLL_INTERVAL_MS", 15_000)),
   },
 
-  // ===================================================
+  // -----------------------------------------------
   // ADMINS
-  // ===================================================
+  // -----------------------------------------------
   admins: optionalEnv("BOT_ADMINS", "")
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean),
 };
 
-console.log("✅ Config loaded:", {
+/**
+ * ===================================================
+ * SAFE STARTUP LOG (NO SECRETS)
+ * ===================================================
+ */
+console.log("✅ Configuration loaded", {
   env: config.env,
-  mongo: "OK",
-  telegram: "OK",
+  port: config.server.port,
+  mongo: "connected via URI",
+  telegramBotEnabled: Boolean(config.telegram.token),
   solanaRpc: config.solana.rpcUrl,
 });
