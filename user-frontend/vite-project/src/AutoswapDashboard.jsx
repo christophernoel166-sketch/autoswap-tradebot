@@ -55,11 +55,27 @@ useEffect(() => {
     .catch(() => {});
 }, []);
 
+async function ensureUserExists() {
+  try {
+    await fetch(`${API_BASE}/api/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+      }),
+    });
+  } catch (err) {
+    console.error("Failed to ensure user exists", err);
+  }
+}
+
+
 /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
 useEffect(() => {
   if (!walletAddress) return;
 
   fetchUserSettings();
+    ensureUserExists();   // 👈 ADD THIS
   fetchUserChannels();
   fetchPositions();
   fetchHistory();
