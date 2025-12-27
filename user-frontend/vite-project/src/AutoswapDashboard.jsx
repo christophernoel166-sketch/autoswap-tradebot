@@ -38,13 +38,16 @@ const isTelegramLinked = !!user?.telegram?.userId;
   const [dateTo, setDateTo] = useState("");
 
   /* --- SYNC WALLET ADDRESS --- */
-  useEffect(() => {
-    if (connected && publicKey) {
-      setWalletAddress(publicKey.toString());
-    }
-  }, [connected, publicKey]);
+useEffect(() => {
+  if (connected && publicKey) {
+    setWalletAddress(publicKey.toString());
+  } else {
+    setWalletAddress("");
+    setUser(null);
+  }
+}, [connected, publicKey]);
 
-  /* --- LOAD CHANNELS --- */
+/* --- LOAD CHANNELS (ADMIN) --- */
 useEffect(() => {
   fetch(`${API_BASE}/api/admin/channels`)
     .then(r => r.json())
@@ -52,27 +55,27 @@ useEffect(() => {
     .catch(() => {});
 }, []);
 
-  /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
-  useEffect(() => {
-  if (walletAddress) {
-    fetchUserSettings();
-    fetchUserChannels();
-    fetchPositions();
-    fetchHistory();
-  }
+/* --- LOAD USER DATA WHEN WALLET CHANGES --- */
+useEffect(() => {
+  if (!walletAddress) return;
+
+  fetchUserSettings();
+  fetchUserChannels();
+  fetchPositions();
+  fetchHistory();
 }, [walletAddress]);
-// =====================================
-// 🔄 AUTO-REFRESH CHANNEL STATUS (STEP 5.5)
-// =====================================
+
+/* --- AUTO-REFRESH CHANNEL STATUS --- */
 useEffect(() => {
   if (!walletAddress) return;
 
   const interval = setInterval(() => {
     fetchUserChannels();
-  }, 8000); // every 8 seconds
+  }, 8000);
 
   return () => clearInterval(interval);
 }, [walletAddress]);
+
 
 
   /* --- FETCH SETTINGS --- */
