@@ -191,6 +191,7 @@ bot.on("channel_post", async (ctx) => {
 // - Wallet requested this channel
 // - Wallet is linked to Telegram
 // - Telegram user is a member of the channel
+// - ONE TELEGRAM → ONE WALLET (GLOBAL LOCK)  ✅ STEP 2C
 // ===================================================
 bot.command("approve_wallet", async (ctx) => {
   try {
@@ -255,7 +256,7 @@ bot.command("approve_wallet", async (ctx) => {
         chat.id,
         Number(user.telegram.userId)
       );
-    } catch (err) {
+    } catch {
       return ctx.reply(
         "❌ Cannot approve wallet.\n\nTelegram user is not found in this channel."
       );
@@ -270,7 +271,23 @@ bot.command("approve_wallet", async (ctx) => {
     }
 
     // --------------------------------------------------
-    // STEP 2.3 — APPROVE
+    // STEP 2C — 🔒 GLOBAL TELEGRAM → WALLET LOCK
+    // --------------------------------------------------
+    const existingWallet = await User.findOne({
+      "telegram.userId": user.telegram.userId,
+      walletAddress: { $ne: walletAddress },
+    });
+
+    if (existingWallet) {
+      return ctx.reply(
+        `❌ Approval blocked.\n\n` +
+        `This Telegram account is already linked to another wallet:\n` +
+        `💼 ${existingWallet.walletAddress}`
+      );
+    }
+
+    // --------------------------------------------------
+    // APPROVE
     // --------------------------------------------------
     await User.updateOne(
       {
@@ -295,7 +312,7 @@ bot.command("approve_wallet", async (ctx) => {
         { parse_mode: "Markdown" }
       );
     } catch {
-      // DM may fail if user blocked bot — ignore
+      // DM may fail if user blocked bot
     }
 
     // --------------------------------------------------
@@ -324,9 +341,8 @@ bot.command("reject_wallet", async (ctx) => {
       return ctx.reply("❌ Usage: /reject_wallet <WALLET_ADDRESS>");
     }
 
-    // Check admin
     const admins = await ctx.telegram.getChatAdministrators(chat.id);
-    const isAdmin = admins.some(a => a.user.id === ctx.from.id);
+    const isAdmin = admins.some((a) => a.user.id === ctx.from.id);
     if (!isAdmin) {
       return ctx.reply("❌ Only channel admins can reject wallets.");
     }
@@ -340,35 +356,20 @@ bot.command("reject_wallet", async (ctx) => {
       return ctx.reply("❌ Wallet has not requested this channel.");
     }
 
-    // Update status → rejected
     await User.updateOne(
       {
         walletAddress,
         "subscribedChannels.channelId": String(chat.id),
       },
       {
-        $set: {
-          "subscribedChannels.$.status": "rejected",
-        },
+        $set: { "subscribedChannels.$.status": "rejected" },
       }
     );
 
-    // 🔔 Notify user via Telegram DM
     if (user.telegram?.userId) {
-      const msg =
-`❌ *Request Rejected*
-
-Your request to trade signals from:
-
-📢 *${chat.title}*
-
-has been rejected by the channel owner.
-
-If you believe this is a mistake, please contact the channel admin.`;
-
       await ctx.telegram.sendMessage(
         user.telegram.userId,
-        msg,
+        `❌ *Request Rejected*\n\n📢 *${chat.title}*`,
         { parse_mode: "Markdown" }
       );
     }
@@ -377,115 +378,6 @@ If you believe this is a mistake, please contact the channel admin.`;
   } catch (err) {
     console.error("reject_wallet error:", err);
     ctx.reply("❌ Rejection failed.");
-  }
-});
-
-
-
-// ===================================================
-// 📋 LIST PENDING WALLET REQUESTS (Telegram identity)
-// ===================================================
-bot.command("list_requests", async (ctx) => {
-  try {
-    const chat = ctx.chat;
-    if (!chat || chat.type !== "channel") {
-      return ctx.reply("❌ Use this command inside the channel.");
-    }
-
-    // Admin check
-    const admins = await ctx.telegram.getChatAdministrators(chat.id);
-    const isAdmin = admins.some(a => a.user.id === ctx.from.id);
-    if (!isAdmin) {
-      return ctx.reply("❌ Only admins can view requests.");
-    }
-
-    const users = await User.find({
-      subscribedChannels: {
-        $elemMatch: {
-          channelId: String(chat.id),
-          status: "pending",
-        },
-      },
-    });
-
-    if (!users.length) {
-      return ctx.reply("✅ No pending requests.");
-    }
-
-    const list = users.map((u) => {
-      if (u.telegram?.username) {
-        return `• @${u.telegram.username}`;
-      }
-
-      if (u.telegram?.userId) {
-        return `• telegram_id:${u.telegram.userId}`;
-      }
-
-      // fallback (should be rare)
-      return `• wallet:${u.walletAddress}`;
-    }).join("\n");
-
-    ctx.reply(
-      `🕒 Pending access requests:\n\n${list}`
-    );
-
-  } catch (err) {
-    console.error("list_requests error:", err);
-    ctx.reply("❌ Failed to load requests.");
-  }
-});
-
-
-// ===================================================
-// 🔗 LINK TELEGRAM ↔ WALLET
-// Usage (private chat with bot):
-// /link_wallet <ONE_TIME_CODE>
-// ===================================================
-bot.command("link_wallet", async (ctx) => {
-  try {
-    // Must be private chat
-    if (ctx.chat.type !== "private") {
-      return ctx.reply("❌ Please DM me to link your wallet.");
-    }
-
-    const args = ctx.message.text.split(" ").slice(1);
-    const code = args[0];
-
-    if (!code) {
-      return ctx.reply("❌ Usage: /link_wallet <CODE>");
-    }
-
-    // Find user by pending link code
-    const user = await User.findOne({
-      "telegram.linkCode": code,
-      "telegram.linkedAt": null,
-    });
-
-    if (!user) {
-      return ctx.reply("❌ Invalid or expired link code.");
-    }
-
-    // Link telegram info
-    user.telegram = {
-      userId: String(ctx.from.id),
-      username: ctx.from.username || null,
-      firstName: ctx.from.first_name || null,
-      linkedAt: new Date(),
-    };
-
-    // Clear code
-    user.telegram.linkCode = null;
-
-    await user.save();
-
-    await ctx.reply(
-      `✅ Wallet linked successfully!\n\n` +
-      `Wallet: ${user.walletAddress}\n` +
-      `Telegram: @${ctx.from.username || "no_username"}`
-    );
-  } catch (err) {
-    console.error("link_wallet error:", err);
-    ctx.reply("❌ Failed to link wallet.");
   }
 });
 

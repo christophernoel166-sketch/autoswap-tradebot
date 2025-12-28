@@ -8,25 +8,18 @@ const userSchema = new mongoose.Schema(
     walletAddress: {
       type: String,
       required: true,
-      index: true, // ✅ single non-unique index
+      index: true, // ❌ NOT unique
     },
 
     // ===================================================
-    // LEGACY TELEGRAM ID (backward compatibility)
-    // ===================================================
-    telegramId: {
-      type: String,
-      default: null,
-    },
-
-    // ===================================================
-    // TELEGRAM IDENTITY (STEP 4)
-    // Used for channel approval & UX
+    // TELEGRAM IDENTITY (ONE TELEGRAM → ONE WALLET)
     // ===================================================
     telegram: {
       userId: {
         type: String,
-        index: true, // ✅ indexed ONCE here
+        unique: true,        // ✅ ENFORCES 1 TELEGRAM = 1 WALLET
+        sparse: true,        // ✅ allows users without Telegram yet
+        index: true,
       },
 
       username: {
@@ -44,12 +37,12 @@ const userSchema = new mongoose.Schema(
       // One-time wallet ↔ telegram linking code
       linkCode: {
         type: String,
-        index: true, // ✅ indexed ONCE here
+        index: true,
       },
     },
 
     // ===================================================
-    // CHANNEL SUBSCRIPTIONS (USER TOGGLE + APPROVAL FLOW)
+    // CHANNEL SUBSCRIPTIONS (MANY CHANNELS PER USER)
     // ===================================================
     subscribedChannels: {
       type: [
@@ -113,10 +106,10 @@ const userSchema = new mongoose.Schema(
 );
 
 /**
- * ❗ IMPORTANT
- * - NO schema.index() calls here
- * - All indexes are defined at field level
- * - This prevents duplicate index warnings
+ * IMPORTANT:
+ * - telegram.userId is UNIQUE
+ * - sparse:true allows users without Telegram linked yet
+ * - One Telegram account → one wallet (hard guarantee)
  */
 
 export default mongoose.model("User", userSchema);
