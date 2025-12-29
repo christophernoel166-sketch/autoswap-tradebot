@@ -98,9 +98,10 @@ async function linkTelegramAccount() {
 
     // Show the exact command the user must send to the bot
     setMessage({
-      type: "info",
-      text: `Send this command to the Telegram bot:\n\n/link_wallet ${data.code}`,
-    });
+  type: "link-code",
+  code: data.code,
+});
+
   } catch (err) {
     console.error("linkTelegramAccount error:", err);
     setMessage({
@@ -574,10 +575,50 @@ async function reRequestChannel(channelId) {
       
 
       {message && (
-        <div className={`p-3 rounded mb-4 ${message.type === "error" ? "bg-red-100 text-red-800" : "bg-green-100 text-green-800"}`}>
-          {message.text}
+  <div className="mb-4">
+    {message.type === "error" && (
+      <div className="p-3 rounded bg-red-100 text-red-800 text-sm">
+        ❌ {message.text}
+      </div>
+    )}
+
+    {message.type === "success" && (
+      <div className="p-3 rounded bg-green-100 text-green-800 text-sm">
+        ✅ {message.text}
+      </div>
+    )}
+
+    {message.type === "link-code" && (
+      <div className="p-4 rounded bg-blue-50 border border-blue-200 text-blue-900">
+        <div className="font-medium mb-1">
+          🔗 Link your Telegram account
         </div>
-      )}
+
+        <p className="text-sm mb-2">
+          Send this command to the Telegram bot:
+        </p>
+
+        <div className="flex items-center justify-between bg-white border rounded px-3 py-2 font-mono text-sm">
+          <span>/link_wallet {message.code}</span>
+
+          <button
+            onClick={() =>
+              navigator.clipboard.writeText(`/link_wallet ${message.code}`)
+            }
+            className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+          >
+            Copy
+          </button>
+        </div>
+
+        <p className="text-xs text-gray-500 mt-2">
+          Open the bot, paste the command, and send it.
+        </p>
+      </div>
+    )}
+  </div>
+)}
+
 
       <div className="grid grid-cols-12 gap-4 w-full relative">
 
