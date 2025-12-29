@@ -1,4 +1,5 @@
 import express from "express";
+import crypto from "crypto";
 import User from "../../models/User.js";
 import SignalChannel from "../../models/SignalChannel.js";
 
@@ -29,13 +30,11 @@ router.get("/", async (req, res) => {
  * ===================================================
  * POST /api/users
  * Ensure user exists (idempotent)
- * Used by frontend when wallet connects
  * ===================================================
  */
 router.post("/", async (req, res) => {
   try {
     const { walletAddress } = req.body;
-
     if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress_required" });
     }
@@ -47,13 +46,73 @@ router.post("/", async (req, res) => {
         walletAddress,
         createdAt: new Date(),
       });
-
       console.log("✅ Created new user:", walletAddress);
     }
 
     return res.json({ ok: true, user });
   } catch (err) {
     console.error("❌ ensure user error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/**
+ * ===================================================
+ * POST /api/users/link-code
+ * Generate Telegram ↔ Wallet link code
+ * ===================================================
+ */
+router.post("/link-code", async (req, res) => {
+  try {
+    const { walletAddress } = req.body;
+
+    if (!walletAddress) {
+      return res.status(400).json({ error: "walletAddress_required" });
+    }
+
+    const user = await User.findOne({ walletAddress });
+    if (!user) {
+      return res.status(404).json({ error: "user_not_found" });
+    }
+
+    // 🔒 Already linked
+    if (user.telegram?.userId) {
+      return res.status(400).json({
+        error: "already_linked",
+        message: "Telegram already linked to this wallet",
+      });
+    }
+
+    // 🔒 Prevent reuse of Telegram with another wallet
+    if (user.telegram?.linkCode) {
+      return res.json({
+        ok: true,
+        code: user.telegram.linkCode,
+        instructions: "Send this command to the bot",
+      });
+    }
+
+    // Generate short one-time code
+    const code = crypto.randomBytes(4).toString("hex");
+
+    user.telegram = {
+      ...user.telegram,
+      linkCode: code,
+      linkedAt: null,
+    };
+
+    await user.save();
+
+    console.log("🔗 Generated link code:", code, "for", walletAddress);
+
+    return res.json({
+      ok: true,
+      code,
+      command: `/link_wallet ${code}`,
+      instructions: "Send this command to the Telegram bot",
+    });
+  } catch (err) {
+    console.error("❌ link-code error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
 });

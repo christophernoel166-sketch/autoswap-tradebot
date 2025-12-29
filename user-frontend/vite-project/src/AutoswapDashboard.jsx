@@ -69,6 +69,48 @@ async function ensureUserExists() {
   }
 }
 
+// ===================================================
+// 🔗 LINK TELEGRAM ACCOUNT (STEP 2B)
+// ===================================================
+async function linkTelegramAccount() {
+  if (!walletAddress) {
+    return setMessage({
+      type: "error",
+      text: "Connect wallet first",
+    });
+  }
+
+  try {
+    const r = await fetch(`${API_BASE}/api/users/link-code`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress }),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      return setMessage({
+        type: "error",
+        text: data.error || "Failed to generate link code",
+      });
+    }
+
+    // Show the exact command the user must send to the bot
+    setMessage({
+      type: "info",
+      text: `Send this command to the Telegram bot:\n\n/link_wallet ${data.code}`,
+    });
+  } catch (err) {
+    console.error("linkTelegramAccount error:", err);
+    setMessage({
+      type: "error",
+      text: "Telegram linking failed",
+    });
+  }
+}
+
+
 
 /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
 useEffect(() => {
@@ -689,7 +731,6 @@ async function reRequestChannel(channelId) {
   {/* Telegram NOT linked */}
   {!isTelegramLinked ? (
     <>
-      {/* Disabled input look */}
       <div className="w-full border rounded px-2 py-2 text-sm bg-gray-100 text-gray-400 cursor-not-allowed">
         Link Telegram to request channels
       </div>
@@ -698,19 +739,16 @@ async function reRequestChannel(channelId) {
         ⚠️ You must link your Telegram account before requesting channel access.
       </p>
 
-      {/* Telegram deep link */}
-      <a
-        href="https://t.me/AUTOSWAPPS_BOT?start=link"
-        target="_blank"
-        rel="noopener noreferrer"
+      {/* ✅ CALL API TO GENERATE LINK CODE */}
+      <button
+        onClick={linkTelegramAccount}
         className="inline-block mt-3 text-xs px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
       >
         🔗 Link Telegram Account
-      </a>
+      </button>
     </>
   ) : (
     <>
-      {/* Telegram linked → enable dropdown */}
       <select
         className="w-full border rounded px-2 py-2 text-sm"
         defaultValue=""
@@ -737,6 +775,7 @@ async function reRequestChannel(channelId) {
     </>
   )}
 </div>
+
 
 {/* SUBSCRIPTIONS */}
 <div className="bg-white p-4 rounded shadow mb-4 w-full">
