@@ -14,6 +14,12 @@ export default function AutoswapDashboard() {
   const [availableChannels, setAvailableChannels] = useState([]);
   const [userChannels, setUserChannels] = useState([]);
   const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
+// ================================
+// LINK TELEGRAM POPUP STATE
+// ================================
+const [linkCode, setLinkCode] = useState(null);
+const [showLinkModal, setShowLinkModal] = useState(false);
+
 
 
 const isTelegramLinked = !!user?.telegram?.userId;
@@ -70,14 +76,11 @@ async function ensureUserExists() {
 }
 
 // ===================================================
-// 🔗 LINK TELEGRAM ACCOUNT (STEP 2B)
+// 🔗 LINK TELEGRAM ACCOUNT (POPUP VERSION)
 // ===================================================
 async function linkTelegramAccount() {
   if (!walletAddress) {
-    return setMessage({
-      type: "error",
-      text: "Connect wallet first",
-    });
+    return setMessage({ type: "error", text: "Connect wallet first" });
   }
 
   try {
@@ -90,23 +93,17 @@ async function linkTelegramAccount() {
     const data = await r.json();
 
     if (!r.ok) {
-      return setMessage({
-        type: "error",
-        text: data.error || "Failed to generate link code",
-      });
+      throw new Error(data.error || "Failed to generate link code");
     }
 
-    // Show the exact command the user must send to the bot
-    setMessage({
-  type: "link-code",
-  code: data.code,
-});
-
+    // ✅ Save code & open modal
+    setLinkCode(data.code);
+    setShowLinkModal(true);
   } catch (err) {
-    console.error("linkTelegramAccount error:", err);
+    console.error(err);
     setMessage({
       type: "error",
-      text: "Telegram linking failed",
+      text: "Failed to generate Telegram link code",
     });
   }
 }
@@ -588,36 +585,42 @@ async function reRequestChannel(channelId) {
       </div>
     )}
 
-    {message.type === "link-code" && (
-      <div className="p-4 rounded bg-blue-50 border border-blue-200 text-blue-900">
-        <div className="font-medium mb-1">
-          🔗 Link your Telegram account
-        </div>
-
-        <p className="text-sm mb-2">
-          Send this command to the Telegram bot:
-        </p>
-
-        <div className="flex items-center justify-between bg-white border rounded px-3 py-2 font-mono text-sm">
-          <span>/link_wallet {message.code}</span>
-
+    {showLinkModal && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+        <div className="bg-white w-full max-w-md rounded-lg shadow-lg p-6 relative">
           <button
-            onClick={() =>
-              navigator.clipboard.writeText(`/link_wallet ${message.code}`)
-            }
-            className="text-xs px-2 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+            onClick={() => setShowLinkModal(false)}
+            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
           >
-            Copy
+            ✕
           </button>
-        </div>
 
-        <p className="text-xs text-gray-500 mt-2">
-          Open the bot, paste the command, and send it.
-        </p>
+          <h3 className="text-lg font-semibold mb-2">
+            🔗 Link Telegram Account
+          </h3>
+
+          <p className="text-sm text-gray-600 mb-4">
+            Copy the command below and send it to the Telegram bot to link your wallet.
+          </p>
+
+          <div className="flex items-center justify-between bg-gray-100 border rounded px-3 py-2 font-mono text-sm">
+            <span>/link_wallet {linkCode}</span>
+            <button
+              onClick={() =>
+                navigator.clipboard.writeText(`/link_wallet ${linkCode}`)
+              }
+              className="text-xs px-3 py-1 rounded bg-blue-600 text-white"
+            >
+              Copy
+            </button>
+          </div>
+        </div>
       </div>
     )}
   </div>
 )}
+
+
 
 
       <div className="grid grid-cols-12 gap-4 w-full relative">
@@ -765,7 +768,7 @@ async function reRequestChannel(channelId) {
   
         <div className="col-span-4 ml-auto flex flex-col gap-4">
 
-  {/* ADD CHANNEL */}
+ {/* ADD CHANNEL */}
 <div className="bg-white p-4 rounded shadow w-full">
   <h3 className="font-medium mb-2">Add Channel</h3>
 
@@ -780,10 +783,10 @@ async function reRequestChannel(channelId) {
         ⚠️ You must link your Telegram account before requesting channel access.
       </p>
 
-      {/* ✅ CALL API TO GENERATE LINK CODE */}
+      {/* ✅ OPEN LINK TELEGRAM POPUP */}
       <button
         onClick={linkTelegramAccount}
-        className="inline-block mt-3 text-xs px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
+        className="inline-block mt-3 text-xs px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
       >
         🔗 Link Telegram Account
       </button>
