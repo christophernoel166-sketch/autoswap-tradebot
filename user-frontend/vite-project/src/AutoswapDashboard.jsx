@@ -19,6 +19,8 @@ export default function AutoswapDashboard() {
 // ================================
 const [linkCode, setLinkCode] = useState(null);
 const [showLinkModal, setShowLinkModal] = useState(false);
+const [linkLoading, setLinkLoading] = useState(false);
+
 
 
 
@@ -570,56 +572,90 @@ async function reRequestChannel(channelId) {
           If WalletMultiButton is provided elsewhere in App, it will render there too.
           Kept here intentionally for UX parity. */}
       
-
-      {message && (
+{message && (
   <div className="mb-4">
+    {/* ERROR MESSAGE */}
     {message.type === "error" && (
       <div className="p-3 rounded bg-red-100 text-red-800 text-sm">
         ❌ {message.text}
       </div>
     )}
 
+    {/* SUCCESS MESSAGE */}
     {message.type === "success" && (
       <div className="p-3 rounded bg-green-100 text-green-800 text-sm">
         ✅ {message.text}
       </div>
     )}
-
-    {showLinkModal && (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-        <div className="bg-white w-full max-w-md rounded-lg shadow-lg p-6 relative">
-          <button
-            onClick={() => setShowLinkModal(false)}
-            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
-          >
-            ✕
-          </button>
-
-          <h3 className="text-lg font-semibold mb-2">
-            🔗 Link Telegram Account
-          </h3>
-
-          <p className="text-sm text-gray-600 mb-4">
-            Copy the command below and send it to the Telegram bot to link your wallet.
-          </p>
-
-          <div className="flex items-center justify-between bg-gray-100 border rounded px-3 py-2 font-mono text-sm">
-            <span>/link_wallet {linkCode}</span>
-            <button
-              onClick={() =>
-                navigator.clipboard.writeText(`/link_wallet ${linkCode}`)
-              }
-              className="text-xs px-3 py-1 rounded bg-blue-600 text-white"
-            >
-              Copy
-            </button>
-          </div>
-        </div>
-      </div>
-    )}
   </div>
 )}
 
+{/* ===================================================
+     🔗 LINK TELEGRAM MODAL (POPUP)
+=================================================== */}
+{showLinkModal && linkCode && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+    <div className="bg-white w-full max-w-md rounded-lg shadow-xl p-6 relative">
+
+      {/* CLOSE BUTTON */}
+      <button
+        onClick={() => setShowLinkModal(false)}
+        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+      >
+        ✕
+      </button>
+
+      {/* TITLE */}
+      <h3 className="text-lg font-semibold mb-1">
+        🔗 Link Telegram Account
+      </h3>
+
+      <p className="text-sm text-gray-600 mb-4">
+        To complete linking, send the command below to the Telegram bot.
+      </p>
+
+      {/* COMMAND BOX */}
+      <div className="bg-gray-100 border rounded p-3 mb-4 font-mono text-sm flex items-center justify-between gap-2">
+        <span className="truncate">
+          /link_wallet {linkCode}
+        </span>
+
+        <button
+          onClick={() =>
+            navigator.clipboard.writeText(`/link_wallet ${linkCode}`)
+          }
+          className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
+        >
+          Copy
+        </button>
+      </div>
+
+      {/* ACTION BUTTONS */}
+      <div className="flex gap-3">
+        <a
+          href="https://t.me/AUTOSWAPPS_BOT"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex-1 text-center text-sm px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+        >
+          🚀 Open Telegram Bot
+        </a>
+
+        <button
+          onClick={() => setShowLinkModal(false)}
+          className="flex-1 text-sm px-4 py-2 rounded border hover:bg-gray-50"
+        >
+          Close
+        </button>
+      </div>
+
+      {/* FOOTER NOTE */}
+      <p className="text-xs text-gray-500 mt-4 text-center">
+        This Telegram account can be linked to only one wallet.
+      </p>
+    </div>
+  </div>
+)}
 
 
 
