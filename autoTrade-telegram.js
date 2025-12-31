@@ -1,5 +1,14 @@
+
 // autotrader-wallet-mode.js
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
+
+
+// 🚫 HARD STOP: API SERVICE MUST NEVER RUN TELEGRAM BOT
+if (process.env.SERVICE_ROLE !== "telegram-bot") {
+  console.log("🚫 Telegram bot blocked (SERVICE_ROLE is not telegram-bot)");
+  process.exit(0);
+}
+
 
 import dotenv from "dotenv";
 import mongoose from "mongoose";

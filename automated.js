@@ -1,6 +1,10 @@
 // autotrader-enhanced.js
 // Production-ready Solana AutoTrader with MANUAL trading capabilities
 
+
+console.log("🚫 Legacy bot disabled");
+process.exit(0);
+
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Telegraf, Markup } from "telegraf";

@@ -1,6 +1,13 @@
+
+
+
 // autoTrade-trailing.js
 // Multi-trade Devnet trailing stop auto-trader (single-file, native-only UI improvements)
 // Run: node autoTrade-trailing.js
+
+console.log("🚫 Legacy bot disabled");
+process.exit(0);
+
 
 import { Connection, Keypair, clusterApiUrl, VersionedTransaction, LAMPORTS_PER_SOL, PublicKey, SystemProgram, Transaction } from "@solana/web3.js";
 import { createJupiterApiClient } from "@jup-ag/api";

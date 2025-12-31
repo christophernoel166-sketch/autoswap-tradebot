@@ -1,3 +1,7 @@
+
+console.log("🚫 Legacy bot disabled");
+process.exit(0);
+
 // telegram/init.js
 import { Telegraf } from "telegraf";
 import { registerSettingsUI } from "./ui.js";

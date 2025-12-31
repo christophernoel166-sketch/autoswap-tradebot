@@ -1,4 +1,10 @@
+
+
 // index.js — Unified Solana Auto + Manual Trader bot launcher
+
+console.log("🚫 Legacy bot disabled");
+process.exit(0);
+
 
 import mongoose from "mongoose";
 import pino from "pino";
