@@ -29,6 +29,29 @@ export function createApiServer() {
   app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
   app.use(express.json());
 
+// ============================
+// GLOBAL CORS FIX (REQUIRED)
+// ============================
+app.use((req, res, next) => {
+  res.header("Access-Control-Allow-Origin", "*");
+  res.header(
+    "Access-Control-Allow-Headers",
+    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
+  );
+  res.header(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
+  );
+
+  // Handle preflight requests
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+
+  next();
+});
+
+
   // Attach socket.io to requests
   app.use((req, _res, next) => {
     req.io = io;
