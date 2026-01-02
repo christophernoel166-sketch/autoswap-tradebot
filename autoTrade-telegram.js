@@ -842,7 +842,9 @@ app.use(expressModule.json());
 app.use(cors());
 
 // configurable port
-const BOT_API_PORT = Number(process.env.BOT_API_PORT || 8081);
+const BOT_API_BASE =
+  process.env.BOT_API_BASE ||
+  "http://localhost:8081"; // fallback for local dev only
 
 // health check endpoint
 app.get("/bot-health", (req, res) => {
