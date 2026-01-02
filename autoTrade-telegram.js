@@ -2,10 +2,7 @@
 // autotrader-wallet-mode.js
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
 
-if (process.env.SERVICE_ROLE !== "telegram-bot") {
-  console.log("🚫 Telegram bot not allowed in this service");
-  process.exit(0);
-}
+
 
 
 import dotenv from "dotenv";
