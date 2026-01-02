@@ -840,6 +840,8 @@ import cors from "cors";
 const app = expressModule();
 app.use(expressModule.json());
 app.use(cors());
+const BOT_API_PORT = Number(process.env.BOT_API_PORT || 8081);
+
 
 // configurable port
 const BOT_API_BASE =
