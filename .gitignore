@@ -50,3 +50,13 @@ user-frontend/vite-project/dist/
 !package-lock.json
 !user-frontend/vite-project/package.json
 !user-frontend/vite-project/package-lock.json
+
+
+# ❌ Legacy / experimental telegram bots (local only)
+telegram/init.js
+automated.js
+automated-trade.js
+autoMate-trade.js
+auto Trade-trailing.js
+index.backup.js
+
