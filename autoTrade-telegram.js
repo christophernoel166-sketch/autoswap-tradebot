@@ -385,6 +385,69 @@ bot.command("reject_wallet", async (ctx) => {
   }
 });
 
+// ===================================================
+// 🔗 LINK TELEGRAM ↔ WALLET
+// Usage (private chat):
+// /link_wallet <CODE>
+// ===================================================
+bot.command("link_wallet", async (ctx) => {
+  try {
+    // Must be private chat
+    if (ctx.chat.type !== "private") {
+      return ctx.reply("❌ Please DM me to link your wallet.");
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const code = args[0];
+
+    if (!code) {
+      return ctx.reply("❌ Usage: /link_wallet <CODE>");
+    }
+
+    console.log("🔗 link_wallet received:", code);
+
+    const user = await User.findOne({
+      "telegram.linkCode": code,
+      "telegram.linkedAt": null,
+    });
+
+    if (!user) {
+      return ctx.reply("❌ Invalid or expired link code.");
+    }
+
+    // 🔒 GLOBAL ONE TELEGRAM → ONE WALLET LOCK
+    const existing = await User.findOne({
+      "telegram.userId": String(ctx.from.id),
+      walletAddress: { $ne: user.walletAddress },
+    });
+
+    if (existing) {
+      return ctx.reply(
+        "❌ This Telegram account is already linked to another wallet."
+      );
+    }
+
+    user.telegram = {
+      userId: String(ctx.from.id),
+      username: ctx.from.username || null,
+      firstName: ctx.from.first_name || null,
+      linkedAt: new Date(),
+      linkCode: null,
+    };
+
+    await user.save();
+
+    await ctx.reply(
+      `✅ Wallet linked successfully!\n\n` +
+      `💼 Wallet: ${user.walletAddress}\n` +
+      `👤 Telegram: @${ctx.from.username || "no_username"}`
+    );
+  } catch (err) {
+    console.error("link_wallet error:", err);
+    ctx.reply("❌ Failed to link wallet.");
+  }
+});
+
 
 // ========= MongoDB =========
 mongoose
