@@ -20,6 +20,9 @@ export default function AutoswapDashboard() {
 const [linkCode, setLinkCode] = useState(null);
 const [showLinkModal, setShowLinkModal] = useState(false);
 const [linkLoading, setLinkLoading] = useState(false);
+const [showLinkPopup, setShowLinkPopup] = useState(false);
+
+
 
 
 
@@ -82,8 +85,14 @@ async function ensureUserExists() {
 // ===================================================
 async function linkTelegramAccount() {
   if (!walletAddress) {
-    return setMessage({ type: "error", text: "Connect wallet first" });
+    return setMessage({
+      type: "error",
+      text: "Connect wallet first",
+    });
   }
+
+  // 🔒 Already linked → do nothing
+  if (isTelegramLinked) return;
 
   try {
     const r = await fetch(`${API_BASE}/api/users/link-code`, {
@@ -95,21 +104,60 @@ async function linkTelegramAccount() {
     const data = await r.json();
 
     if (!r.ok) {
-      throw new Error(data.error || "Failed to generate link code");
+      return setMessage({
+        type: "error",
+        text: data.error || "Failed to generate link code",
+      });
     }
 
-    // ✅ Save code & open modal
+    // ✅ Store code + open popup
     setLinkCode(data.code);
-    setShowLinkModal(true);
+    setShowLinkPopup(true);
+
+    // 🔁 STEP 2 — REFRESH USER AFTER LINKING
+    setTimeout(() => {
+      refreshUser();
+    }, 1500);
+
   } catch (err) {
-    console.error(err);
+    console.error("linkTelegramAccount error:", err);
     setMessage({
       type: "error",
-      text: "Failed to generate Telegram link code",
+      text: "Telegram linking failed",
     });
   }
 }
 
+
+async function refreshUser() {
+  if (!walletAddress) return;
+
+  try {
+    const r = await fetch(
+      `${API_BASE}/api/users?walletAddress=${encodeURIComponent(walletAddress)}`
+    );
+    if (!r.ok) return;
+
+    const data = await r.json();
+    setUser(data.user || null);
+  } catch (err) {
+    console.warn("refreshUser error:", err);
+  }
+}
+// ===================================================
+// 🔒 STEP 3 — AUTO-CLOSE LINK POPUP WHEN LINKED
+// ===================================================
+useEffect(() => {
+  if (isTelegramLinked && showLinkPopup) {
+    setShowLinkPopup(false);
+    setLinkCode(null);
+
+    setMessage({
+      type: "success",
+      text: "Telegram account linked successfully ✅",
+    });
+  }
+}, [isTelegramLinked]);
 
 
 /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
@@ -117,6 +165,8 @@ useEffect(() => {
   if (!walletAddress) return;
 
   fetchUserSettings();
+refreshUser();
+
     ensureUserExists();   // 👈 ADD THIS
   fetchUserChannels();
   fetchPositions();
@@ -133,6 +183,34 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, [walletAddress]);
+// ===================================================
+// 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
+// ===================================================
+useEffect(() => {
+  if (!showLinkPopup || !walletAddress) return;
+
+  const interval = setInterval(() => {
+    refreshUser(); // checks if telegram.userId now exists
+  }, 3000); // every 3 seconds
+
+  return () => clearInterval(interval);
+}, [showLinkPopup, walletAddress]);
+// ===================================================
+// ⏱️ STEP 4.3 — LINK TIMEOUT REMINDER
+// ===================================================
+useEffect(() => {
+  if (!showLinkPopup) return;
+
+  const timer = setTimeout(() => {
+    setMessage({
+      type: "info",
+      text: "After sending the command in Telegram, return here to continue.",
+    });
+  }, 40000); // 50 seconds
+
+  return () => clearTimeout(timer);
+}, [showLinkPopup]);
+
 
 
 
@@ -593,70 +671,42 @@ async function reRequestChannel(channelId) {
 {/* ===================================================
      🔗 LINK TELEGRAM MODAL (POPUP)
 =================================================== */}
-{showLinkModal && linkCode && (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-    <div className="bg-white w-full max-w-md rounded-lg shadow-xl p-6 relative">
+{showLinkPopup && (
+  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="bg-white rounded-lg p-6 w-full max-w-sm text-center shadow-lg">
 
-      {/* CLOSE BUTTON */}
-      <button
-        onClick={() => setShowLinkModal(false)}
-        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
-      >
-        ✕
-      </button>
-
-      {/* TITLE */}
-      <h3 className="text-lg font-semibold mb-1">
-        🔗 Link Telegram Account
+      <h3 className="text-lg font-semibold mb-2">
+        Link Telegram Account
       </h3>
 
-      <p className="text-sm text-gray-600 mb-4">
-        To complete linking, send the command below to the Telegram bot.
+      <p className="text-sm text-gray-600 mb-3">
+        Send this command to the Telegram bot:
       </p>
 
-      {/* COMMAND BOX */}
-      <div className="bg-gray-100 border rounded p-3 mb-4 font-mono text-sm flex items-center justify-between gap-2">
-        <span className="truncate">
-          /link_wallet {linkCode}
-        </span>
-
-        <button
-          onClick={() =>
-            navigator.clipboard.writeText(`/link_wallet ${linkCode}`)
-          }
-          className="text-xs px-3 py-1 rounded bg-blue-600 text-white hover:bg-blue-700"
-        >
-          Copy
-        </button>
+      <div className="bg-gray-100 rounded px-3 py-2 font-mono text-sm mb-3">
+        /link_wallet {linkCode}
       </div>
 
-      {/* ACTION BUTTONS */}
-      <div className="flex gap-3">
+      <div className="flex gap-2 justify-center">
+        <button
+          onClick={() => navigator.clipboard.writeText(`/link_wallet ${linkCode}`)}
+          className="text-xs px-3 py-2 rounded bg-gray-200 hover:bg-gray-300"
+        >
+          📋 Copy
+        </button>
+
         <a
           href="https://t.me/AUTOSWAPPS_BOT"
           target="_blank"
           rel="noopener noreferrer"
-          className="flex-1 text-center text-sm px-4 py-2 rounded bg-indigo-600 text-white hover:bg-indigo-700"
+          className="text-xs px-3 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
         >
           🚀 Open Telegram Bot
         </a>
-
-        <button
-          onClick={() => setShowLinkModal(false)}
-          className="flex-1 text-sm px-4 py-2 rounded border hover:bg-gray-50"
-        >
-          Close
-        </button>
       </div>
-
-      {/* FOOTER NOTE */}
-      <p className="text-xs text-gray-500 mt-4 text-center">
-        This Telegram account can be linked to only one wallet.
-      </p>
     </div>
   </div>
 )}
-
 
 
       <div className="grid grid-cols-12 gap-4 w-full relative">
