@@ -5,6 +5,10 @@ export default defineConfig({
   plugins: [react()],
 
   preview: {
-    allowedHosts: "all",
+    host: true,
+    port: 8080,
+    allowedHosts: [
+      "autoswap-tradebot-production-9c06.up.railway.app"
+    ],
   },
 });
