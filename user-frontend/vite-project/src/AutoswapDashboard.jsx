@@ -764,12 +764,8 @@ async function reRequestChannel(channelId) {
 )}
 
 
-     <div
-  className={`col-span-12 lg:col-span-8 ${
-    mobileTab !== "dashboard" ? "hidden lg:block" : ""
-  }`}
->
-
+<div className="grid grid-cols-12 gap-4 w-full relative">
+  
 
         {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
 <div
@@ -1148,58 +1144,138 @@ async function reRequestChannel(channelId) {
           </div>
         )}
       </div>
+{/* ACTIVE POSITIONS (BOTTOM SECTION) */}
+<div className="bg-white p-4 rounded shadow mt-6 mb-10">
+  <div className="flex justify-between mb-3 items-center">
+    <h2 className="text-l font-medium">Active Positions</h2>
+    <div className="flex gap-2">
+      <button
+        onClick={fetchPositions}
+        className="px-3 py-1 border rounded text-sm"
+      >
+        {loading ? "Loading…" : "Refresh"}
+      </button>
+      <button
+        onClick={manualSellAll}
+        className="px-3 py-1 border rounded text-sm"
+      >
+        Sell All
+      </button>
+    </div>
+  </div>
 
-      {/* ACTIVE POSITIONS (BOTTOM SECTION) */}
-      <div className="bg-white p-4 rounded shadow mt-6 mb-10">
-        <div className="flex justify-between mb-3">
-          <h2 className="text-l font-medium">Active Positions</h2>
-          <div className="flex gap-2">
-            <button onClick={fetchPositions} className="px-3 py-1 border rounded">
-              {loading ? "Loading…" : "Refresh"}
+  {positions.length === 0 ? (
+    <div className="text-gray-500">No active positions.</div>
+  ) : (
+    <>
+      {/* ================= MOBILE VIEW (CARDS) ================= */}
+      <div className="space-y-3 lg:hidden">
+        {positions.map((p, i) => (
+          <div
+            key={i}
+            className="border rounded p-3 flex flex-col gap-2"
+          >
+            <div className="flex justify-between items-center">
+              <span className="font-mono text-sm truncate max-w-[160px]">
+                {p.mint}
+              </span>
+              <span
+                className={`text-sm font-medium ${
+                  Number(p.changePercent || 0) >= 0
+                    ? "text-green-600"
+                    : "text-red-600"
+                }`}
+              >
+                {p.changePercent}%
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
+              <div>
+                <div className="text-gray-400">Entry</div>
+                {Number(p.entryPrice || 0).toFixed(6)}
+              </div>
+
+              <div>
+                <div className="text-gray-400">Current</div>
+                {Number(p.currentPrice || 0).toFixed(6)}
+              </div>
+
+              <div>
+                <div className="text-gray-400">PnL</div>
+                <span
+                  className={
+                    Number(p.pnlSol || 0) >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }
+                >
+                  {Number(p.pnlSol || 0).toFixed(6)} SOL
+                </span>
+              </div>
+
+              <div>
+                <div className="text-gray-400">TP Stage</div>
+                {p.tpStage}
+              </div>
+            </div>
+
+            <button
+              onClick={() => manualSell(p.mint)}
+              className="mt-2 px-3 py-1 border rounded text-sm"
+            >
+              Sell
             </button>
-            <button onClick={manualSellAll} className="px-3 py-1 border rounded">Sell All</button>
           </div>
-        </div>
-
-        {positions.length === 0 ? (
-          <div className="text-gray-500">No active positions.</div>
-        ) : (
-          <table className="min-w-[700px] w-full text-sm">
-
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Token</th>
-                <th>Entry</th>
-                <th>Current</th>
-                <th>%</th>
-                <th>PnL</th>
-                <th>TP</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {positions.map((p, i) => (
-                <tr key={i} className="border-t">
-                  <td>{i + 1}</td>
-                  <td className="font-mono">{p.mint}</td>
-                  <td>{Number(p.entryPrice || 0).toFixed(6)}</td>
-                  <td>{Number(p.currentPrice || 0).toFixed(6)}</td>
-                  <td className={Number(p.changePercent || 0) >= 0 ? "text-green-600" : "text-red-600"}>
-                    {p.changePercent}
-                  </td>
-                  <td>{Number(p.pnlSol || 0).toFixed(6)}</td>
-                  <td>{p.tpStage}</td>
-                  <td>
-                    <button onClick={() => manualSell(p.mint)} className="px-2 py-1 border rounded">Sell</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        ))}
       </div>
 
-    </div>
-  );
-}
+      {/* ================= DESKTOP VIEW (TABLE) ================= */}
+      <div className="hidden lg:block overflow-x-auto">
+        <table className="min-w-[700px] w-full text-sm">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Token</th>
+              <th>Entry</th>
+              <th>Current</th>
+              <th>%</th>
+              <th>PnL</th>
+              <th>TP</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {positions.map((p, i) => (
+              <tr key={i} className="border-t">
+                <td>{i + 1}</td>
+                <td className="font-mono">{p.mint}</td>
+                <td>{Number(p.entryPrice || 0).toFixed(6)}</td>
+                <td>{Number(p.currentPrice || 0).toFixed(6)}</td>
+                <td
+                  className={
+                    Number(p.changePercent || 0) >= 0
+                      ? "text-green-600"
+                      : "text-red-600"
+                  }
+                >
+                  {p.changePercent}
+                </td>
+                <td>{Number(p.pnlSol || 0).toFixed(6)}</td>
+                <td>{p.tpStage}</td>
+                <td>
+                  <button
+                    onClick={() => manualSell(p.mint)}
+                    className="px-2 py-1 border rounded"
+                  >
+                    Sell
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  )}
+</div>
