@@ -709,10 +709,11 @@ async function reRequestChannel(channelId) {
 )}
 
 
-      <div className="grid grid-cols-12 gap-4 w-full relative">
+     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full relative">
+
 
         {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
-        <div className="col-span-8">
+       <div className="col-span-1 lg:col-span-8">
 
           {/* PERFORMANCE */}
           <div className="bg-white p-4 rounded shadow mb-3">
@@ -852,7 +853,8 @@ async function reRequestChannel(channelId) {
 
       
   
-        <div className="col-span-4 ml-auto flex flex-col gap-4">
+        <div className="col-span-1 lg:col-span-4 flex flex-col gap-4">
+
 
  {/* ADD CHANNEL */}
 <div className="bg-white p-4 rounded shadow w-full">
