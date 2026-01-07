@@ -764,7 +764,11 @@ async function reRequestChannel(channelId) {
 )}
 
 
-     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 w-full relative">
+     <div
+  className={`col-span-12 lg:col-span-8 ${
+    mobileTab !== "dashboard" ? "hidden lg:block" : ""
+  }`}
+>
 
 
         {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
