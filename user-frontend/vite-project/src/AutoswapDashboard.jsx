@@ -21,6 +21,12 @@ const [linkCode, setLinkCode] = useState(null);
 const [showLinkModal, setShowLinkModal] = useState(false);
 const [linkLoading, setLinkLoading] = useState(false);
 const [showLinkPopup, setShowLinkPopup] = useState(false);
+// ================================
+// MOBILE TABS (STEP 2)
+// ================================
+const [mobileTab, setMobileTab] = useState("dashboard");
+// "dashboard" | "channels" | "settings"
+
 
 
 
@@ -658,6 +664,43 @@ async function reRequestChannel(channelId) {
 </div>
 
 
+{/* MOBILE TAB BAR */}
+<div className="lg:hidden bg-white border-b flex justify-around text-sm font-medium">
+  <button
+    onClick={() => setMobileTab("dashboard")}
+    className={`flex-1 py-2 ${
+      mobileTab === "dashboard"
+        ? "border-b-2 border-indigo-600 text-indigo-600"
+        : "text-gray-500"
+    }`}
+  >
+    Dashboard
+  </button>
+
+  <button
+    onClick={() => setMobileTab("channels")}
+    className={`flex-1 py-2 ${
+      mobileTab === "channels"
+        ? "border-b-2 border-indigo-600 text-indigo-600"
+        : "text-gray-500"
+    }`}
+  >
+    Channels
+  </button>
+
+  <button
+    onClick={() => setMobileTab("settings")}
+    className={`flex-1 py-2 ${
+      mobileTab === "settings"
+        ? "border-b-2 border-indigo-600 text-indigo-600"
+        : "text-gray-500"
+    }`}
+  >
+    Settings
+  </button>
+</div>
+
+
       {/* Header with wallet button kept — this was in multiple places earlier.
           If WalletMultiButton is provided elsewhere in App, it will render there too.
           Kept here intentionally for UX parity. */}
@@ -725,7 +768,11 @@ async function reRequestChannel(channelId) {
 
 
         {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
-       <div className="col-span-1 lg:col-span-8">
+<div
+  className={`col-span-12 lg:col-span-8 ${
+    mobileTab === "dashboard" ? "block" : "hidden"
+  } lg:block`}
+>
 
           {/* PERFORMANCE */}
           <div className="bg-white p-4 rounded shadow mb-3">
@@ -865,7 +912,11 @@ async function reRequestChannel(channelId) {
 
       
   
-        <div className="col-span-1 lg:col-span-4 flex flex-col gap-4">
+        <div
+  className={`col-span-12 lg:col-span-8 ${
+    mobileTab === "dashboard" ? "block" : "hidden"
+  } lg:block`}
+>
 
 
  {/* ADD CHANNEL */}
@@ -1052,8 +1103,9 @@ async function reRequestChannel(channelId) {
         {filteredHistory.length === 0 ? (
           <div className="text-gray-500">No trades found.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+          <div className="overflow-x-auto -mx-4 px-4">
+  <table className="min-w-[900px] w-full text-sm">
+
               <thead>
                 <tr>
                   <th>Time</th>
@@ -1061,8 +1113,9 @@ async function reRequestChannel(channelId) {
                   <th>Entry</th>
                   <th>Exit</th>
                   <th>PnL</th>
-                  <th>Buy Tx</th>
-                  <th>Sell Tx</th>
+                  <th className="hidden lg:table-cell">Buy Tx</th>
+<th className="hidden lg:table-cell">Sell Tx</th>
+
                 </tr>
               </thead>
               <tbody>
@@ -1075,8 +1128,14 @@ async function reRequestChannel(channelId) {
                       <td>{Number(h.entryPrice || 0).toFixed(6)}</td>
                       <td>{Number(h.exitPrice || 0).toFixed(6)}</td>
                       <td className={pnl >= 0 ? "text-green-600" : "text-red-600"}>{pnl.toFixed(6)}</td>
-                      <td className="break-all">{h.buyTxid || "-"}</td>
-                      <td className="break-all">{h.sellTxid || "-"}</td>
+                      <td className="hidden lg:table-cell break-all max-w-[220px]">
+  {h.buyTxid || "-"}
+</td>
+
+<td className="hidden lg:table-cell break-all max-w-[220px]">
+  {h.sellTxid || "-"}
+</td>
+
                     </tr>
                   );
                 })}
@@ -1101,7 +1160,8 @@ async function reRequestChannel(channelId) {
         {positions.length === 0 ? (
           <div className="text-gray-500">No active positions.</div>
         ) : (
-          <table className="w-full text-sm">
+          <table className="min-w-[700px] w-full text-sm">
+
             <thead>
               <tr>
                 <th>#</th>
