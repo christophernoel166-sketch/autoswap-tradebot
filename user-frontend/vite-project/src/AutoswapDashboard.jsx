@@ -2,6 +2,11 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import "@solana/wallet-adapter-react-ui/styles.css";
+import MobileHeader from "./layout/MobileHeader";
+import MobileTabs from "./layout/MobileTabs";
+import PerformanceSummary from "./analytics/PerformanceSummary";
+
+
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
 
@@ -653,52 +658,12 @@ async function reRequestChannel(channelId) {
     <div className="p-4 max-w-7xl mx-auto">
 
 {/* MOBILE HEADER */}
-<div className="lg:hidden sticky top-0 z-40 bg-white border-b px-4 py-3 flex justify-between items-center">
-  <h1 className="font-semibold text-lg">Autoswap</h1>
+<MobileHeader connected={connected} walletAddress={walletAddress} />
 
-  <div className="text-xs text-gray-600 truncate max-w-[160px]">
-    {connected && walletAddress
-      ? walletAddress.slice(0, 4) + "..." + walletAddress.slice(-4)
-      : "Wallet not connected"}
-  </div>
-</div>
 
 
 {/* MOBILE TAB BAR */}
-<div className="lg:hidden bg-white border-b flex justify-around text-sm font-medium">
-  <button
-    onClick={() => setMobileTab("dashboard")}
-    className={`flex-1 py-2 ${
-      mobileTab === "dashboard"
-        ? "border-b-2 border-indigo-600 text-indigo-600"
-        : "text-gray-500"
-    }`}
-  >
-    Dashboard
-  </button>
-
-  <button
-    onClick={() => setMobileTab("channels")}
-    className={`flex-1 py-2 ${
-      mobileTab === "channels"
-        ? "border-b-2 border-indigo-600 text-indigo-600"
-        : "text-gray-500"
-    }`}
-  >
-    Channels
-  </button>
-
-  <button
-    onClick={() => setMobileTab("settings")}
-    className={`flex-1 py-2 ${
-      mobileTab === "settings"
-        ? "border-b-2 border-indigo-600 text-indigo-600"
-        : "text-gray-500"
-    }`}
-  >
-    Settings
-  </button>
-</div>
+<MobileTabs mobileTab={mobileTab} setMobileTab={setMobileTab} />
 
 
       {/* Header with wallet button kept — this was in multiple places earlier.
@@ -774,31 +739,18 @@ async function reRequestChannel(channelId) {
   } lg:block`}
 >
 
-          {/* PERFORMANCE */}
-          <div className="bg-white p-4 rounded shadow mb-3">
-            <div className="grid grid-cols-3 gap-4 text-center">
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-gray-500 text-sm">Total PnL</div>
-                <div className="text-xl font-semibold">{totalPnl} SOL</div>
-              </div>
+          <PerformanceSummary
+  totalPnl={totalPnl}
+  metrics={metrics}
+  tokenFilter={tokenFilter}
+  setTokenFilter={setTokenFilter}
+  dateFrom={dateFrom}
+  setDateFrom={setDateFrom}
+  dateTo={dateTo}
+  setDateTo={setDateTo}
+  fmt={fmt}
+/>
 
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-gray-500 text-sm">Win Rate</div>
-                <div className="text-xl font-semibold">{fmt(metrics.winRate,1)}%</div>
-              </div>
-
-              <div className="bg-gray-50 p-3 rounded">
-                <div className="text-gray-500 text-sm">Trades</div>
-                <div className="text-xl font-semibold">{metrics.trades}</div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-3 gap-3 mt-4">
-              <input className="border px-2 py-1 rounded" placeholder="Filter token" value={tokenFilter} onChange={e => setTokenFilter(e.target.value)} />
-              <input type="date" className="border px-2 py-1 rounded" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
-              <input type="date" className="border px-2 py-1 rounded" value={dateTo} onChange={e => setDateTo(e.target.value)} />
-            </div>
-          </div>
 
           {/* ELITE ANALYTICS PANEL (PRO CHARTS + RISK METRICS) */}
           <div className="bg-white p-4 rounded shadow mb-4">
