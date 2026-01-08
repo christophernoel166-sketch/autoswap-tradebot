@@ -5,6 +5,20 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import MobileHeader from "./layout/MobileHeader";
 import MobileTabs from "./layout/MobileTabs";
 import PerformanceSummary from "./analytics/PerformanceSummary";
+import EliteAnalytics from "./analytics/EliteAnalytics";
+import AddChannel from "./channels/AddChannel";
+import Subscriptions from "./channels/Subscriptions";
+import TradingSettings from "./settings/TradingSettings";
+import ActivePositions from "./positions/ActivePositions";
+import TradeHistory from "./history/TradeHistory";
+import Sidebar from "./layout/Sidebar";
+import MainPanel from "./layout/MainPanel";
+
+
+
+
+
+
 
 
 
@@ -655,7 +669,10 @@ async function reRequestChannel(channelId) {
 
   /* === UI === */
   return (
-    <div className="p-4 max-w-7xl mx-auto">
+    <div className="p-4 lg:px-4 lg:py-6 max-w-8xl mx-auto space-y-6
+                bg-gray-50 dark:bg-gray-900 rounded-xl">
+
+
 
 {/* MOBILE HEADER */}
 <MobileHeader connected={connected} walletAddress={walletAddress} />
@@ -728,506 +745,103 @@ async function reRequestChannel(channelId) {
   </div>
 )}
 
+<div className="grid grid-cols-12 gap-6 w-full">
 
-<div className="grid grid-cols-12 gap-4 w-full relative">
-  
 
-        {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
-<div
+
+
+  {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
+  <div
   className={`col-span-12 lg:col-span-8 ${
     mobileTab === "dashboard" ? "block" : "hidden"
   } lg:block`}
 >
+  <div className="space-y-6">
+    <PerformanceSummary
+      totalPnl={totalPnl}
+      metrics={metrics}
+      tokenFilter={tokenFilter}
+      setTokenFilter={setTokenFilter}
+      dateFrom={dateFrom}
+      setDateFrom={setDateFrom}
+      dateTo={dateTo}
+      setDateTo={setDateTo}
+      fmt={fmt}
+    />
 
-          <PerformanceSummary
-  totalPnl={totalPnl}
-  metrics={metrics}
-  tokenFilter={tokenFilter}
-  setTokenFilter={setTokenFilter}
-  dateFrom={dateFrom}
-  setDateFrom={setDateFrom}
-  dateTo={dateTo}
-  setDateTo={setDateTo}
-  fmt={fmt}
-/>
+    <EliteAnalytics
+      historyLoading={historyLoading}
+      filteredTradesCount={filteredHistory.length}
+      metrics={metrics}
+      distribution={distribution}
+      renderCumulativePath={renderCumulativePath}
+      fmt={fmt}
+    />
 
+    <TradeHistory filteredHistory={filteredHistory} />
 
-          {/* ELITE ANALYTICS PANEL (PRO CHARTS + RISK METRICS) */}
-          <div className="bg-white p-4 rounded shadow mb-4">
-            <div className="flex items-start justify-between">
-              <h3 className="font-medium">Elite Analytics</h3>
-              <div className="text-sm text-gray-500">{historyLoading ? "Loading..." : `${filteredHistory.length} trades selected`}</div>
-            </div>
-
-            {/* metrics row */}
-            <div className="grid grid-cols-6 gap-3 mt-4 text-center">
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Sharpe</div>
-                <div className="font-semibold">{fmt(metrics.sharpe,2)}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Sortino</div>
-                <div className="font-semibold">{fmt(metrics.sortino,2)}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Max Drawdown</div>
-                <div className="font-semibold">{fmt(metrics.maxDrawdown,4)}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Avg Drawdown</div>
-                <div className="font-semibold">{fmt(metrics.avgDrawdown,4)}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Profit Factor</div>
-                <div className="font-semibold">{metrics.profitFactor === Infinity ? "∞" : fmt(metrics.profitFactor,2)}</div>
-              </div>
-              <div className="p-2 border rounded">
-                <div className="text-xs text-gray-500">Risk of Ruin</div>
-                <div className="font-semibold">{fmt(metrics.riskOfRuin,4)}</div>
-              </div>
-            </div>
-
-            {/* charts */}
-            <div className="mt-4 grid grid-cols-2 gap-4">
-              {/* cumulative pnl chart */}
-              <div className="p-2 border rounded bg-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-medium">Cumulative PnL</div>
-                  <div className="text-xs text-gray-500">total: {fmt(metrics.totalPnl,6)} SOL</div>
-                </div>
-                <svg width="100%" height="140" viewBox="0 0 760 140" preserveAspectRatio="none">
-                  {/* axes */}
-                  <rect x="0" y="0" width="760" height="140" fill="transparent" />
-                  {(() => {
-                    const points = renderCumulativePath(metrics.pnlSeries, 760, 140, 12);
-                    if (!points) return null;
-                    return (
-                      <>
-                        <polyline
-                          fill="none"
-                          stroke={Math.max(...(metrics.pnlSeries||[])) >= 0 ? "#16a34a" : "#ef4444"}
-                          strokeWidth={2}
-                          points={points}
-                        />
-                        {/* small circles */}
-                        {metrics.pnlSeries.map((v,i) => {
-                          const max = Math.max(...metrics.pnlSeries, 0);
-                          const min = Math.min(...metrics.pnlSeries, 0);
-                          const range = max - min || 1;
-                          const padding = 12;
-                          const width = 760;
-                          const height = 140;
-                          const stepX = (width - 2*padding) / Math.max(1, metrics.pnlSeries.length - 1);
-                          const x = padding + i * stepX;
-                          const y = padding + ( (max - v) / range ) * (height - 2*padding);
-                          return <circle key={i} cx={x} cy={y} r={2} fill={v >= 0 ? "#16a34a" : "#ef4444"} />;
-                        })}
-                      </>
-                    );
-                  })()}
-                </svg>
-              </div>
-
-              {/* profit distribution histogram */}
-              <div className="p-2 border rounded bg-white">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="text-sm font-medium">Profit Distribution</div>
-                  <div className="text-xs text-gray-500">buckets: {distribution.length}</div>
-                </div>
-                <svg width="100%" height="140" viewBox="0 0 760 140" preserveAspectRatio="none">
-                  <rect x="0" y="0" width="760" height="140" fill="transparent" />
-                  {(() => {
-                    if (!distribution.length) return null;
-                    const padding = 12;
-                    const width = 760 - padding*2;
-                    const height = 140 - padding*2;
-                    const maxCount = Math.max(...distribution.map(d => d.count), 1);
-                    const barW = width / distribution.length;
-                    return distribution.map((d,i) => {
-                      const x = padding + i * barW;
-                      const h = (d.count / maxCount) * height;
-                      const y = padding + (height - h);
-                      const isPos = d.bucket >= 0;
-                      return <rect key={i} x={x+2} y={y} width={Math.max(4, barW-4)} height={Math.max(2, h)} fill={isPos ? "#4f46e5" : "#ef4444"} />;
-                    });
-                  })()}
-                </svg>
-
-                <div className="text-xs text-gray-600 mt-2">
-                  Positive buckets to the right, negative to the left (bucket = SOL rounded).
-                </div>
-              </div>
-            </div>
-          </div>
-
-        </div>
-
-      
-  
-        <div
-  className={`col-span-12 lg:col-span-8 ${
-    mobileTab === "dashboard" ? "block" : "hidden"
-  } lg:block`}
->
-
-
- {/* ADD CHANNEL */}
-<div className="bg-white p-4 rounded shadow w-full">
-  <h3 className="font-medium mb-2">Add Channel</h3>
-
-  {/* Telegram NOT linked */}
-  {!isTelegramLinked ? (
-    <>
-      <div className="w-full border rounded px-2 py-2 text-sm bg-gray-100 text-gray-400 cursor-not-allowed">
-        Link Telegram to request channels
-      </div>
-
-      <p className="text-xs text-red-600 mt-2">
-        ⚠️ You must link your Telegram account before requesting channel access.
-      </p>
-
-      {/* ✅ OPEN LINK TELEGRAM POPUP */}
-      <button
-        onClick={linkTelegramAccount}
-        className="inline-block mt-3 text-xs px-4 py-2 rounded bg-blue-600 text-white hover:bg-blue-700"
-      >
-        🔗 Link Telegram Account
-      </button>
-    </>
-  ) : (
-    <>
-      <select
-        className="w-full border rounded px-2 py-2 text-sm"
-        defaultValue=""
-        onChange={(e) => {
-          const channelId = e.target.value;
-          if (!channelId) return;
-          requestChannel(channelId);
-        }}
-      >
-        <option value="" disabled>
-          Select a channel to request access
-        </option>
-
-        {availableChannels.map((ch) => (
-          <option key={ch.channelId} value={ch.channelId}>
-            @{ch.username || ch.title || ch.channelId}
-          </option>
-        ))}
-      </select>
-
-      <p className="text-xs text-gray-500 mt-2">
-        Request will be sent to the channel owner for approval.
-      </p>
-    </>
-  )}
-</div>
-
-
-{/* SUBSCRIPTIONS */}
-<div className="bg-white p-4 rounded shadow mb-4 w-full">
-  <h3 className="font-medium mb-2">Subscriptions</h3>
-
-  {userChannels.length === 0 ? (
-    <div className="text-gray-500 text-sm">
-      No channel subscriptions yet.
-    </div>
-  ) : (
-    userChannels.map((ch) => {
-      const badge = getChannelStatusBadge(ch.channelId);
-
-      return (
-        <div
-          key={ch.channelId}
-          className="flex justify-between items-center border rounded px-2 py-2 mb-2"
-        >
-          {/* Channel info */}
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">
-              @{ch.username || ch.title || ch.channelId}
-            </span>
-
-            <span
-              className={`text-xs mt-1 inline-block px-2 py-0.5 rounded ${
-                badge.color === "green"
-                  ? "bg-green-100 text-green-700"
-                  : badge.color === "yellow"
-                  ? "bg-yellow-100 text-yellow-700"
-                  : badge.color === "red"
-                  ? "bg-red-100 text-red-700"
-                  : "bg-gray-100 text-gray-600"
-              }`}
-            >
-              {badge.label}
-            </span>
-          </div>
-
-          {/* Actions */}
-          <div className="flex gap-2 items-center">
-            {ch.status === "rejected" && (
-              <button
-                onClick={() => reRequestChannel(ch.channelId)}
-                className="text-xs px-2 py-1 border rounded bg-yellow-100"
-              >
-                Re-request
-              </button>
-            )}
-
-            {ch.enabled ? (
-              <button
-                onClick={() => toggleChannel(ch.channelId, false)}
-                className="text-xs px-2 py-1 border rounded bg-red-100"
-              >
-                Disable
-              </button>
-            ) : (
-              <button
-                disabled={ch.status !== "approved"}
-                onClick={() => toggleChannel(ch.channelId, true)}
-                className={`text-xs px-2 py-1 border rounded ${
-                  ch.status !== "approved"
-                    ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                    : "bg-green-100"
-                }`}
-              >
-                Enable
-              </button>
-            )}
-          </div>
-        </div>
-      );
-    })
-  )}
-</div>
-
-
-
-
-          {/* SETTINGS */}
-          <div className="bg-white p-4 rounded shadow">
-            <h3 className="font-medium mb-3">Settings</h3>
-
-            <label className="block text-sm mb-1">Default SOL per trade</label>
-            <input type="number" className="border px-2 py-1 w-full mb-2"
-              value={solPerTrade} onChange={e => setSolPerTrade(e.target.value)} />
-
-            <label className="block text-sm mb-1">Stop Loss (%)</label>
-            <input type="number" className="border px-2 py-1 w-full mb-3"
-              value={stopLoss} onChange={e => setStopLoss(e.target.value)} />
-
-            <label className="block text-sm mb-1">Trailing Trigger (%)</label>
-            <input type="number" className="border px-2 py-1 w-full mb-3"
-              value={trailingTrigger} onChange={e => setTrailingTrigger(e.target.value)} />
-
-            <label className="block text-sm mb-1">Trailing Distance (%)</label>
-            <input type="number" className="border px-2 py-1 w-full mb-3"
-              value={trailingDistance} onChange={e => setTrailingDistance(e.target.value)} />
-
-            <h4 className="font-medium mt-4 mb-2">Take Profit Levels</h4>
-            <div className="grid grid-cols-2 gap-3">
-              <input type="number" className="border px-2 py-1" value={tp1} onChange={e => setTp1(e.target.value)} />
-              <input type="number" className="border px-2 py-1" value={tp1Sell} onChange={e => setTp1Sell(e.target.value)} />
-
-              <input type="number" className="border px-2 py-1" value={tp2} onChange={e => setTp2(e.target.value)} />
-              <input type="number" className="border px-2 py-1" value={tp2Sell} onChange={e => setTp2Sell(e.target.value)} />
-
-              <input type="number" className="border px-2 py-1" value={tp3} onChange={e => setTp3(e.target.value)} />
-              <input type="number" className="border px-2 py-1" value={tp3Sell} onChange={e => setTp3Sell(e.target.value)} />
-            </div>
-
-            <button onClick={saveSettings} className="mt-4 w-full py-2 bg-indigo-600 text-white rounded">
-              Save Settings
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ---------------------------------------------------------------- */}
-      {/* -------------------  TRADE HISTORY (BOTTOM SECTION) ------------- */}
-      {/* ---------------------------------------------------------------- */}
-
-      <div className="bg-white p-4 rounded shadow mt-6">
-        <div className="flex justify-between mb-4">
-          <h3 className="font-medium">Trade History</h3>
-          <span className="text-sm text-gray-500">{filteredHistory.length} records</span>
-        </div>
-
-        {filteredHistory.length === 0 ? (
-          <div className="text-gray-500">No trades found.</div>
-        ) : (
-          <div className="overflow-x-auto -mx-4 px-4">
-  <table className="min-w-[900px] w-full text-sm">
-
-              <thead>
-                <tr>
-                  <th>Time</th>
-                  <th>Token</th>
-                  <th>Entry</th>
-                  <th>Exit</th>
-                  <th>PnL</th>
-                  <th className="hidden lg:table-cell">Buy Tx</th>
-<th className="hidden lg:table-cell">Sell Tx</th>
-
-                </tr>
-              </thead>
-              <tbody>
-                {filteredHistory.map((h, i) => {
-                  const pnl = (Number(h.exitPrice || 0) - Number(h.entryPrice || 0)) * (Number(h.amountSol || h.solAmount || 0));
-                  return (
-                    <tr key={i} className="border-t">
-                      <td>{String(h.createdAt || "").slice(0, 19)}</td>
-                      <td>{h.tokenMint || h.mint}</td>
-                      <td>{Number(h.entryPrice || 0).toFixed(6)}</td>
-                      <td>{Number(h.exitPrice || 0).toFixed(6)}</td>
-                      <td className={pnl >= 0 ? "text-green-600" : "text-red-600"}>{pnl.toFixed(6)}</td>
-                      <td className="hidden lg:table-cell break-all max-w-[220px]">
-  {h.buyTxid || "-"}
-</td>
-
-<td className="hidden lg:table-cell break-all max-w-[220px]">
-  {h.sellTxid || "-"}
-</td>
-
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
-{/* ACTIVE POSITIONS (BOTTOM SECTION) */}
-<div className="bg-white p-4 rounded shadow mt-6 mb-10">
-  <div className="flex justify-between mb-3 items-center">
-    <h2 className="text-l font-medium">Active Positions</h2>
-    <div className="flex gap-2">
-      <button
-        onClick={fetchPositions}
-        className="px-3 py-1 border rounded text-sm"
-      >
-        {loading ? "Loading…" : "Refresh"}
-      </button>
-      <button
-        onClick={manualSellAll}
-        className="px-3 py-1 border rounded text-sm"
-      >
-        Sell All
-      </button>
-    </div>
+    <ActivePositions
+      positions={positions}
+      loading={loading}
+      fetchPositions={fetchPositions}
+      manualSell={manualSell}
+      manualSellAll={manualSellAll}
+    />
   </div>
-
-  {positions.length === 0 ? (
-    <div className="text-gray-500">No active positions.</div>
-  ) : (
-    <>
-      {/* ================= MOBILE VIEW (CARDS) ================= */}
-      <div className="space-y-3 lg:hidden">
-        {positions.map((p, i) => (
-          <div
-            key={i}
-            className="border rounded p-3 flex flex-col gap-2"
-          >
-            <div className="flex justify-between items-center">
-              <span className="font-mono text-sm truncate max-w-[160px]">
-                {p.mint}
-              </span>
-              <span
-                className={`text-sm font-medium ${
-                  Number(p.changePercent || 0) >= 0
-                    ? "text-green-600"
-                    : "text-red-600"
-                }`}
-              >
-                {p.changePercent}%
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 text-xs text-gray-700">
-              <div>
-                <div className="text-gray-400">Entry</div>
-                {Number(p.entryPrice || 0).toFixed(6)}
-              </div>
-
-              <div>
-                <div className="text-gray-400">Current</div>
-                {Number(p.currentPrice || 0).toFixed(6)}
-              </div>
-
-              <div>
-                <div className="text-gray-400">PnL</div>
-                <span
-                  className={
-                    Number(p.pnlSol || 0) >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }
-                >
-                  {Number(p.pnlSol || 0).toFixed(6)} SOL
-                </span>
-              </div>
-
-              <div>
-                <div className="text-gray-400">TP Stage</div>
-                {p.tpStage}
-              </div>
-            </div>
-
-            <button
-              onClick={() => manualSell(p.mint)}
-              className="mt-2 px-3 py-1 border rounded text-sm"
-            >
-              Sell
-            </button>
-          </div>
-        ))}
-      </div>
-
-      {/* ================= DESKTOP VIEW (TABLE) ================= */}
-      <div className="hidden lg:block overflow-x-auto">
-        <table className="min-w-[700px] w-full text-sm">
-          <thead>
-            <tr>
-              <th>#</th>
-              <th>Token</th>
-              <th>Entry</th>
-              <th>Current</th>
-              <th>%</th>
-              <th>PnL</th>
-              <th>TP</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {positions.map((p, i) => (
-              <tr key={i} className="border-t">
-                <td>{i + 1}</td>
-                <td className="font-mono">{p.mint}</td>
-                <td>{Number(p.entryPrice || 0).toFixed(6)}</td>
-                <td>{Number(p.currentPrice || 0).toFixed(6)}</td>
-                <td
-                  className={
-                    Number(p.changePercent || 0) >= 0
-                      ? "text-green-600"
-                      : "text-red-600"
-                  }
-                >
-                  {p.changePercent}
-                </td>
-                <td>{Number(p.pnlSol || 0).toFixed(6)}</td>
-                <td>{p.tpStage}</td>
-                <td>
-                  <button
-                    onClick={() => manualSell(p.mint)}
-                    className="px-2 py-1 border rounded"
-                  >
-                    Sell
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  )}
 </div>
+
+  
+    {/* RIGHT SIDEBAR — CHANNELS + SETTINGS */}
+<div
+  className={`col-span-12 lg:col-span-4 space-y-4
+              bg-gray-100 dark:bg-gray-800
+              rounded-xl p-4
+              ${
+                mobileTab === "dashboard" ? "block" : "hidden"
+              } lg:block lg:sticky lg:top-4 self-start`}
+>
+
+
+  <AddChannel
+    isTelegramLinked={isTelegramLinked}
+    availableChannels={availableChannels}
+    linkTelegramAccount={linkTelegramAccount}
+    requestChannel={subscribeChannel}
+  />
+
+  <Subscriptions
+    userChannels={userChannels}
+    toggleChannel={toggleChannel}
+    reRequestChannel={reRequestChannel}
+    getChannelStatusBadge={getChannelStatusBadge}
+  />
+
+  <TradingSettings
+    solPerTrade={solPerTrade}
+    setSolPerTrade={setSolPerTrade}
+    stopLoss={stopLoss}
+    setStopLoss={setStopLoss}
+    trailingTrigger={trailingTrigger}
+    setTrailingTrigger={setTrailingTrigger}
+    trailingDistance={trailingDistance}
+    setTrailingDistance={setTrailingDistance}
+    tp1={tp1}
+    setTp1={setTp1}
+    tp1Sell={tp1Sell}
+    setTp1Sell={setTp1Sell}
+    tp2={tp2}
+    setTp2={setTp2}
+    tp2Sell={tp2Sell}
+    setTp2Sell={setTp2Sell}
+    tp3={tp3}
+    setTp3={setTp3}
+    tp3Sell={tp3Sell}
+    setTp3Sell={setTp3Sell}
+    saveSettings={saveSettings}
+  />
+</div>
+</div>   
+</div>   
+);
+}
+     

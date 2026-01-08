@@ -9,26 +9,57 @@ export default function App() {
   const { connected, publicKey } = useWallet();
   const [walletAddress, setWalletAddress] = useState("");
 
-  useEffect(() => {
-    // apply dark-mode preference on load (global)
-    const dm = localStorage.getItem("autoswap_dark") === "1";
-    if (dm) document.documentElement.classList.add("dark");
-    else document.documentElement.classList.remove("dark");
+  // 🌙 theme: "light" | "dark"
+  const [theme, setTheme] = useState(
+    localStorage.getItem("autoswap_theme") || "light"
+  );
 
+  useEffect(() => {
+    // apply theme globally
+    const root = document.documentElement;
+
+    if (theme === "dark") {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+
+    localStorage.setItem("autoswap_theme", theme);
+
+    // wallet sync (unchanged)
     if (connected && publicKey) setWalletAddress(publicKey.toString());
     else setWalletAddress("");
-  }, [connected, publicKey]);
+  }, [theme, connected, publicKey]);
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 transition-colors">
+    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top bar */}
-      <div className="p-0.3 border-b bg-white dark:bg-gray-800 flex justify-between items-center">
-        <h1 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Autoswap Trading Dashboard</h1>
-        {/* single canonical wallet control */}
-        <WalletMultiButton />
+      <div className="px-4 py-3 border-b bg-white dark:bg-gray-800 flex justify-between items-center">
+        <h1 className="text-xl font-semibold">
+          Autoswap Trading Dashboard
+        </h1>
+
+        <div className="flex items-center gap-3">
+          {/* 🌙 Theme toggle */}
+          <button
+            onClick={() =>
+              setTheme(theme === "dark" ? "light" : "dark")
+            }
+            className="text-xs px-3 py-2 rounded border
+                       bg-gray-100 hover:bg-gray-200
+                       dark:bg-gray-700 dark:hover:bg-gray-600
+                       dark:border-gray-600 transition"
+            title="Toggle theme"
+          >
+            {theme === "dark" ? "🌞 Light" : "🌙 Dark"}
+          </button>
+
+          {/* Wallet control */}
+          <WalletMultiButton />
+        </div>
       </div>
 
-      {/* Load dashboard; the dashboard will present connect UI as well */}
+      {/* Main dashboard */}
       <AutoswapDashboard walletAddress={walletAddress} />
     </div>
   );
