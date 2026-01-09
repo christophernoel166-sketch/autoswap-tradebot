@@ -905,6 +905,69 @@ app.use(expressModule.json());
 app.use(cors());
 const BOT_API_PORT = Number(process.env.BOT_API_PORT || 8081);
 
+// ===================================================
+// 📩 API → BOT: POST CHANNEL APPROVAL REQUEST
+// ===================================================
+app.post("/bot/request-approval", async (req, res) => {
+  try {
+    const { walletAddress, channelId } = req.body;
+
+    if (!walletAddress || !channelId) {
+      return res.status(400).json({
+        error: "walletAddress & channelId required",
+      });
+    }
+
+    const user = await User.findOne({ walletAddress });
+    if (!user || !user.telegram?.userId) {
+      return res.status(404).json({
+        error: "user_not_linked",
+      });
+    }
+
+    const channel = await SignalChannel.findOne({
+      channelId: String(channelId),
+      status: "active",
+    });
+
+    if (!channel) {
+      return res.status(404).json({
+        error: "channel_not_found",
+      });
+    }
+
+    const username = user.telegram.username
+      ? `@${user.telegram.username}`
+      : "(no username)";
+
+    const message = `
+🆕 *Trade Access Request*
+
+👤 Telegram: ${username}
+🆔 Telegram ID: \`${user.telegram.userId}\`
+💼 Wallet: \`${walletAddress}\`
+
+Approve:
+/approve_wallet ${walletAddress}
+
+Reject:
+/reject_wallet ${walletAddress}
+`;
+
+    await bot.telegram.sendMessage(
+      channel.channelId,
+      message,
+      { parse_mode: "Markdown" }
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("request-approval error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
 
 // configurable port
 const BOT_API_BASE =
