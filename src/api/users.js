@@ -1,20 +1,11 @@
 import express from "express";
 import crypto from "crypto";
-import fetch from "node-fetch";
 import User from "../../models/User.js";
 import SignalChannel from "../../models/SignalChannel.js";
 
 console.log("🔥 LOADED users API ROUTER:", import.meta.url);
 
 const router = express.Router();
-
-/**
- * ===================================================
- * INTERNAL BOT SERVICE BASE (Railway internal DNS)
- * ===================================================
- */
-const BOT_INTERNAL_BASE =
-  process.env.BOT_INTERNAL_BASE || "http://localhost:8081";
 
 /**
  * ===================================================
@@ -92,15 +83,16 @@ router.post("/link-code", async (req, res) => {
       });
     }
 
-    // Reuse existing code if already generated
+    // 🔒 Prevent reuse of Telegram with another wallet
     if (user.telegram?.linkCode) {
       return res.json({
         ok: true,
         code: user.telegram.linkCode,
-        command: `/link_wallet ${user.telegram.linkCode}`,
+        instructions: "Send this command to the bot",
       });
     }
 
+    // Generate short one-time code
     const code = crypto.randomBytes(4).toString("hex");
 
     user.telegram = {
@@ -117,6 +109,7 @@ router.post("/link-code", async (req, res) => {
       ok: true,
       code,
       command: `/link_wallet ${code}`,
+      instructions: "Send this command to the Telegram bot",
     });
   } catch (err) {
     console.error("❌ link-code error:", err);
@@ -127,7 +120,7 @@ router.post("/link-code", async (req, res) => {
 /**
  * ===================================================
  * POST /api/users/subscribe
- * API ENFORCEMENT + BOT NOTIFICATION
+ * OPTION A — API-ONLY ENFORCEMENT
  * ===================================================
  */
 router.post("/subscribe", async (req, res) => {
@@ -154,7 +147,7 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
-    // 🔐 One Telegram → one wallet (global lock)
+    // 🔐 One Telegram → one wallet
     const telegramOwner = await User.findOne({
       "telegram.userId": user.telegram.userId,
       walletAddress: { $ne: walletAddress },
@@ -186,25 +179,6 @@ router.post("/subscribe", async (req, res) => {
     }
 
     await user.save();
-
-    /**
-     * ===================================================
-     * 🔔 Notify BOT to post approval request
-     * ===================================================
-     */
-    try {
-      await fetch(`${BOT_INTERNAL_BASE}/bot/request-approval`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress,
-          channelId,
-        }),
-      });
-    } catch (err) {
-      console.error("⚠️ Bot notification failed:", err);
-      // Do NOT fail the API response
-    }
 
     return res.json({ ok: true, status: "pending" });
   } catch (err) {
