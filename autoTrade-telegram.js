@@ -1138,9 +1138,12 @@ app.post("/api/manual-sell", async (req, res) => {
   }
 });
 
-// start server (non-blocking)
-app.listen(BOT_API_PORT, () => {
-  LOG.info({ port: BOT_API_PORT }, `Bot internal API listening on port ${BOT_API_PORT}`);
+// start server (non-blocking) — Railway internal networking FIX
+app.listen(BOT_API_PORT, "0.0.0.0", () => {
+  LOG.info(
+    { port: BOT_API_PORT },
+    "Bot internal API listening on 0.0.0.0"
+  );
 });
 
 // ========= Admin channel management commands via Telegram (keep admin only) =========
