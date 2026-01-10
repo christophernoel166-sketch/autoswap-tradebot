@@ -1140,8 +1140,6 @@ app.post("/api/manual-sell", async (req, res) => {
 });
 
 // start server (non-blocking) — Railway internal networking FIX
-const PORT = Number(process.env.PORT);
-
 app.listen(PORT, "0.0.0.0", () => {
   LOG.info(
     { port: PORT },
