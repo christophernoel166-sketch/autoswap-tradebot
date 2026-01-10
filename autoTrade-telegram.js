@@ -903,7 +903,8 @@ import cors from "cors";
 const app = expressModule();
 app.use(expressModule.json());
 app.use(cors());
-const PORT = Number(process.env.PORT);
+const PORT = Number(process.env.PORT || 8080);
+
 
 
 // ===================================================
