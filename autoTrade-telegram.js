@@ -903,7 +903,8 @@ import cors from "cors";
 const app = expressModule();
 app.use(expressModule.json());
 app.use(cors());
-const BOT_API_PORT = Number(process.env.BOT_API_PORT || 8081);
+const PORT = Number(process.env.PORT);
+
 
 // ===================================================
 // 📩 API → BOT: POST CHANNEL APPROVAL REQUEST
@@ -1139,9 +1140,11 @@ app.post("/api/manual-sell", async (req, res) => {
 });
 
 // start server (non-blocking) — Railway internal networking FIX
-app.listen(BOT_API_PORT, "0.0.0.0", () => {
+const PORT = Number(process.env.PORT);
+
+app.listen(PORT, "0.0.0.0", () => {
   LOG.info(
-    { port: BOT_API_PORT },
+    { port: PORT },
     "Bot internal API listening on 0.0.0.0"
   );
 });
