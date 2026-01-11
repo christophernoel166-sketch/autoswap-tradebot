@@ -199,13 +199,13 @@ bot.on("channel_post", async (ctx) => {
     if (!text) return;
 
     const chat = ctx.chat;
-    const trimmed = text.trim();
+    const parts = text.trim().split(/\s+/);
 
-    // ===============================
-    // ✅ APPROVE WALLET
-    // ===============================
-    if (trimmed.startsWith("/approve_wallet")) {
-      const walletAddress = trimmed.split(" ")[1];
+    // =========================
+    // APPROVE WALLET
+    // =========================
+    if (parts[0] === "/approve_wallet") {
+      const walletAddress = parts[1];
       if (!walletAddress) {
         return ctx.telegram.sendMessage(
           chat.id,
@@ -213,72 +213,26 @@ bot.on("channel_post", async (ctx) => {
         );
       }
 
-      // Admin check
+      // admin check
       const admins = await ctx.telegram.getChatAdministrators(chat.id);
       const isAdmin = admins.some(a => a.user.id === ctx.from.id);
       if (!isAdmin) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Only channel admins can approve wallets."
-        );
+        return ctx.telegram.sendMessage(chat.id, "❌ Admins only.");
       }
 
-      // Load channel
-      const channel = await SignalChannel.findOne({
-        channelId: String(chat.id),
-      });
-      if (!channel) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Channel not registered."
-        );
-      }
-
-      // Load user
       const user = await User.findOne({
         walletAddress,
         "subscribedChannels.channelId": String(chat.id),
       });
+
       if (!user) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Wallet has not requested access to this channel."
-        );
+        return ctx.telegram.sendMessage(chat.id, "❌ Wallet did not request access.");
       }
 
-      // Telegram must be linked
       if (!user.telegram?.userId) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ User has not linked a Telegram account."
-        );
+        return ctx.telegram.sendMessage(chat.id, "❌ User has not linked Telegram.");
       }
 
-      // Telegram user must be channel member
-      const member = await ctx.telegram.getChatMember(
-        chat.id,
-        Number(user.telegram.userId)
-      );
-      if (!["creator", "administrator", "member"].includes(member.status)) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Telegram user is not a member of this channel."
-        );
-      }
-
-      // GLOBAL TELEGRAM → WALLET LOCK
-      const existing = await User.findOne({
-        "telegram.userId": user.telegram.userId,
-        walletAddress: { $ne: walletAddress },
-      });
-      if (existing) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ This Telegram account is already linked to another wallet."
-        );
-      }
-
-      // APPROVE
       await User.updateOne(
         {
           walletAddress,
@@ -292,11 +246,11 @@ bot.on("channel_post", async (ctx) => {
         }
       );
 
-      // Notify user (DM)
+      // DM user
       try {
         await ctx.telegram.sendMessage(
           user.telegram.userId,
-          `✅ Approved!\n\nYou can now trade signals from:\n📢 ${chat.title}`
+          `✅ Approved!\nYou can now trade from ${chat.title}`
         );
       } catch {}
 
@@ -306,26 +260,12 @@ bot.on("channel_post", async (ctx) => {
       );
     }
 
-    // ===============================
-    // ❌ REJECT WALLET
-    // ===============================
-    if (trimmed.startsWith("/reject_wallet")) {
-      const walletAddress = trimmed.split(" ")[1];
-      if (!walletAddress) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Usage: /reject_wallet <WALLET_ADDRESS>"
-        );
-      }
-
-      const admins = await ctx.telegram.getChatAdministrators(chat.id);
-      const isAdmin = admins.some(a => a.user.id === ctx.from.id);
-      if (!isAdmin) {
-        return ctx.telegram.sendMessage(
-          chat.id,
-          "❌ Only channel admins can reject wallets."
-        );
-      }
+    // =========================
+    // REJECT WALLET
+    // =========================
+    if (parts[0] === "/reject_wallet") {
+      const walletAddress = parts[1];
+      if (!walletAddress) return;
 
       await User.updateOne(
         {
@@ -342,8 +282,9 @@ bot.on("channel_post", async (ctx) => {
         `🚫 Wallet rejected:\n${walletAddress}`
       );
     }
+
   } catch (err) {
-    console.error("channel approval handler error:", err);
+    console.error("channel_post approval error:", err);
   }
 });
 
