@@ -23,6 +23,14 @@ import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
+bot.on("channel_post", async (ctx) => {
+  console.log("📣 RAW CHANNEL POST RECEIVED:", {
+    chatId: ctx.chat?.id,
+    from: ctx.from?.id,
+    text: ctx.channelPost?.text,
+  });
+});
+
 
 
 function isUserApprovedForChannel(user, channelId) {
