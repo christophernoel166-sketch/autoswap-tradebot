@@ -912,6 +912,8 @@ const PORT = Number(process.env.PORT || 8080);
 // ===================================================
 app.post("/bot/request-approval", async (req, res) => {
   try {
+console.log("📩 APPROVAL REQUEST RECEIVED:", req.body);
+
     const { walletAddress, channelId } = req.body;
 
     if (!walletAddress || !channelId) {

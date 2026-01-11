@@ -15,13 +15,6 @@ import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
 
 
-
-
-
-
-
-
-
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
 
 export default function AutoswapDashboard() {
@@ -45,11 +38,6 @@ const [showLinkPopup, setShowLinkPopup] = useState(false);
 // ================================
 const [mobileTab, setMobileTab] = useState("dashboard");
 // "dashboard" | "channels" | "settings"
-
-
-
-
-
 
 
 const isTelegramLinked = !!user?.telegram?.userId;
@@ -452,25 +440,60 @@ function canReRequest(channelId) {
     fetchHistory();
   }
 
-  // Subscribe helper
-  async function subscribeChannel(ch) {
-    if (!walletAddress) return setMessage({ type: "error", text: "Connect wallet first" });
-    try {
-      const r = await fetch(`${API_BASE}/api/users/subscribe`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress, channel: ch }),
-      });
-      if (r.ok) setMessage({ type: "success", text: `Subscribed to @${ch}` });
-      else setMessage({ type: "error", text: "Subscribe failed" });
-    } catch (err) {
-      console.warn("subscribeChannel error:", err);
-      setMessage({ type: "error", text: "Subscribe failed" });
-    }
+  
+
+  
+    // Subscribe helper (with approval notification)
+async function subscribeChannel(ch) {
+  if (!walletAddress) {
+    return setMessage({ type: "error", text: "Connect wallet first" });
   }
 
+  try {
+    // 1️⃣ Save subscription (status = pending)
+    const r = await fetch(`${API_BASE}/api/users/subscribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        channel: ch,
+      }),
+    });
+
+    if (!r.ok) {
+      throw new Error("Subscribe failed");
+    }
+
+    // 2️⃣ 🔔 Notify bot to message channel owner
+    await fetch(`${API_BASE}/bot/request-approval`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        channelId: ch,
+      }),
+    });
+
+    // 3️⃣ Refresh UI
+    await fetchUserChannels();
+
+    setMessage({
+      type: "success",
+      text: "Request sent. Waiting for channel owner approval.",
+    });
+  } catch (err) {
+    console.warn("subscribeChannel error:", err);
+    setMessage({
+      type: "error",
+      text: "Failed to request channel access",
+    });
+  }
+}
+
+
+
 // ================================
-// RE-REQUEST AFTER REJECTION (STEP 5.4)
+// RE-REQUEST AFTER REJECTION (FIXED)
 // ================================
 async function reRequestChannel(channelId) {
   if (!walletAddress) {
@@ -478,6 +501,7 @@ async function reRequestChannel(channelId) {
   }
 
   try {
+    // 1️⃣ Save subscription again (status = pending)
     const r = await fetch(`${API_BASE}/api/users/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -491,6 +515,17 @@ async function reRequestChannel(channelId) {
       throw new Error("re-request failed");
     }
 
+    // 2️⃣ 🔔 Notify bot to message channel owner (MISSING BEFORE)
+    await fetch(`${API_BASE}/bot/request-approval`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        channelId,
+      }),
+    });
+
+    // 3️⃣ Refresh UI
     await fetchUserChannels();
 
     setMessage({
@@ -505,6 +540,7 @@ async function reRequestChannel(channelId) {
     });
   }
 }
+
 
 
   /* === ANALYTICS: filters, returns, metrics === */
@@ -840,8 +876,8 @@ async function reRequestChannel(channelId) {
     saveSettings={saveSettings}
   />
 </div>
-</div>   
-</div>   
+</div>
+</div>     
 );
 }
      
