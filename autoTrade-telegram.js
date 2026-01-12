@@ -194,7 +194,6 @@ bot.on("channel_post", async (ctx) => {
   }
 });
 
-
 // ===================================================
 // 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY)
 // Handles:
@@ -208,6 +207,8 @@ bot.on("channel_post", async (ctx) => {
 
     const chat = ctx.chat;
     const channelId = String(chat.id);
+    const channelUsername = chat.username ? `@${chat.username}` : null;
+    const channelTitle = chat.title || null;
 
     // ===============================
     // APPROVE WALLET
@@ -221,17 +222,37 @@ bot.on("channel_post", async (ctx) => {
         );
       }
 
+      // -------------------------------
       // ADMIN CHECK
+      // -------------------------------
       const admins = await ctx.telegram.getChatAdministrators(channelId);
       const isAdmin = admins.some((a) => a.user.id === ctx.from?.id);
       if (!isAdmin) {
         return ctx.telegram.sendMessage(channelId, "❌ Admins only.");
       }
 
-      // LOAD USER REQUEST
+      // 🔎 DEBUG — CRITICAL
+      console.log("🔎 APPROVAL DEBUG", {
+        walletAddress,
+        channelId,
+        channelUsername,
+        channelTitle,
+      });
+
+      // -------------------------------
+      // LOAD USER REQUEST (FIXED MATCH)
+      // -------------------------------
       const user = await User.findOne({
         walletAddress,
-        "subscribedChannels.channelId": channelId,
+        subscribedChannels: {
+          $elemMatch: {
+            $or: [
+              { channelId: channelId },
+              channelUsername ? { channelId: channelUsername } : null,
+              channelTitle ? { channelId: channelTitle } : null,
+            ].filter(Boolean),
+          },
+        },
       });
 
       if (!user) {
@@ -248,7 +269,9 @@ bot.on("channel_post", async (ctx) => {
         );
       }
 
+      // -------------------------------
       // VERIFY USER IS CHANNEL MEMBER
+      // -------------------------------
       const member = await ctx.telegram.getChatMember(
         channelId,
         Number(user.telegram.userId)
@@ -261,7 +284,9 @@ bot.on("channel_post", async (ctx) => {
         );
       }
 
+      // -------------------------------
       // GLOBAL TELEGRAM → WALLET LOCK
+      // -------------------------------
       const existing = await User.findOne({
         "telegram.userId": user.telegram.userId,
         walletAddress: { $ne: walletAddress },
@@ -274,11 +299,15 @@ bot.on("channel_post", async (ctx) => {
         );
       }
 
-      // APPROVE
+      // -------------------------------
+      // APPROVE (TARGET CORRECT ENTRY)
+      // -------------------------------
       await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          "subscribedChannels.channelId": {
+            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+          },
         },
         {
           $set: {
@@ -288,17 +317,62 @@ bot.on("channel_post", async (ctx) => {
         }
       );
 
+      console.log("✅ WALLET APPROVED", {
+        walletAddress,
+        channelId,
+      });
+
+      // -------------------------------
       // DM USER
-      await ctx.telegram.sendMessage(
-        user.telegram.userId,
-        `✅ Approved!\nYou can now trade signals from:\n📢 ${chat.title}`
-      ).catch(() => {});
+      // -------------------------------
+      await ctx.telegram
+        .sendMessage(
+          user.telegram.userId,
+          `✅ *Approved!*\n\nYou can now trade signals from:\n📢 *${chat.title}*`,
+          { parse_mode: "Markdown" }
+        )
+        .catch(() => {});
 
       return ctx.telegram.sendMessage(
         channelId,
         `✅ Wallet approved:\n${walletAddress}`
       );
     }
+
+    // ===============================
+    // REJECT WALLET
+    // ===============================
+    if (text.startsWith("/reject_wallet")) {
+      const walletAddress = text.split(" ")[1];
+      if (!walletAddress) return;
+
+      await User.updateOne(
+        {
+          walletAddress,
+          "subscribedChannels.channelId": {
+            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+          },
+        },
+        {
+          $set: { "subscribedChannels.$.status": "rejected" },
+        }
+      );
+
+      console.log("🚫 WALLET REJECTED", {
+        walletAddress,
+        channelId,
+      });
+
+      return ctx.telegram.sendMessage(
+        channelId,
+        `🚫 Wallet rejected:\n${walletAddress}`
+      );
+    }
+  } catch (err) {
+    console.error("channel approve/reject error:", err);
+  }
+});
+
 
     // ===============================
     // REJECT WALLET
