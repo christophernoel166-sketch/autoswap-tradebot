@@ -194,121 +194,99 @@ bot.on("channel_post", async (ctx) => {
 
 
 // ===================================================
-// 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY)
-// Handles:
+// 🔐 CHANNEL APPROVAL HANDLER (FIXED & FINAL)
+// Handles BOTH:
 // /approve_wallet <WALLET_ADDRESS>
+// /approvewallet <WALLET_ADDRESS>
 // /reject_wallet <WALLET_ADDRESS>
+// /rejectwallet <WALLET_ADDRESS>
 // ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
-    console.log("🔥 CHANNEL_POST HANDLER FIRED", {
-      chatId: ctx.chat?.id,
-      fromId: ctx.from?.id,
-      senderChatId: ctx.channelPost?.sender_chat?.id,
-      text: ctx.channelPost?.text,
-    });
-
     const text = ctx.channelPost?.text?.trim();
     if (!text) return;
 
     const chat = ctx.chat;
     if (!chat || chat.type !== "channel") return;
 
-    const channelId = String(chat.id); // ✅ ALWAYS CHANNEL ID
+    const channelId = String(chat.id);
 
-    // ===================================================
-    // ✅ APPROVE WALLET
-    // ===================================================
-    if (text.startsWith("/approve_wallet")) {
-      const walletAddress = text.split(" ")[1];
+    console.log("🔥 CHANNEL_POST RECEIVED", {
+      channelId,
+      text,
+      fromId: ctx.from?.id,
+      senderChatId: ctx.channelPost?.sender_chat?.id,
+    });
 
-      if (!walletAddress) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
-        );
-        return;
-      }
-// ---------------------------------------------------
-// 🔐 ADMIN CHECK (CORRECT FOR CHANNEL POSTS)
-// ---------------------------------------------------
-const isChannelPost =
-  ctx.channelPost?.sender_chat?.id === ctx.chat?.id;
+    // --------------------------------------------------
+    // ✅ COMMAND NORMALIZATION
+    // --------------------------------------------------
+    const isApprove =
+      text.startsWith("/approve_wallet") ||
+      text.startsWith("/approvewallet");
 
-console.log("🔐 CHANNEL ADMIN CHECK", {
-  senderChatId: ctx.channelPost?.sender_chat?.id,
-  channelId: ctx.chat?.id,
-  isChannelPost,
-});
+    const isReject =
+      text.startsWith("/reject_wallet") ||
+      text.startsWith("/rejectwallet");
 
-if (!isChannelPost) {
-  await ctx.telegram.sendMessage(
-    channelId,
-    "❌ Approval must be sent as a channel admin post."
-  );
-  return;
-}
+    if (!isApprove && !isReject) return;
 
-
-      // ---------------------------------------------------
-      // 🔎 LOAD USER REQUEST (CHANNEL ID ONLY)
-      // ---------------------------------------------------
-      const user = await User.findOne({
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-      });
-
-      if (!user) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet did not request this channel."
-        );
-        return;
-      }
-
-      if (!user.telegram?.userId) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet has not linked Telegram."
-        );
-        return;
-      }
-
-      // ---------------------------------------------------
-      // 👤 VERIFY USER IS CHANNEL MEMBER
-      // ---------------------------------------------------
-      const member = await ctx.telegram.getChatMember(
+    const walletAddress = text.split(/\s+/)[1];
+    if (!walletAddress) {
+      await ctx.telegram.sendMessage(
         channelId,
-        Number(user.telegram.userId)
+        "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
       );
+      return;
+    }
 
-      if (!["creator", "administrator", "member"].includes(member.status)) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Telegram user is not in this channel."
-        );
-        return;
-      }
+    // --------------------------------------------------
+    // 🔐 ADMIN CHECK (CORRECT FOR CHANNEL POSTS)
+    // --------------------------------------------------
+    const admins = await ctx.telegram.getChatAdministrators(channelId);
 
-      // ---------------------------------------------------
-      // 🔒 GLOBAL TELEGRAM → WALLET LOCK
-      // ---------------------------------------------------
-      const existing = await User.findOne({
-        "telegram.userId": user.telegram.userId,
-        walletAddress: { $ne: walletAddress },
-      });
+    const senderId =
+      ctx.from?.id ||
+      ctx.channelPost?.sender_chat?.id;
 
-      if (existing) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          `❌ This Telegram is already linked to another wallet:\n${existing.walletAddress}`
-        );
-        return;
-      }
+    const isAdmin = admins.some(
+      (a) => String(a.user.id) === String(senderId)
+    );
 
-      // ---------------------------------------------------
-      // ✅ APPROVE WALLET (CHANNEL ID ONLY)
-      // ---------------------------------------------------
+    console.log("🔐 ADMIN CHECK", {
+      senderId,
+      adminIds: admins.map((a) => a.user.id),
+      isAdmin,
+    });
+
+    if (!isAdmin) {
+      await ctx.telegram.sendMessage(
+        channelId,
+        "❌ Admins only."
+      );
+      return;
+    }
+
+    // --------------------------------------------------
+    // 🔎 LOAD USER REQUEST (CHANNEL ID ONLY)
+    // --------------------------------------------------
+    const user = await User.findOne({
+      walletAddress,
+      "subscribedChannels.channelId": channelId,
+    });
+
+    if (!user) {
+      await ctx.telegram.sendMessage(
+        channelId,
+        "❌ Wallet did not request this channel."
+      );
+      return;
+    }
+
+    // --------------------------------------------------
+    // ✅ APPROVE
+    // --------------------------------------------------
+    if (isApprove) {
       await User.updateOne(
         {
           walletAddress,
@@ -322,47 +300,29 @@ if (!isChannelPost) {
         }
       );
 
-      // 🔎 VERIFY DB UPDATE
-      const verify = await User.findOne({
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-      }).lean();
-
-      console.log("✅ APPROVAL VERIFIED", verify?.subscribedChannels);
-
-      // ---------------------------------------------------
-      // 📩 NOTIFICATIONS
-      // ---------------------------------------------------
-      await ctx.telegram
-        .sendMessage(
-          user.telegram.userId,
-          `✅ *Approved!*\n\nYou can now trade signals from:\n📢 *${chat.title}*`,
-          { parse_mode: "Markdown" }
-        )
-        .catch(() => {});
+      console.log("✅ WALLET APPROVED", { walletAddress, channelId });
 
       await ctx.telegram.sendMessage(
         channelId,
         `✅ Wallet approved:\n${walletAddress}`
       );
 
+      if (user.telegram?.userId) {
+        await ctx.telegram
+          .sendMessage(
+            user.telegram.userId,
+            `✅ Approved!\nYou can now trade signals from:\n📢 ${chat.title}`
+          )
+          .catch(() => {});
+      }
+
       return;
     }
 
-    // ===================================================
-    // 🚫 REJECT WALLET
-    // ===================================================
-    if (text.startsWith("/reject_wallet")) {
-      const walletAddress = text.split(" ")[1];
-
-      if (!walletAddress) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Usage: /reject_wallet <WALLET_ADDRESS>"
-        );
-        return;
-      }
-
+    // --------------------------------------------------
+    // 🚫 REJECT
+    // --------------------------------------------------
+    if (isReject) {
       await User.updateOne(
         {
           walletAddress,
@@ -379,14 +339,11 @@ if (!isChannelPost) {
         channelId,
         `🚫 Wallet rejected:\n${walletAddress}`
       );
-
-      return;
     }
   } catch (err) {
     console.error("❌ channel approve/reject error:", err);
   }
 });
-
 
 // ===================================================
 // 🔗 LINK TELEGRAM ↔ WALLET
