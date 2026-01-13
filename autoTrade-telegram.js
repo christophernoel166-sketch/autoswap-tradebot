@@ -201,20 +201,26 @@ bot.on("channel_post", async (ctx) => {
 // ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
-    console.log("🔥 CHANNEL_POST HANDLER FIRED", {
-      chatId: ctx.chat?.id,
-      fromId: ctx.from?.id,
-      senderChatId: ctx.channelPost?.sender_chat?.id,
-      text: ctx.channelPost?.text,
-    });
+    const rawText = ctx.channelPost?.text;
+    if (!rawText) return;
 
-    const text = ctx.channelPost?.text?.trim();
-    if (!text) return;
+    console.log("🧪 CHANNEL_POST TEXT:", JSON.stringify(rawText));
 
+    const text = rawText.trim();
     const chat = ctx.chat;
     if (!chat || chat.type !== "channel") return;
 
-    const channelId = String(chat.id); // ✅ ALWAYS CHANNEL ID
+    const channelId = String(chat.id);
+    const botUsername = ctx.botInfo?.username;
+
+    // --------------------------------------------------
+    // Normalize command (handles /cmd and /cmd@BotName)
+    // --------------------------------------------------
+    const normalize = (cmd) =>
+      text === cmd ||
+      text.startsWith(cmd + " ") ||
+      (botUsername && text.startsWith(`${cmd}@${botUsername}`));
+
 
     // ===================================================
     // ✅ APPROVE WALLET
