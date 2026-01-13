@@ -24,6 +24,12 @@ import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
 
+bot.on("channel_post", (ctx) => {
+  console.log("🧪 RAW CHANNEL POST RECEIVED:", ctx.channelPost?.text);
+});
+
+
+
 
 function isUserApprovedForChannel(user, channelId) {
   if (!Array.isArray(user.subscribedChannels)) return false;
