@@ -23,14 +23,6 @@ import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
-bot.on("channel_post", async (ctx) => {
-  console.log("📣 RAW CHANNEL POST RECEIVED:", {
-    chatId: ctx.chat?.id,
-    from: ctx.from?.id,
-    text: ctx.channelPost?.text,
-  });
-});
-
 
 
 function isUserApprovedForChannel(user, channelId) {
@@ -1210,154 +1202,70 @@ bot.command("admin_channels", async (ctx) => {
   ctx.reply("📢 Current allowed channels: " + list);
 });
 
-// ========= Channel self-connect handler (Option 4) =========
 
 
-// ===================================================
-// CHANNEL POST HANDLER (CONNECT + TRADE EXECUTION)
-// ===================================================
-bot.on("channel_post", async (ctx) => {
-  try {
-    const post = ctx.update.channel_post;
-    if (!post || !post.text) return;
 
-    const text = post.text.trim();
-    const channelId = String(post.chat.id); // -100xxxx
-    const title = post.chat.title || "Unnamed Channel";
+ 
 
-    // --------------------------------------------------
-    // /connect → register channel
-    // --------------------------------------------------
-    if (text === "/connect") {
-      await SignalChannel.findOneAndUpdate(
-        { channelId },
-        {
-          channelId,
-          title,
-          status: "active",
-          connectedAt: new Date(),
-        },
-        { upsert: true }
-      );
-
-      LOG.info({ channelId, title }, "✅ Channel connected via /connect");
-      return;
-    }
-
-    // --------------------------------------------------
-    // 🔒 STEP 3 — HARD BLOCK UNAPPROVED WALLETS
-    // --------------------------------------------------
-
-    // 1️⃣ Users who ENABLED this channel
-    const users = await User.find({
-      "subscribedChannels.channelId": channelId,
-      "subscribedChannels.enabled": true,
-    });
-
-    if (!users.length) {
-      LOG.warn({ channelId }, "⚠️ No subscribed users — skipping signal");
-      return;
-    }
-
-    // 2️⃣ ONLY APPROVED wallets
-    const approvedUsers = users.filter((u) =>
-      u.subscribedChannels.some(
-        (c) =>
-          c.channelId === channelId &&
-          c.status === "approved" &&
-          c.enabled === true
-      )
-    );
-
-    if (!approvedUsers.length) {
-      LOG.warn({ channelId }, "⛔ Signal blocked — no APPROVED wallets");
-      return;
-    }
-
-    // --------------------------------------------------
-    // 🚀 EXECUTE TRADES (SAFE)
-    // --------------------------------------------------
-    for (const user of approvedUsers) {
-      LOG.info(
-        {
-          wallet: user.walletAddress,
-          channelId,
-        },
-        "🚀 Executing trade for APPROVED wallet"
-      );
-
-      // 🔥 CALL EXISTING TRADE ENGINE
-      // executeTradeForUser(user, text);
-    }
-  } catch (err) {
-    LOG.error({ err }, "❌ channel_post handler error");
-  }
-});
-
-
-// ========= Signal handler: supports multiple channels (channel -> mint) =========
+// ========= Signal handler: CHANNEL ID BASED (FIXED) =========
 bot.on("message", async (ctx) => {
   try {
+    // Must be channel message
     if (!ctx.message || !ctx.message.text) return;
+    if (!ctx.chat || ctx.chat.type !== "channel") return;
 
-    let chatUser = null;
-    if (ctx.message.sender_chat && ctx.message.sender_chat.username) {
-      chatUser = ctx.message.sender_chat.username;
-    } else if (ctx.chat && ctx.chat.username) {
-      chatUser = ctx.chat.username;
-    } else if (ctx.chat && ctx.chat.title) {
-      chatUser = ctx.chat.title;
-    } else {
-      return; // Not a channel message
-    }
+    const channelId = String(ctx.chat.id); // ✅ REAL CHANNEL ID (-100xxxx)
+    const text = ctx.message.text;
 
-    const cleaned = chatUser.replace(/^@/, "");
-
-    // Skip if channel isn't allowed
-    if (!CHANNELS.includes(cleaned)) {
-      LOG.debug({ from: cleaned }, "Channel not allowed");
+    // Skip if channel not active
+    if (!CHANNELS.includes(channelId)) {
+      LOG.debug({ channelId }, "Channel not allowed");
       return;
     }
 
-    // Extract mint address from message text
-    const text = ctx.message.text;
+    // Extract mint
     const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
     if (!mintMatch) return;
+
     const mint = mintMatch[0];
     if (!looksLikeMint(mint)) return;
 
-    LOG.info({ mint, from: cleaned }, "signal detected");
+    LOG.info({ mint, channelId }, "📡 Signal detected");
 
-    // Find users subscribed to this channel (by walletAddress stored in DB)
-
+    // Load users by CHANNEL ID (NOT username)
     const users = await User.find({
-  subscribedChannels: {
-    $elemMatch: {
-      channelId: cleaned,
-      enabled: true,   // 👈 USER_TOGGLE enforced here
-    },
-  },
-  active: { $ne: false },
-}).lean();
+      subscribedChannels: {
+        $elemMatch: {
+          channelId,
+          enabled: true,
+        },
+      },
+      active: { $ne: false },
+    }).lean();
 
-
-    if (!users || users.length === 0) {
-      LOG.warn(`No users subscribed to channel: ${cleaned}`);
+    if (!users.length) {
+      LOG.warn({ channelId }, "No subscribed users");
       return;
     }
 
-    LOG.info(`Executing trades for ${users.length} subscribed users...`);
+    LOG.info(
+      { channelId, count: users.length },
+      "Executing trades for subscribed users"
+    );
 
     for (const user of users) {
-      // user is DB document with walletAddress
-      executeUserTrade(user, mint, cleaned).catch((err) =>
-        LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
+      executeUserTrade(user, mint, channelId).catch((err) =>
+        LOG.error(
+          { err, wallet: user.walletAddress, channelId },
+          "executeUserTrade error"
+        )
       );
     }
   } catch (err) {
-    LOG.error({ err }, "message handler error");
+    LOG.error({ err }, "signal handler error");
   }
 });
+
 
 // ========= Start bot =========
 bot.launch({
