@@ -240,32 +240,14 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
 
-    // --------------------------------------------------
-    // 🔐 ADMIN CHECK (CORRECT FOR CHANNEL POSTS)
-    // --------------------------------------------------
-    const admins = await ctx.telegram.getChatAdministrators(channelId);
+    // ✅ CHANNEL POST VALIDATION (Telegram guarantees admin)
+if (
+  !ctx.channelPost?.sender_chat ||
+  String(ctx.channelPost.sender_chat.id) !== String(channelId)
+) {
+  return;
+}
 
-    const senderId =
-      ctx.from?.id ||
-      ctx.channelPost?.sender_chat?.id;
-
-    const isAdmin = admins.some(
-      (a) => String(a.user.id) === String(senderId)
-    );
-
-    console.log("🔐 ADMIN CHECK", {
-      senderId,
-      adminIds: admins.map((a) => a.user.id),
-      isAdmin,
-    });
-
-    if (!isAdmin) {
-      await ctx.telegram.sendMessage(
-        channelId,
-        "❌ Admins only."
-      );
-      return;
-    }
 
     // --------------------------------------------------
     // 🔎 LOAD USER REQUEST (CHANNEL ID ONLY)
