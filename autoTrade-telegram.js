@@ -278,42 +278,43 @@ if (!botIsAdmin) {
     }
 
     // --------------------------------------------------
-    // ✅ APPROVE
-    // --------------------------------------------------
-    if (isApprove) {
-      await User.updateOne(
-        {
-          walletAddress,
-          "subscribedChannels.channelId": channelId,
-        },
-        {
-          $set: {
-            "subscribedChannels.$.status": "approved",
-             "subscribedChannels.$.enabled": true,
+// ✅ APPROVE
+// --------------------------------------------------
+if (isApprove) {
 
-            "subscribedChannels.$.approvedAt": new Date(),
-          },
-        }
-      );
+  // 🚨 STEP 3 — PROOF POINT (ADD THIS)
+  console.log("🚨 STEP 3 ABOUT TO UPDATE DB", {
+    walletAddress,
+    channelId,
+  });
 
-      console.log("✅ WALLET APPROVED", { walletAddress, channelId });
-
-      await ctx.telegram.sendMessage(
-        channelId,
-        `✅ Wallet approved:\n${walletAddress}`
-      );
-
-      if (user.telegram?.userId) {
-        await ctx.telegram
-          .sendMessage(
-            user.telegram.userId,
-            `✅ Approved!\nYou can now trade signals from:\n📢 ${chat.title}`
-          )
-          .catch(() => {});
-      }
-
-      return;
+  const result = await User.updateOne(
+    {
+      walletAddress,
+      "subscribedChannels.channelId": channelId,
+    },
+    {
+      $set: {
+        "subscribedChannels.$.status": "approved",
+        "subscribedChannels.$.enabled": true,
+        "subscribedChannels.$.approvedAt": new Date(),
+      },
     }
+  );
+
+  // ✅ STEP 3 COMPLETED
+  console.log("✅ STEP 3 DB UPDATED", {
+    matched: result.matchedCount,
+    modified: result.modifiedCount,
+  });
+
+  await ctx.telegram.sendMessage(
+    channelId,
+    `✅ Wallet approved:\n${walletAddress}`
+  );
+
+  return;
+}
 
     // --------------------------------------------------
     // 🚫 REJECT
