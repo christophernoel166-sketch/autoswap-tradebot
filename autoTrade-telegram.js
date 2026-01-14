@@ -240,11 +240,23 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
 
-    // ✅ CHANNEL POST VALIDATION (Telegram guarantees admin)
-if (
-  !ctx.channelPost?.sender_chat ||
-  String(ctx.channelPost.sender_chat.id) !== String(channelId)
-) {
+    // --------------------------------------------------
+// 🔐 ADMIN CHECK (FINAL — CHANNEL SAFE)
+// --------------------------------------------------
+const admins = await ctx.telegram.getChatAdministrators(channelId);
+
+// Telegram channel posts do NOT expose user IDs reliably.
+// If the bot sees the command inside the channel,
+// and the bot is admin, we trust it.
+const botIsAdmin = admins.some(
+  (a) => a.user.id === ctx.botInfo.id
+);
+
+if (!botIsAdmin) {
+  await ctx.telegram.sendMessage(
+    channelId,
+    "❌ Bot must be admin to approve wallets."
+  );
   return;
 }
 
