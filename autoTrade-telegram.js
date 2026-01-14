@@ -295,6 +295,8 @@ bot.on("channel_post", async (ctx) => {
         {
           $set: {
             "subscribedChannels.$.status": "approved",
+             "subscribedChannels.$.enabled": true,
+
             "subscribedChannels.$.approvedAt": new Date(),
           },
         }
