@@ -1230,26 +1230,30 @@ bot.on("message", async (ctx) => {
 });
 
 
-// ========= Start bot =========
-bot.launch({
-  allowedUpdates: [
-    "message",
-    "channel_post",
-    "my_chat_member", // ✅ THIS IS THE FIX
-  ],
-}).then(() => {
-  LOG.info("Bot launched (wallet-mode)");
-});
+// ========= Start bot (GUARDED) =========
+if (process.env.TELEGRAM_BOT_ENABLED === "true") {
+  bot.launch({
+    allowedUpdates: [
+      "message",
+      "channel_post",
+      "my_chat_member",
+    ],
+  }).then(() => {
+    LOG.info("🤖 Telegram bot launched (wallet-mode)");
+  });
 
-process.once("SIGINT", () => {
-  bot.stop("SIGINT");
-  clearInterval(channelRefreshHandle);
-});
+  process.once("SIGINT", () => {
+    bot.stop("SIGINT");
+    clearInterval(channelRefreshHandle);
+  });
 
-process.once("SIGTERM", () => {
-  bot.stop("SIGTERM");
-  clearInterval(channelRefreshHandle);
-});
+  process.once("SIGTERM", () => {
+    bot.stop("SIGTERM");
+    clearInterval(channelRefreshHandle);
+  });
+} else {
+  LOG.info("🚫 Telegram bot disabled in this service");
+}
 
 
 // ========= Named exports (for other modules to import) =========
