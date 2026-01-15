@@ -223,23 +223,7 @@ bot.on("channel_post", async (ctx) => {
         return;
       }
 
-      // -------------------------------
-      // ADMIN CHECK
-      // -------------------------------
-      const admins = await ctx.telegram.getChatAdministrators(channelId);
-      const isAdmin = admins.some((a) => a.user.id === ctx.from?.id);
-
-      if (!isAdmin) {
-        await ctx.telegram.sendMessage(channelId, "❌ Admins only.");
-        return;
-      }
-
-      console.log("🔎 APPROVAL DEBUG", {
-        walletAddress,
-        channelId,
-        channelUsername,
-        channelTitle,
-      });
+      
 
       // -------------------------------
       // LOAD USER REQUEST (ROBUST MATCH)
