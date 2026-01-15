@@ -29,8 +29,6 @@ bot.on("channel_post", (ctx) => {
 });
 
 
-
-
 function isUserApprovedForChannel(user, channelId) {
   if (!Array.isArray(user.subscribedChannels)) return false;
 
@@ -194,12 +192,10 @@ bot.on("channel_post", async (ctx) => {
 
 
 // ===================================================
-// 🔐 CHANNEL APPROVAL HANDLER (FIXED & FINAL)
-// Handles BOTH:
+// 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY)
+// Handles:
 // /approve_wallet <WALLET_ADDRESS>
-// /approvewallet <WALLET_ADDRESS>
 // /reject_wallet <WALLET_ADDRESS>
-// /rejectwallet <WALLET_ADDRESS>
 // ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
@@ -207,109 +203,165 @@ bot.on("channel_post", async (ctx) => {
     if (!text) return;
 
     const chat = ctx.chat;
-    if (!chat || chat.type !== "channel") return;
+    if (!chat) return;
 
     const channelId = String(chat.id);
+    const channelUsername = chat.username ? `@${chat.username}` : null;
+    const channelTitle = chat.title || null;
 
-    console.log("🔥 CHANNEL_POST RECEIVED", {
-      channelId,
-      text,
-      fromId: ctx.from?.id,
-      senderChatId: ctx.channelPost?.sender_chat?.id,
-    });
+    // ===============================
+    // APPROVE WALLET
+    // ===============================
+    if (text.startsWith("/approve_wallet")) {
+      const walletAddress = text.split(" ")[1];
 
-    // --------------------------------------------------
-    // ✅ COMMAND NORMALIZATION
-    // --------------------------------------------------
-    const isApprove =
-      text.startsWith("/approve_wallet") ||
-      text.startsWith("/approvewallet");
+      if (!walletAddress) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
+        );
+        return;
+      }
 
-    const isReject =
-      text.startsWith("/reject_wallet") ||
-      text.startsWith("/rejectwallet");
+      // -------------------------------
+      // ADMIN CHECK
+      // -------------------------------
+      const admins = await ctx.telegram.getChatAdministrators(channelId);
+      const isAdmin = admins.some((a) => a.user.id === ctx.from?.id);
 
-    if (!isApprove && !isReject) return;
+      if (!isAdmin) {
+        await ctx.telegram.sendMessage(channelId, "❌ Admins only.");
+        return;
+      }
 
-    const walletAddress = text.split(/\s+/)[1];
-    if (!walletAddress) {
-      await ctx.telegram.sendMessage(
+      console.log("🔎 APPROVAL DEBUG", {
+        walletAddress,
         channelId,
-        "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
-      );
-      return;
-    }
+        channelUsername,
+        channelTitle,
+      });
 
-  
+      // -------------------------------
+      // LOAD USER REQUEST (ROBUST MATCH)
+      // -------------------------------
+      const user = await User.findOne({
+        walletAddress,
+        subscribedChannels: {
+          $elemMatch: {
+            channelId: {
+              $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+            },
+          },
+        },
+      });
 
+      if (!user) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet did not request this channel."
+        );
+        return;
+      }
 
+      if (!user.telegram?.userId) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet has not linked Telegram."
+        );
+        return;
+      }
 
-
-
-
-    // --------------------------------------------------
-    // 🔎 LOAD USER REQUEST (CHANNEL ID ONLY)
-    // --------------------------------------------------
-    const user = await User.findOne({
-      walletAddress,
-      "subscribedChannels.channelId": channelId,
-    });
-
-    if (!user) {
-      await ctx.telegram.sendMessage(
+      // -------------------------------
+      // VERIFY USER IS CHANNEL MEMBER
+      // -------------------------------
+      const member = await ctx.telegram.getChatMember(
         channelId,
-        "❌ Wallet did not request this channel."
+        Number(user.telegram.userId)
       );
-      return;
-    }
 
-    // --------------------------------------------------
-// ✅ APPROVE
-// --------------------------------------------------
-if (isApprove) {
+      if (!["creator", "administrator", "member"].includes(member.status)) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Telegram user is not in this channel."
+        );
+        return;
+      }
 
-  // 🚨 STEP 3 — PROOF POINT (ADD THIS)
-  console.log("🚨 STEP 3 ABOUT TO UPDATE DB", {
-    walletAddress,
-    channelId,
-  });
+      // -------------------------------
+      // GLOBAL TELEGRAM → WALLET LOCK
+      // -------------------------------
+      const existing = await User.findOne({
+        "telegram.userId": user.telegram.userId,
+        walletAddress: { $ne: walletAddress },
+      });
 
-  const result = await User.updateOne(
-    {
-      walletAddress,
-      "subscribedChannels.channelId": channelId,
-    },
-    {
-      $set: {
-        "subscribedChannels.$.status": "approved",
-        "subscribedChannels.$.enabled": true,
-        "subscribedChannels.$.approvedAt": new Date(),
-      },
-    }
-  );
+      if (existing) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          `❌ This Telegram is already linked to another wallet:\n${existing.walletAddress}`
+        );
+        return;
+      }
 
-  // ✅ STEP 3 COMPLETED
-  console.log("✅ STEP 3 DB UPDATED", {
-    matched: result.matchedCount,
-    modified: result.modifiedCount,
-  });
-
-  await ctx.telegram.sendMessage(
-    channelId,
-    `✅ Wallet approved:\n${walletAddress}`
-  );
-
-  return;
-}
-
-    // --------------------------------------------------
-    // 🚫 REJECT
-    // --------------------------------------------------
-    if (isReject) {
+      // -------------------------------
+      // APPROVE (CORRECT ARRAY ELEMENT)
+      // -------------------------------
       await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          "subscribedChannels.channelId": {
+            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+          },
+        },
+        {
+          $set: {
+            "subscribedChannels.$.status": "approved",
+            "subscribedChannels.$.approvedAt": new Date(),
+          },
+        }
+      );
+
+      console.log("✅ WALLET APPROVED", { walletAddress, channelId });
+
+      // -------------------------------
+      // DM USER
+      // -------------------------------
+      await ctx.telegram
+        .sendMessage(
+          user.telegram.userId,
+          `✅ *Approved!*\n\nYou can now trade signals from:\n📢 *${chat.title}*`,
+          { parse_mode: "Markdown" }
+        )
+        .catch(() => {});
+
+      await ctx.telegram.sendMessage(
+        channelId,
+        `✅ Wallet approved:\n${walletAddress}`
+      );
+
+      return;
+    }
+
+    // ===============================
+    // REJECT WALLET
+    // ===============================
+    if (text.startsWith("/reject_wallet")) {
+      const walletAddress = text.split(" ")[1];
+
+      if (!walletAddress) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Usage: /reject_wallet <WALLET_ADDRESS>"
+        );
+        return;
+      }
+
+      await User.updateOne(
+        {
+          walletAddress,
+          "subscribedChannels.channelId": {
+            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+          },
         },
         {
           $set: { "subscribedChannels.$.status": "rejected" },
@@ -322,11 +374,14 @@ if (isApprove) {
         channelId,
         `🚫 Wallet rejected:\n${walletAddress}`
       );
+
+      return;
     }
   } catch (err) {
-    console.error("❌ channel approve/reject error:", err);
+    console.error("channel approve/reject error:", err);
   }
 });
+
 
 // ===================================================
 // 🔗 LINK TELEGRAM ↔ WALLET
@@ -1151,95 +1206,175 @@ bot.command("admin_channels", async (ctx) => {
   ctx.reply("📢 Current allowed channels: " + list);
 });
 
+// ========= Channel self-connect handler (Option 4) =========
 
 
-
- 
-
-// ========= Signal handler: CHANNEL ID BASED (FIXED) =========
-bot.on("message", async (ctx) => {
+// ===================================================
+// CHANNEL POST HANDLER (CONNECT + TRADE EXECUTION)
+// ===================================================
+bot.on("channel_post", async (ctx) => {
   try {
-    // Must be channel message
-    if (!ctx.message || !ctx.message.text) return;
-    if (!ctx.chat || ctx.chat.type !== "channel") return;
+    const post = ctx.update.channel_post;
+    if (!post || !post.text) return;
 
-    const channelId = String(ctx.chat.id); // ✅ REAL CHANNEL ID (-100xxxx)
-    const text = ctx.message.text;
+    const text = post.text.trim();
+    const channelId = String(post.chat.id); // -100xxxx
+    const title = post.chat.title || "Unnamed Channel";
 
-    // Skip if channel not active
-    if (!CHANNELS.includes(channelId)) {
-      LOG.debug({ channelId }, "Channel not allowed");
+    // --------------------------------------------------
+    // /connect → register channel
+    // --------------------------------------------------
+    if (text === "/connect") {
+      await SignalChannel.findOneAndUpdate(
+        { channelId },
+        {
+          channelId,
+          title,
+          status: "active",
+          connectedAt: new Date(),
+        },
+        { upsert: true }
+      );
+
+      LOG.info({ channelId, title }, "✅ Channel connected via /connect");
       return;
     }
 
-    // Extract mint
-    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
-    if (!mintMatch) return;
+    // --------------------------------------------------
+    // 🔒 STEP 3 — HARD BLOCK UNAPPROVED WALLETS
+    // --------------------------------------------------
 
-    const mint = mintMatch[0];
-    if (!looksLikeMint(mint)) return;
-
-    LOG.info({ mint, channelId }, "📡 Signal detected");
-
-    // Load users by CHANNEL ID (NOT username)
+    // 1️⃣ Users who ENABLED this channel
     const users = await User.find({
-      subscribedChannels: {
-        $elemMatch: {
-          channelId,
-          enabled: true,
-        },
-      },
-      active: { $ne: false },
-    }).lean();
+      "subscribedChannels.channelId": channelId,
+      "subscribedChannels.enabled": true,
+    });
 
     if (!users.length) {
-      LOG.warn({ channelId }, "No subscribed users");
+      LOG.warn({ channelId }, "⚠️ No subscribed users — skipping signal");
       return;
     }
 
-    LOG.info(
-      { channelId, count: users.length },
-      "Executing trades for subscribed users"
+    // 2️⃣ ONLY APPROVED wallets
+    const approvedUsers = users.filter((u) =>
+      u.subscribedChannels.some(
+        (c) =>
+          c.channelId === channelId &&
+          c.status === "approved" &&
+          c.enabled === true
+      )
     );
 
-    for (const user of users) {
-      executeUserTrade(user, mint, channelId).catch((err) =>
-        LOG.error(
-          { err, wallet: user.walletAddress, channelId },
-          "executeUserTrade error"
-        )
+    if (!approvedUsers.length) {
+      LOG.warn({ channelId }, "⛔ Signal blocked — no APPROVED wallets");
+      return;
+    }
+
+    // --------------------------------------------------
+    // 🚀 EXECUTE TRADES (SAFE)
+    // --------------------------------------------------
+    for (const user of approvedUsers) {
+      LOG.info(
+        {
+          wallet: user.walletAddress,
+          channelId,
+        },
+        "🚀 Executing trade for APPROVED wallet"
       );
+
+      // 🔥 CALL EXISTING TRADE ENGINE
+      // executeTradeForUser(user, text);
     }
   } catch (err) {
-    LOG.error({ err }, "signal handler error");
+    LOG.error({ err }, "❌ channel_post handler error");
   }
 });
 
 
-// ========= Start bot (GUARDED) =========
-if (process.env.TELEGRAM_BOT_ENABLED === "true") {
-  bot.launch({
-    allowedUpdates: [
-      "message",
-      "channel_post",
-      "my_chat_member",
-    ],
-  }).then(() => {
-    LOG.info("🤖 Telegram bot launched (wallet-mode)");
-  });
+// ========= Signal handler: supports multiple channels (channel -> mint) =========
+bot.on("message", async (ctx) => {
+  try {
+    if (!ctx.message || !ctx.message.text) return;
 
-  process.once("SIGINT", () => {
-    bot.stop("SIGINT");
-    clearInterval(channelRefreshHandle);
-  });
+    let chatUser = null;
+    if (ctx.message.sender_chat && ctx.message.sender_chat.username) {
+      chatUser = ctx.message.sender_chat.username;
+    } else if (ctx.chat && ctx.chat.username) {
+      chatUser = ctx.chat.username;
+    } else if (ctx.chat && ctx.chat.title) {
+      chatUser = ctx.chat.title;
+    } else {
+      return; // Not a channel message
+    }
 
-  process.once("SIGTERM", () => {
-    bot.stop("SIGTERM");
-    clearInterval(channelRefreshHandle);
-  });
-} else {
-  LOG.info("🚫 Telegram bot disabled in this service");
-}
+    const cleaned = chatUser.replace(/^@/, "");
+
+    // Skip if channel isn't allowed
+    if (!CHANNELS.includes(cleaned)) {
+      LOG.debug({ from: cleaned }, "Channel not allowed");
+      return;
+    }
+
+    // Extract mint address from message text
+    const text = ctx.message.text;
+    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+    if (!mintMatch) return;
+    const mint = mintMatch[0];
+    if (!looksLikeMint(mint)) return;
+
+    LOG.info({ mint, from: cleaned }, "signal detected");
+
+    // Find users subscribed to this channel (by walletAddress stored in DB)
+
+    const users = await User.find({
+  subscribedChannels: {
+    $elemMatch: {
+      channelId: cleaned,
+      enabled: true,   // 👈 USER_TOGGLE enforced here
+    },
+  },
+  active: { $ne: false },
+}).lean();
+
+
+    if (!users || users.length === 0) {
+      LOG.warn(`No users subscribed to channel: ${cleaned}`);
+      return;
+    }
+
+    LOG.info(`Executing trades for ${users.length} subscribed users...`);
+
+    for (const user of users) {
+      // user is DB document with walletAddress
+      executeUserTrade(user, mint, cleaned).catch((err) =>
+        LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
+      );
+    }
+  } catch (err) {
+    LOG.error({ err }, "message handler error");
+  }
+});
+
+// ========= Start bot =========
+bot.launch({
+  allowedUpdates: [
+    "message",
+    "channel_post",
+    "my_chat_member", // ✅ THIS IS THE FIX
+  ],
+}).then(() => {
+  LOG.info("Bot launched (wallet-mode)");
+});
+
+process.once("SIGINT", () => {
+  bot.stop("SIGINT");
+  clearInterval(channelRefreshHandle);
+});
+
+process.once("SIGTERM", () => {
+  bot.stop("SIGTERM");
+  clearInterval(channelRefreshHandle);
+});
 
 
 // ========= Named exports (for other modules to import) =========
