@@ -3,13 +3,6 @@
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
 
 
-if (process.env.SERVICE_ROLE !== "telegram-bot") {
-  console.log("⏭️ Not telegram-bot service, exiting");
-  process.exit(0);
-}
-
-
-
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Telegraf } from "telegraf";
