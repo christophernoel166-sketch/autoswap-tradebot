@@ -203,9 +203,7 @@ bot.on("channel_post", async (ctx) => {
     const chat = ctx.chat;
     if (!chat) return;
 
-    const channelId = String(chat.id);
-    const channelUsername = chat.username ? `@${chat.username}` : null;
-    const channelTitle = chat.title || null;
+    const channelId = String(chat.id); // ✅ single source of truth
 
     // ===============================
     // APPROVE WALLET
@@ -221,23 +219,20 @@ bot.on("channel_post", async (ctx) => {
         return;
       }
 
-      
-
       // -------------------------------
-      // LOAD USER REQUEST (ROBUST MATCH)
+      // LOAD USER REQUEST
       // -------------------------------
       const user = await User.findOne({
         walletAddress,
-        subscribedChannels: {
-          $elemMatch: {
-            channelId: {
-              $in: [channelId, channelUsername, channelTitle].filter(Boolean),
-            },
-          },
-        },
+        "subscribedChannels.channelId": channelId,
       });
 
       if (!user) {
+        console.warn("Approval failed: no subscription", {
+          walletAddress,
+          channelId,
+        });
+
         await ctx.telegram.sendMessage(
           channelId,
           "❌ Wallet did not request this channel."
@@ -254,46 +249,12 @@ bot.on("channel_post", async (ctx) => {
       }
 
       // -------------------------------
-      // VERIFY USER IS CHANNEL MEMBER
+      // APPROVE
       // -------------------------------
-      const member = await ctx.telegram.getChatMember(
-        channelId,
-        Number(user.telegram.userId)
-      );
-
-      if (!["creator", "administrator", "member"].includes(member.status)) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Telegram user is not in this channel."
-        );
-        return;
-      }
-
-      // -------------------------------
-      // GLOBAL TELEGRAM → WALLET LOCK
-      // -------------------------------
-      const existing = await User.findOne({
-        "telegram.userId": user.telegram.userId,
-        walletAddress: { $ne: walletAddress },
-      });
-
-      if (existing) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          `❌ This Telegram is already linked to another wallet:\n${existing.walletAddress}`
-        );
-        return;
-      }
-
-      // -------------------------------
-      // APPROVE (CORRECT ARRAY ELEMENT)
-      // -------------------------------
-      await User.updateOne(
+      const result = await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": {
-            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
-          },
+          "subscribedChannels.channelId": channelId,
         },
         {
           $set: {
@@ -303,11 +264,13 @@ bot.on("channel_post", async (ctx) => {
         }
       );
 
-      console.log("✅ WALLET APPROVED", { walletAddress, channelId });
+      console.log("✅ WALLET APPROVED", {
+        walletAddress,
+        channelId,
+        modified: result.modifiedCount,
+      });
 
-      // -------------------------------
-      // DM USER
-      // -------------------------------
+      // DM user (best effort)
       await ctx.telegram
         .sendMessage(
           user.telegram.userId,
@@ -316,6 +279,7 @@ bot.on("channel_post", async (ctx) => {
         )
         .catch(() => {});
 
+      // Confirm in channel
       await ctx.telegram.sendMessage(
         channelId,
         `✅ Wallet approved:\n${walletAddress}`
@@ -341,9 +305,7 @@ bot.on("channel_post", async (ctx) => {
       await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": {
-            $in: [channelId, channelUsername, channelTitle].filter(Boolean),
-          },
+          "subscribedChannels.channelId": channelId,
         },
         {
           $set: { "subscribedChannels.$.status": "rejected" },
@@ -360,7 +322,7 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
   } catch (err) {
-    console.error("channel approve/reject error:", err);
+    console.error("❌ channel approve/reject error:", err);
   }
 });
 
