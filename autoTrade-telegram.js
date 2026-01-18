@@ -3,6 +3,8 @@
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
 
 
+
+
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Telegraf } from "telegraf";
@@ -22,9 +24,12 @@ import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
 
-bot.on("channel_post", (ctx) => {
-  console.log("🧪 RAW CHANNEL POST RECEIVED:", ctx.channelPost?.text);
-});
+
+// bot.on("channel_post", async (ctx, next) => {
+  // console.log("🧪 RAW CHANNEL POST RECEIVED:", ctx.channelPost?.text);
+  // return next(); // 🔥 REQUIRED
+// });
+
 
 
 function isUserApprovedForChannel(user, channelId) {
@@ -191,19 +196,15 @@ bot.on("channel_post", async (ctx) => {
 
 // ===================================================
 // 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY)
-// Handles:
-// /approve_wallet <WALLET_ADDRESS>
-// /reject_wallet <WALLET_ADDRESS>
 // ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
     const text = ctx.channelPost?.text?.trim();
-    if (!text) return;
-
     const chat = ctx.chat;
-    if (!chat) return;
 
-    const channelId = String(chat.id); // ✅ single source of truth
+    if (!chat || !text) return;
+
+    const channelId = String(chat.id);
 
     // ===============================
     // APPROVE WALLET
@@ -219,38 +220,8 @@ bot.on("channel_post", async (ctx) => {
         return;
       }
 
-      // -------------------------------
-      // LOAD USER REQUEST
-      // -------------------------------
-      const user = await User.findOne({
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-      });
+      LOG.info("🧪 APPROVAL START", { walletAddress, channelId });
 
-      if (!user) {
-        console.warn("Approval failed: no subscription", {
-          walletAddress,
-          channelId,
-        });
-
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet did not request this channel."
-        );
-        return;
-      }
-
-      if (!user.telegram?.userId) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet has not linked Telegram."
-        );
-        return;
-      }
-
-      // -------------------------------
-      // APPROVE
-      // -------------------------------
       const result = await User.updateOne(
         {
           walletAddress,
@@ -259,28 +230,22 @@ bot.on("channel_post", async (ctx) => {
         {
           $set: {
             "subscribedChannels.$.status": "approved",
-             "subscribedChannels.$.enabled": true,   // ✅ FIX
+            "subscribedChannels.$.enabled": true,
             "subscribedChannels.$.approvedAt": new Date(),
           },
         }
       );
 
-      console.log("✅ WALLET APPROVED", {
-        walletAddress,
-        channelId,
-        modified: result.modifiedCount,
-      });
+      LOG.info("🧪 APPROVAL UPDATE RESULT", result);
 
-      // DM user (best effort)
-      await ctx.telegram
-        .sendMessage(
-          user.telegram.userId,
-          `✅ *Approved!*\n\nYou can now trade signals from:\n📢 *${chat.title}*`,
-          { parse_mode: "Markdown" }
-        )
-        .catch(() => {});
+      if (result.modifiedCount === 0) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet did not request this channel."
+        );
+        return;
+      }
 
-      // Confirm in channel
       await ctx.telegram.sendMessage(
         channelId,
         `✅ Wallet approved:\n${walletAddress}`
@@ -309,11 +274,12 @@ bot.on("channel_post", async (ctx) => {
           "subscribedChannels.channelId": channelId,
         },
         {
-          $set: { "subscribedChannels.$.status": "rejected" },
+          $set: {
+            "subscribedChannels.$.status": "rejected",
+            "subscribedChannels.$.enabled": false,
+          },
         }
       );
-
-      console.log("🚫 WALLET REJECTED", { walletAddress, channelId });
 
       await ctx.telegram.sendMessage(
         channelId,
@@ -323,7 +289,7 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
   } catch (err) {
-    console.error("❌ channel approve/reject error:", err);
+    LOG.error(err, "❌ channel approve/reject error");
   }
 });
 
@@ -392,19 +358,6 @@ bot.command("link_wallet", async (ctx) => {
 });
 
 
-// ========= MongoDB =========
-mongoose
-  .connect(MONGO_URI)
-  .then(async () => {
-    LOG.info("Connected to MongoDB");
-    await loadChannels();
-    LOG.info("Initial channel list loaded");
-  })
-  .catch((err) => {
-    LOG.error(err, "MongoDB Error");
-    process.exit(1);
-  });
-
 // ========= Dynamic Channel Management =========
 let CHANNELS = [];
 
@@ -426,10 +379,44 @@ async function loadChannels() {
   }
 }
 
-const CHANNEL_REFRESH_MS = parseInt(process.env.CHANNEL_REFRESH_MS || "300000", 10);
-const channelRefreshHandle = setInterval(() => {
-  loadChannels().catch((err) => LOG.error({ err }, "Periodic channel reload failed"));
-}, CHANNEL_REFRESH_MS);
+// ========= MongoDB + Bot bootstrap =========
+mongoose
+  .connect(MONGO_URI)
+  .then(async () => {
+    LOG.info("Connected to MongoDB");
+
+    await loadChannels();
+    LOG.info("Initial channel list loaded");
+
+    LOG.info("Launching Telegram bot (wallet-mode)...");
+
+bot.launch({
+  allowedUpdates: ["message", "channel_post", "my_chat_member"],
+}).catch((err) => {
+  LOG.error(err, "Telegram bot launch failed");
+});
+
+LOG.info("Telegram bot polling started");
+
+
+    // ✅ START periodic refresh ONLY AFTER bot is running
+    const CHANNEL_REFRESH_MS = parseInt(
+      process.env.CHANNEL_REFRESH_MS || "300000",
+      10
+    );
+
+    setInterval(() => {
+      loadChannels().catch((err) =>
+        LOG.error({ err }, "Periodic channel reload failed")
+      );
+    }, CHANNEL_REFRESH_MS);
+  })
+  .catch((err) => {
+    LOG.error(err, "MongoDB Error");
+    process.exit(1);
+  });
+
+
 
 // ========= Utils =========
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -839,80 +826,80 @@ if (sub.status !== "approved") {
   LOG.info({ wallet: user.walletAddress, mint }, "User added to monitor for multi-channel trading");
 }
 
-// ======= Step A: lightweight Express server for bot APIs =======
-import expressModule from "express"; // avoid name clash
-import cors from "cors";
+// // ======= Step A: lightweight Express server for bot APIs =======
+// import expressModule from "express"; // avoid name clash
+// import cors from "cors";
 
-const app = expressModule();
-app.use(expressModule.json());
-app.use(cors());
-const PORT = Number(process.env.PORT || 8080);
+// const app = expressModule();
+// app.use(expressModule.json());
+// app.use(cors());
+//const PORT = Number(process.env.PORT || 8080);
 
 
 
 // ===================================================
 // 📩 API → BOT: POST CHANNEL APPROVAL REQUEST
 // ===================================================
-app.post("/bot/request-approval", async (req, res) => {
-  try {
-console.log("📩 APPROVAL REQUEST RECEIVED:", req.body);
+// app.post("/bot/request-approval", async (req, res) => {
+//  try {
+// console.log("📩 APPROVAL REQUEST RECEIVED:", req.body);
 
-    const { walletAddress, channelId } = req.body;
+ //   const { walletAddress, channelId } = req.body;
 
-    if (!walletAddress || !channelId) {
-      return res.status(400).json({
-        error: "walletAddress & channelId required",
-      });
-    }
+   // if (!walletAddress || !channelId) {
+    //  return res.status(400).json({
+    //    error: "walletAddress & channelId required",
+   //   });
+  //  }
 
-    const user = await User.findOne({ walletAddress });
-    if (!user || !user.telegram?.userId) {
-      return res.status(404).json({
-        error: "user_not_linked",
-      });
-    }
+   // const user = await User.findOne({ walletAddress });
+  //  if (!user || !user.telegram?.userId) {
+   //   return res.status(404).json({
+   //     error: "user_not_linked",
+    //  });
+   // }
 
-    const channel = await SignalChannel.findOne({
-      channelId: String(channelId),
-      status: "active",
-    });
+   // const channel = await SignalChannel.findOne({
+    //  channelId: String(channelId),
+    //  status: "active",
+  //  });
 
-    if (!channel) {
-      return res.status(404).json({
-        error: "channel_not_found",
-      });
-    }
+   // if (!channel) {
+     // return res.status(404).json({
+     //   error: "channel_not_found",
+    //  });
+   // }
 
-    const username = user.telegram.username
-      ? `@${user.telegram.username}`
-      : "(no username)";
+   // const username = user.telegram.username
+    //  ? `@${user.telegram.username}`
+    //  : "(no username)";
 
-    const message = `
-🆕 *Trade Access Request*
+  //  const message = `
+// 🆕 *Trade Access Request*
 
-👤 Telegram: ${username}
-🆔 Telegram ID: \`${user.telegram.userId}\`
-💼 Wallet: \`${walletAddress}\`
+// 👤 Telegram: ${username}
+//🆔 Telegram ID: \`${user.telegram.userId}\`
+// 💼 Wallet: \`${walletAddress}\`
 
-Approve:
-/approve_wallet ${walletAddress}
+// Approve:
+// /approve_wallet ${walletAddress}
 
-Reject:
-/reject_wallet ${walletAddress}
-`;
+// Reject:
+// /reject_wallet ${walletAddress}
+// `;
 
-    await bot.telegram.sendMessage(
-      channel.channelId,
-      message,
-      { parse_mode: "Markdown" }
-    );
+   // await bot.telegram.sendMessage(
+     // channel.channelId,
+    //  message,
+     // { parse_mode: "Markdown" }
+   // );
 
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error("request-approval error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
+  // return res.json({ ok: true });
+ // } catch (err) {
+   // console.error("request-approval error:", err);
+   // return res.status(500).json({ error: "internal_error" });
+ // }
+// });
 
 
 
@@ -922,181 +909,178 @@ const BOT_API_BASE =
   "http://localhost:8081"; // fallback for local dev only
 
 // health check endpoint
-app.get("/bot-health", (req, res) => {
-  res.json({ ok: true, startedAt: new Date().toISOString() });
-});
+// app.get("/bot-health", (req, res) => {
+  // res.json({ ok: true, startedAt: new Date().toISOString() });
+// });
 
 // ========= Wallet-based Active Positions API (internal bot API) =========
-app.get("/api/active-positions/wallet/:walletAddress", async (req, res) => {
-  try {
-    const wallet = String(req.params.walletAddress);
-    const user = await User.findOne({ walletAddress: wallet });
-    if (!user) return res.json({ positions: [] });
+// app.get("/api/active-positions/wallet/:walletAddress", async (req, res) => {
+  // try {
+    // const wallet = String(req.params.walletAddress);
+    // const user = await User.findOne({ walletAddress: wallet });
+    // if (!user) return res.json({ positions: [] });
 
-    const positions = [];
-    for (const [mint, state] of monitored.entries()) {
-      const info = state.users.get(wallet);
-      if (!info) continue;
+    // const positions = [];
+    // for (const [mint, state] of monitored.entries()) {
+      // const info = state.users.get(wallet);
+      // if (!info) continue;
 
-      const entry = info.entryPrice || 0;
-      const current = state.lastPrice || entry;
-      const diffPct = entry > 0 ? (((current - entry) / entry) * 100).toFixed(2) : "0";
-      const solPerTrade = info.solAmount || user.solPerTrade || 0.01;
+      // const entry = info.entryPrice || 0;
+      // const current = state.lastPrice || entry;
+      // const diffPct = entry > 0 ? (((current - entry) / entry) * 100).toFixed(2) : "0";
+      // const solPerTrade = info.solAmount || user.solPerTrade || 0.01;
 
-      positions.push({
-        mint,
-        entryPrice: entry,
-        currentPrice: current,
-        changePercent: diffPct,
-        pnlSol: ((current - entry) * solPerTrade).toFixed(6),
-        tpStage: info.tpStage,
-        wallet,
-      });
-    }
+      // positions.push({
+        // mint,
+        // entryPrice: entry,
+        // currentPrice: current,
+        // changePercent: diffPct,
+        // pnlSol: ((current - entry) * solPerTrade).toFixed(6),
+        // tpStage: info.tpStage,
+        // wallet,
+      // });
+    // }
 
-    return res.json({ positions });
-  } catch (err) {
-    console.error("active-positions API error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
+    // return res.json({ positions });
+  // } catch (err) {
+    // console.error("active-positions API error:", err);
+    // return res.status(500).json({ error: "internal_error" });
+  // }
+// });
 
 
 // ================= TEST ENDPOINT — create fake open position =================
-app.post("/test-open", async (req, res) => {
-  try {
-    const { wallet, mint } = req.body;
+// app.post("/test-open", async (req, res) => {
+  // try {
+    // const { wallet, mint } = req.body;
 
-    if (!wallet || !mint) {
-      return res.status(400).json({ error: "wallet & mint required" });
-    }
+    // if (!wallet || !mint) {
+      // return res.status(400).json({ error: "wallet & mint required" });
+    // }
 
     // Create a fake monitor entry if not existing
-    if (!monitored.has(mint)) {
-      monitored.set(mint, {
-        lastPrice: 0.50,
-        users: new Map(),
-        entryPrices: new Map(),
-      });
-    }
+    // if (!monitored.has(mint)) {
+      // monitored.set(mint, {
+        // lastPrice: 0.50,
+        // users: new Map(),
+        // entryPrices: new Map(),
+      // });
+    // }
 
-    const state = monitored.get(mint);
+    // const state = monitored.get(mint);
 
-    const entry = 0.40;
-    const current = 0.50;
+    // const entry = 0.40;
+    // const current = 0.50;
 
-    state.lastPrice = current;
+    // state.lastPrice = current;
 
-    state.users.set(wallet, {
-      entryPrice: entry,
-      solAmount: 0.01,
-      tpStage: 1,
-    });
+    // state.users.set(wallet, {
+      // entryPrice: entry,
+      // solAmount: 0.01,
+      // tpStage: 1,
+    // });
 
-    state.entryPrices.set(wallet, entry);
+    // state.entryPrices.set(wallet, entry);
 
-    res.json({
-      ok: true,
-      created: {
-        wallet,
-        mint,
-        entryPrice: entry,
-        currentPrice: current,
-        tpStage: 1,
-      },
-    });
-  } catch (err) {
-    console.error("test-open error:", err);
-    res.status(500).json({ error: "internal_error" });
-  }
-});
+    // res.json({
+      // ok: true,
+      // created: {
+        // wallet,
+        // mint,
+        // entryPrice: entry,
+        // currentPrice: current,
+        // tpStage: 1,
+      // },
+    // });
+  // } catch (err) {
+    // console.error("test-open error:", err);
+    // res.status(500).json({ error: "internal_error" });
+  // }
+// });
 
 // ========= Step C: Manual Sell API (frontend-triggered, wallet-based) =========
-app.post("/api/manual-sell", async (req, res) => {
-  try {
-    const { walletAddress, mint } = req.body;
+// app.post("/api/manual-sell", async (req, res) => {
+  // try {
+    // const { walletAddress, mint } = req.body;
 
-    if (!walletAddress || !mint) {
-      return res.status(400).json({ error: "missing_parameters" });
-    }
+    // if (!walletAddress || !mint) {
+      // return res.status(400).json({ error: "missing_parameters" });
+    // }
 
-    const user = await User.findOne({ walletAddress: String(walletAddress) });
-    if (!user) {
-      return res.status(404).json({ error: "user_not_found" });
-    }
+    // const user = await User.findOne({ walletAddress: String(walletAddress) });
+    // if (!user) {
+      // return res.status(404).json({ error: "user_not_found" });
+    // }
 
-    const wallet = user.walletAddress;
-    if (!wallet) {
-      return res.status(400).json({ error: "no_wallet_registered" });
-    }
+    // const wallet = user.walletAddress;
+    // if (!wallet) {
+      // return res.status(400).json({ error: "no_wallet_registered" });
+    // }
 
     // Is this token currently being monitored?
-    const state = monitored.get(mint);
-    const info = state?.users?.get(String(wallet));
+    // const state = monitored.get(mint);
+    // const info = state?.users?.get(String(wallet));
 
-    let entryPrice = null;
-    if (info && info.entryPrice) entryPrice = info.entryPrice;
+    // let entryPrice = null;
+    // if (info && info.entryPrice) entryPrice = info.entryPrice;
 
     // Execute 100% sell
-    let sellRes;
-    try {
-      sellRes = await safeSellAll(wallet, mint);
-    } catch (err) {
-      console.error("manual sell error:", err);
-      return res.status(500).json({ error: "sell_failed" });
-    }
+    // let sellRes;
+    // try {
+      // sellRes = await safeSellAll(wallet, mint);
+    // } catch (err) {
+      // console.error("manual sell error:", err);
+      // return res.status(500).json({ error: "sell_failed" });
+    // }
 
-    const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+    // const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
 
     // Fetch exit price
-    let exitPrice = 0;
-    try {
-      exitPrice = await getCurrentPrice(mint);
-    } catch {}
+    // let exitPrice = 0;
+    // try {
+      // exitPrice = await getCurrentPrice(mint);
+    // } catch {}
 
     // Save trade to backend DB
-    await saveTradeToBackend({
-      walletAddress: wallet,
-      mint,
-      solAmount: user.solPerTrade || 0.01,
-      entryPrice,
-      exitPrice,
-      buyTxid: null,
-      sellTxid,
-      sourceChannel: "manual_frontend",
-      reason: "manual_sell_web",
-      tradeType: "manual",
-    });
+    // await saveTradeToBackend({
+      // walletAddress: wallet,
+      // mint,
+      // solAmount: user.solPerTrade || 0.01,
+      // entryPrice,
+      // exitPrice,
+      // buyTxid: null,
+      // sellTxid,
+      // sourceChannel: "manual_frontend",
+      // reason: "manual_sell_web",
+      // tradeType: "manual",
+    // });
 
     // Remove from monitoring
-    if (state) {
-      state.users.delete(String(wallet));
-      state.entryPrices.delete(wallet);
-    }
+    // if (state) {
+      // state.users.delete(String(wallet));
+      // state.entryPrices.delete(wallet);
+    // }
 
-    return res.json({
-      ok: true,
-      tx: sellTxid,
-      exitPrice,
-    });
-  } catch (err) {
-    console.error("manual-sell API error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
+    // return res.json({
+      // ok: true,
+      // tx: sellTxid,
+      // exitPrice,
+    // });
+  // } catch (err) {
+    // console.error("manual-sell API error:", err);
+    // return res.status(500).json({ error: "internal_error" });
+  // }
+// });
 
 // start server (non-blocking) — Railway internal networking FIX
-app.listen(PORT, "0.0.0.0", () => {
-  LOG.info(
-    { port: PORT },
-    "Bot internal API listening on 0.0.0.0"
-  );
-});
+// app.listen(PORT, "0.0.0.0", () => {
+  // LOG.info(
+    // { port: PORT },
+    // "Bot internal API listening on 0.0.0.0"
+  // );
+// });
 
 // ========= Admin channel management commands via Telegram (keep admin only) =========
-bot.start((ctx) => {
-  ctx.reply("AutoTrader (wallet-mode). Admins: use /admin_addchannel, /admin_removechannel, /admin_channels.");
-});
 
 bot.command("users", async (ctx) => {
   const caller = String(ctx.from.id);
@@ -1154,87 +1138,8 @@ bot.command("admin_channels", async (ctx) => {
 // ========= Channel self-connect handler (Option 4) =========
 
 
-// ===================================================
-// CHANNEL POST HANDLER (CONNECT + TRADE EXECUTION)
-// ===================================================
-bot.on("channel_post", async (ctx) => {
-  try {
-    const post = ctx.update.channel_post;
-    if (!post || !post.text) return;
 
-    const text = post.text.trim();
-    const channelId = String(post.chat.id); // -100xxxx
-    const title = post.chat.title || "Unnamed Channel";
-
-    // --------------------------------------------------
-    // /connect → register channel
-    // --------------------------------------------------
-    if (text === "/connect") {
-      await SignalChannel.findOneAndUpdate(
-        { channelId },
-        {
-          channelId,
-          title,
-          status: "active",
-          connectedAt: new Date(),
-        },
-        { upsert: true }
-      );
-
-      LOG.info({ channelId, title }, "✅ Channel connected via /connect");
-      return;
-    }
-
-    // --------------------------------------------------
-    // 🔒 STEP 3 — HARD BLOCK UNAPPROVED WALLETS
-    // --------------------------------------------------
-
-    // 1️⃣ Users who ENABLED this channel
-    const users = await User.find({
-      "subscribedChannels.channelId": channelId,
-      "subscribedChannels.enabled": true,
-    });
-
-    if (!users.length) {
-      LOG.warn({ channelId }, "⚠️ No subscribed users — skipping signal");
-      return;
-    }
-
-    // 2️⃣ ONLY APPROVED wallets
-    const approvedUsers = users.filter((u) =>
-      u.subscribedChannels.some(
-        (c) =>
-          c.channelId === channelId &&
-          c.status === "approved" &&
-          c.enabled === true
-      )
-    );
-
-    if (!approvedUsers.length) {
-      LOG.warn({ channelId }, "⛔ Signal blocked — no APPROVED wallets");
-      return;
-    }
-
-    // --------------------------------------------------
-    // 🚀 EXECUTE TRADES (SAFE)
-    // --------------------------------------------------
-    for (const user of approvedUsers) {
-      LOG.info(
-        {
-          wallet: user.walletAddress,
-          channelId,
-        },
-        "🚀 Executing trade for APPROVED wallet"
-      );
-
-      // 🔥 CALL EXISTING TRADE ENGINE
-      // executeTradeForUser(user, text);
-    }
-  } catch (err) {
-    LOG.error({ err }, "❌ channel_post handler error");
-  }
-});
-
+    
 
 // ========= Signal handler: supports multiple channels (channel -> mint) =========
 bot.on("message", async (ctx) => {
@@ -1300,25 +1205,16 @@ bot.on("message", async (ctx) => {
   }
 });
 
-// ========= Start bot =========
-bot.launch({
-  allowedUpdates: [
-    "message",
-    "channel_post",
-    "my_chat_member", // ✅ THIS IS THE FIX
-  ],
-}).then(() => {
-  LOG.info("Bot launched (wallet-mode)");
-});
+
 
 process.once("SIGINT", () => {
   bot.stop("SIGINT");
-  clearInterval(channelRefreshHandle);
+  process.exit(0);
 });
 
 process.once("SIGTERM", () => {
   bot.stop("SIGTERM");
-  clearInterval(channelRefreshHandle);
+  process.exit(0);
 });
 
 
