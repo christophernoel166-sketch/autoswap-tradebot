@@ -379,6 +379,103 @@ async function loadChannels() {
   }
 }
 
+
+// ========= Subscription Watcher (STEP 3A — NEW) =========
+let subscriptionPollRunning = false;
+
+async function pollPendingSubscriptions() {
+  if (subscriptionPollRunning) return;
+  subscriptionPollRunning = true;
+
+  try {
+    const users = await User.find({
+      subscribedChannels: {
+        $elemMatch: { status: "pending" },
+      },
+    }).lean();
+
+    for (const user of users) {
+      for (const sub of user.subscribedChannels) {
+        if (sub.status !== "pending") continue;
+
+        const result = await User.updateOne(
+          {
+            walletAddress: user.walletAddress,
+            "subscribedChannels.channelId": sub.channelId,
+            "subscribedChannels.status": "pending",
+            "subscribedChannels.notifiedAt": { $exists: false },
+          },
+          {
+            $set: {
+              "subscribedChannels.$.notifiedAt": new Date(),
+            },
+          }
+        );
+
+        // Already notified or race condition
+        if (result.modifiedCount === 0) continue;
+
+        try {
+          LOG.info(
+            { wallet: user.walletAddress, channelId: sub.channelId },
+            "📩 Sending approval request to channel"
+          );
+
+          await sendApprovalRequestToChannel({
+            walletAddress: user.walletAddress,
+            channelId: sub.channelId,
+          });
+        } catch (err) {
+          LOG.error(
+            { err, wallet: user.walletAddress, channelId: sub.channelId },
+            "❌ Failed to send approval request"
+          );
+        }
+      }
+    }
+  } catch (err) {
+    LOG.error({ err }, "❌ pollPendingSubscriptions error");
+  } finally {
+    subscriptionPollRunning = false;
+  }
+}
+
+
+// ========= Approval Request Helper (FIXED — SAFE TEXT MODE) =========
+async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
+  const user = await User.findOne({ walletAddress });
+
+  if (!user || !user.telegram?.userId) {
+    throw new Error("User not linked to Telegram");
+  }
+
+  const channel = await SignalChannel.findOne({
+    channelId: String(channelId),
+    status: "active",
+  });
+
+  if (!channel) {
+    throw new Error("Channel not found or inactive");
+  }
+
+  const username = user.telegram.username
+    ? `@${user.telegram.username}`
+    : "(no username)";
+
+  const message =
+    "🆕 Trade Access Request\n\n" +
+    `👤 Telegram: ${username}\n` +
+    `🆔 Telegram ID: ${user.telegram.userId}\n` +
+    `💼 Wallet: ${walletAddress}\n\n` +
+    "Approve:\n" +
+    `/approve_wallet ${walletAddress}\n\n` +
+    "Reject:\n" +
+    `/reject_wallet ${walletAddress}`;
+
+  await bot.telegram.sendMessage(channel.channelId, message);
+}
+
+
 // ========= MongoDB + Bot bootstrap =========
 mongoose
   .connect(MONGO_URI)
@@ -387,6 +484,25 @@ mongoose
 
     await loadChannels();
     LOG.info("Initial channel list loaded");
+
+    // ========= STEP 3B — Start subscription watcher =========
+    const SUBSCRIPTION_POLL_MS = parseInt(
+      process.env.SUBSCRIPTION_POLL_MS || "10000",
+      10
+    );
+
+    // initial kick
+    pollPendingSubscriptions().catch((err) =>
+      LOG.error({ err }, "Initial subscription poll failed")
+    );
+
+    // periodic poll
+    setInterval(() => {
+      pollPendingSubscriptions().catch((err) =>
+        LOG.error({ err }, "Periodic subscription poll failed")
+      );
+    }, SUBSCRIPTION_POLL_MS);
+
 
     LOG.info("Launching Telegram bot (wallet-mode)...");
 
@@ -837,70 +953,36 @@ if (sub.status !== "approved") {
 
 
 
+import express from "express";
+import cors from "cors";
+
+const app = express();
+app.use(express.json());
+app.use(cors());
+
 // ===================================================
 // 📩 API → BOT: POST CHANNEL APPROVAL REQUEST
 // ===================================================
-// app.post("/bot/request-approval", async (req, res) => {
-//  try {
-// console.log("📩 APPROVAL REQUEST RECEIVED:", req.body);
+app.post("/bot/request-approval", async (req, res) => {
+  try {
+    LOG.info("📩 APPROVAL REQUEST RECEIVED", req.body);
 
- //   const { walletAddress, channelId } = req.body;
+    const { walletAddress, channelId } = req.body;
 
-   // if (!walletAddress || !channelId) {
-    //  return res.status(400).json({
-    //    error: "walletAddress & channelId required",
-   //   });
-  //  }
+    if (!walletAddress || !channelId) {
+      return res.status(400).json({
+        error: "walletAddress & channelId required",
+      });
+    }
 
-   // const user = await User.findOne({ walletAddress });
-  //  if (!user || !user.telegram?.userId) {
-   //   return res.status(404).json({
-   //     error: "user_not_linked",
-    //  });
-   // }
+    await sendApprovalRequestToChannel({ walletAddress, channelId });
 
-   // const channel = await SignalChannel.findOne({
-    //  channelId: String(channelId),
-    //  status: "active",
-  //  });
-
-   // if (!channel) {
-     // return res.status(404).json({
-     //   error: "channel_not_found",
-    //  });
-   // }
-
-   // const username = user.telegram.username
-    //  ? `@${user.telegram.username}`
-    //  : "(no username)";
-
-  //  const message = `
-// 🆕 *Trade Access Request*
-
-// 👤 Telegram: ${username}
-//🆔 Telegram ID: \`${user.telegram.userId}\`
-// 💼 Wallet: \`${walletAddress}\`
-
-// Approve:
-// /approve_wallet ${walletAddress}
-
-// Reject:
-// /reject_wallet ${walletAddress}
-// `;
-
-   // await bot.telegram.sendMessage(
-     // channel.channelId,
-    //  message,
-     // { parse_mode: "Markdown" }
-   // );
-
-  // return res.json({ ok: true });
- // } catch (err) {
-   // console.error("request-approval error:", err);
-   // return res.status(500).json({ error: "internal_error" });
- // }
-// });
-
+    return res.json({ ok: true });
+  } catch (err) {
+    LOG.error({ err }, "request-approval error");
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
 
 
 // configurable port
@@ -1073,12 +1155,15 @@ const BOT_API_BASE =
 // });
 
 // start server (non-blocking) — Railway internal networking FIX
-// app.listen(PORT, "0.0.0.0", () => {
-  // LOG.info(
-    // { port: PORT },
-    // "Bot internal API listening on 0.0.0.0"
-  // );
-// });
+const PORT = Number(process.env.PORT || 8081);
+
+app.listen(PORT, "0.0.0.0", () => {
+  LOG.info(
+    { port: PORT },
+    "Bot internal API listening on 0.0.0.0"
+  );
+});
+
 
 // ========= Admin channel management commands via Telegram (keep admin only) =========
 

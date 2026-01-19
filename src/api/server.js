@@ -88,48 +88,6 @@ app.use((req, res, next) => {
     });
   });
 
-/**
- * ============================
- * BOT PROXY ROUTES
- * ============================
- * API → Telegram Bot service
- */
-
-
-app.post("/bot/request-approval", async (req, res) => {
-  try {
-    const BOT_API_BASE = process.env.BOT_API_BASE;
-
-    if (!BOT_API_BASE) {
-      return res.status(500).json({
-        error: "BOT_API_BASE not configured",
-      });
-    }
-
-    const botUrl =
-      BOT_API_BASE.replace(/\/$/, "") + "/bot/request-approval";
-
-    const r = await fetch(botUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(req.body),
-    });
-
-    const data = await r.json().catch(() => null);
-
-    if (!r.ok) {
-      return res.status(502).json({
-        error: "bot_service_failed",
-        details: data,
-      });
-    }
-
-    return res.json(data);
-  } catch (err) {
-    console.error("BOT proxy error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
 
 
   /**

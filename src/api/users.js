@@ -1,17 +1,11 @@
 import express from "express";
 import crypto from "crypto";
-import fetch from "node-fetch"; // ✅ ADD
 import User from "../../models/User.js";
 import SignalChannel from "../../models/SignalChannel.js";
 
 console.log("🔥 LOADED users API ROUTER:", import.meta.url);
 
 const router = express.Router();
-
-// ✅ Railway internal bot API (FIXED PORT)
-const BOT_API_BASE =
-  process.env.BOT_API_BASE ||
-  "http://autoswap-tradebot.railway.internal:8080";
 
 /**
  * ===================================================
@@ -123,7 +117,7 @@ router.post("/link-code", async (req, res) => {
 /**
  * ===================================================
  * POST /api/users/subscribe
- * API → BOT approval trigger (FINAL FIX)
+ * Wallet → Channel subscription request (DB only)
  * ===================================================
  */
 router.post("/subscribe", async (req, res) => {
@@ -149,6 +143,7 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
+    // 🔒 One Telegram account → One wallet
     const telegramOwner = await User.findOne({
       "telegram.userId": user.telegram.userId,
       walletAddress: { $ne: walletAddress },
@@ -181,19 +176,8 @@ router.post("/subscribe", async (req, res) => {
 
     await user.save();
 
-    // 🔔 NOTIFY BOT (THIS WAS MISSING BEFORE)
-    try {
-      await fetch(`${BOT_API_BASE}/bot/request-approval`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress,
-          channelId,
-        }),
-      });
-    } catch (err) {
-      console.error("⚠️ Bot notify failed:", err.message);
-    }
+    // ✅ No HTTP call to bot anymore
+    // Bot will send approval request from DB watcher (STEP 3)
 
     return res.json({ ok: true, status: "pending" });
   } catch (err) {
