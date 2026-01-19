@@ -998,10 +998,6 @@ app.post("/bot/request-approval", async (req, res) => {
 });
 
 
-// configurable port
-const BOT_API_BASE =
-  process.env.BOT_API_BASE ||
-  "http://localhost:8081"; // fallback for local dev only
 
 // health check endpoint
 // app.get("/bot-health", (req, res) => {
