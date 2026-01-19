@@ -441,7 +441,16 @@ async function pollPendingSubscriptions() {
 }
 
 
-// ========= Approval Request Helper (FIXED — SAFE TEXT MODE) =========
+// ========= Approval Request Helper (FIXED — HARD SAFE) =========
+function escapeTelegram(text) {
+  return String(text).replace(/[<>&]/g, (c) => {
+    if (c === "<") return "&lt;";
+    if (c === ">") return "&gt;";
+    if (c === "&") return "&amp;";
+    return c;
+  });
+}
+
 async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   const user = await User.findOne({ walletAddress });
 
@@ -462,15 +471,19 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     ? `@${user.telegram.username}`
     : "(no username)";
 
+  const safeUsername = escapeTelegram(username);
+  const safeTelegramId = escapeTelegram(user.telegram.userId);
+  const safeWallet = escapeTelegram(walletAddress);
+
   const message =
     "🆕 Trade Access Request\n\n" +
-    `👤 Telegram: ${username}\n` +
-    `🆔 Telegram ID: ${user.telegram.userId}\n` +
-    `💼 Wallet: ${walletAddress}\n\n` +
+    "👤 Telegram: " + safeUsername + "\n" +
+    "🆔 Telegram ID: " + safeTelegramId + "\n" +
+    "💼 Wallet: " + safeWallet + "\n\n" +
     "Approve:\n" +
-    `/approve_wallet ${walletAddress}\n\n` +
+    "/approve_wallet " + walletAddress + "\n\n" +
     "Reject:\n" +
-    `/reject_wallet ${walletAddress}`;
+    "/reject_wallet " + walletAddress;
 
   await bot.telegram.sendMessage(channel.channelId, message);
 }
