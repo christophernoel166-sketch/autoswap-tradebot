@@ -464,15 +464,7 @@ async function subscribeChannel(ch) {
       throw new Error("Subscribe failed");
     }
 
-    // 2️⃣ 🔔 Notify bot to message channel owner
-    await fetch(`${API_BASE}/bot/request-approval`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        walletAddress,
-        channelId: ch,
-      }),
-    });
+    
 
     // 3️⃣ Refresh UI
     await fetchUserChannels();
@@ -515,16 +507,7 @@ async function reRequestChannel(channelId) {
       throw new Error("re-request failed");
     }
 
-    // 2️⃣ 🔔 Notify bot to message channel owner (MISSING BEFORE)
-    await fetch(`${API_BASE}/bot/request-approval`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        walletAddress,
-        channelId,
-      }),
-    });
-
+    
     // 3️⃣ Refresh UI
     await fetchUserChannels();
 
