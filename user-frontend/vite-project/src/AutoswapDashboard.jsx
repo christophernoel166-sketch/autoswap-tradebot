@@ -485,7 +485,7 @@ async function subscribeChannel(ch) {
 
 
 // ================================
-// RE-REQUEST AFTER REJECTION (FIXED)
+// RE-REQUEST AFTER REJECTION (DB-WATCHER MODE)
 // ================================
 async function reRequestChannel(channelId) {
   if (!walletAddress) {
@@ -493,7 +493,7 @@ async function reRequestChannel(channelId) {
   }
 
   try {
-    // 1️⃣ Save subscription again (status = pending)
+    // Save subscription again (status = pending)
     const r = await fetch(`${API_BASE}/api/users/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -506,6 +506,23 @@ async function reRequestChannel(channelId) {
     if (!r.ok) {
       throw new Error("re-request failed");
     }
+
+    // Bot will pick this up from DB watcher
+    await fetchUserChannels();
+
+    setMessage({
+      type: "success",
+      text: "Re-request sent. Waiting for approval.",
+    });
+  } catch (err) {
+    console.warn("reRequestChannel error:", err);
+    setMessage({
+      type: "error",
+      text: "Failed to re-request channel",
+    });
+  }
+}
+
 
     
     // 3️⃣ Refresh UI
