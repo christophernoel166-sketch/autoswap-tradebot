@@ -962,11 +962,11 @@ if (sub.status !== "approved") {
 // const app = expressModule();
 // app.use(expressModule.json());
 // app.use(cors());
-//const PORT = Number(process.env.PORT || 8080);
 
 
 
-import express from "express";
+
+
 import cors from "cors";
 
 const app = express();
@@ -1163,15 +1163,7 @@ app.post("/bot/request-approval", async (req, res) => {
   // }
 // });
 
-// start server (non-blocking) — Railway internal networking FIX
-const PORT = Number(process.env.PORT || 8081);
 
-app.listen(PORT, "0.0.0.0", () => {
-  LOG.info(
-    { port: PORT },
-    "Bot internal API listening on 0.0.0.0"
-  );
-});
 
 
 // ========= Admin channel management commands via Telegram (keep admin only) =========
