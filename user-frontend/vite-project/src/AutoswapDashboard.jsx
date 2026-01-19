@@ -442,14 +442,15 @@ function canReRequest(channelId) {
 
   
 
-  // Subscribe helper (with approval notification)
+  // ================================
+// SUBSCRIBE CHANNEL (DB ONLY)
+// ================================
 async function subscribeChannel(ch) {
   if (!walletAddress) {
     return setMessage({ type: "error", text: "Connect wallet first" });
   }
 
   try {
-    // 1️⃣ Save subscription (status = pending)
     const r = await fetch(`${API_BASE}/api/users/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -463,7 +464,6 @@ async function subscribeChannel(ch) {
       throw new Error("Subscribe failed");
     }
 
-    // 3️⃣ Refresh UI
     await fetchUserChannels();
 
     setMessage({
@@ -479,11 +479,8 @@ async function subscribeChannel(ch) {
   }
 }
 
-
-
-
 // ================================
-// RE-REQUEST AFTER REJECTION (DB-WATCHER MODE)
+// RE-REQUEST AFTER REJECTION
 // ================================
 async function reRequestChannel(channelId) {
   if (!walletAddress) {
@@ -491,7 +488,6 @@ async function reRequestChannel(channelId) {
   }
 
   try {
-    // Save subscription again (status = pending)
     const r = await fetch(`${API_BASE}/api/users/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -505,7 +501,6 @@ async function reRequestChannel(channelId) {
       throw new Error("re-request failed");
     }
 
-    // Bot will pick this up from DB watcher
     await fetchUserChannels();
 
     setMessage({
@@ -520,25 +515,6 @@ async function reRequestChannel(channelId) {
     });
   }
 }
-
-
-    
-    // 3️⃣ Refresh UI
-    await fetchUserChannels();
-
-    setMessage({
-      type: "success",
-      text: "Re-request sent. Waiting for approval.",
-    });
-  } catch (err) {
-    console.warn("reRequestChannel error:", err);
-    setMessage({
-      type: "error",
-      text: "Failed to re-request channel",
-    });
-  }
-}
-
 
 
   /* === ANALYTICS: filters, returns, metrics === */
