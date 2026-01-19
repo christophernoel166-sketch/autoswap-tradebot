@@ -442,8 +442,7 @@ function canReRequest(channelId) {
 
   
 
-  
-    // Subscribe helper (with approval notification)
+  // Subscribe helper (with approval notification)
 async function subscribeChannel(ch) {
   if (!walletAddress) {
     return setMessage({ type: "error", text: "Connect wallet first" });
@@ -464,8 +463,6 @@ async function subscribeChannel(ch) {
       throw new Error("Subscribe failed");
     }
 
-    
-
     // 3️⃣ Refresh UI
     await fetchUserChannels();
 
@@ -481,6 +478,7 @@ async function subscribeChannel(ch) {
     });
   }
 }
+
 
 
 
