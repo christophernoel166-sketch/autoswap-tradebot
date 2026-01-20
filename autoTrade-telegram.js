@@ -458,13 +458,25 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     throw new Error("User not linked to Telegram");
   }
 
+  // --------------------------------------------------
+  // 🔧 Normalize channel identifier
+  // - supports "@xitech101" (dashboard-friendly)
+  // - supports numeric channelId fallback
+  // --------------------------------------------------
+  const normalized = String(channelId).replace(/^@/, "");
+
   const channel = await SignalChannel.findOne({
-    channelId: String(channelId),
+    $or: [
+      { username: normalized },          // match @xitech101
+      { channelId: String(channelId) },  // fallback: numeric ID
+    ],
     status: "active",
   });
 
   if (!channel) {
-    throw new Error("Channel not found or inactive");
+    throw new Error(
+      `Channel not found or inactive for channelId=${channelId}`
+    );
   }
 
   const username = user.telegram.username
@@ -485,9 +497,11 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     "Reject:\n" +
     "/reject_wallet " + walletAddress;
 
+  // --------------------------------------------------
+  // 📩 Send approval request to the Telegram channel
+  // --------------------------------------------------
   await bot.telegram.sendMessage(channel.channelId, message);
 }
-
 
 // ========= MongoDB + Bot bootstrap =========
 mongoose
