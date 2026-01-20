@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — NEW) =========
+// ========= Subscription Watcher (STEP 3A — FIXED) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -398,61 +398,32 @@ async function pollPendingSubscriptions() {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
 
-        // 🔒 HARD STOP: already notified → NEVER resend
-        if (sub.notifiedAt) {
-          LOG.info(
-            {
-              wallet: user.walletAddress,
-              channelId: sub.channelId,
-              notifiedAt: sub.notifiedAt,
-            },
-            "⏭ Skipping already-notified subscription"
-          );
-          continue;
-        }
-
-        // 🔐 Atomic guard (prevents race conditions)
-        const result = await User.updateOne(
-          {
-            walletAddress: user.walletAddress,
-            "subscribedChannels.channelId": sub.channelId,
-            "subscribedChannels.status": "pending",
-            "subscribedChannels.notifiedAt": { $exists: false },
-          },
-          {
-            $set: {
-              "subscribedChannels.$.notifiedAt": new Date(),
-            },
-          }
-        );
-
-        // Another poller beat us → skip
-        if (result.modifiedCount === 0) {
-          LOG.info(
-            {
-              wallet: user.walletAddress,
-              channelId: sub.channelId,
-            },
-            "⏭ Notification already recorded by another poller"
-          );
-          continue;
-        }
-
         try {
           LOG.info(
             { wallet: user.walletAddress, channelId: sub.channelId },
             "📩 Sending approval request to channel"
           );
 
+          // 🔥 SEND FIRST
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
 
-          LOG.info(
-            { wallet: user.walletAddress, channelId: sub.channelId },
-            "✅ Approval request sent successfully"
+          // ✅ MARK NOTIFIED ONLY AFTER SUCCESS
+          await User.updateOne(
+            {
+              walletAddress: user.walletAddress,
+              "subscribedChannels.channelId": sub.channelId,
+              "subscribedChannels.status": "pending",
+            },
+            {
+              $set: {
+                "subscribedChannels.$.notifiedAt": new Date(),
+              },
+            }
           );
+
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
@@ -467,6 +438,7 @@ async function pollPendingSubscriptions() {
     subscriptionPollRunning = false;
   }
 }
+
 
 
 // ========= Approval Request Helper (FIXED — HARD SAFE) =========
