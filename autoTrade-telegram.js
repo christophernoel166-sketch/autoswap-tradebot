@@ -398,6 +398,20 @@ async function pollPendingSubscriptions() {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
 
+        // 🔒 HARD STOP: already notified → NEVER resend
+        if (sub.notifiedAt) {
+          LOG.info(
+            {
+              wallet: user.walletAddress,
+              channelId: sub.channelId,
+              notifiedAt: sub.notifiedAt,
+            },
+            "⏭ Skipping already-notified subscription"
+          );
+          continue;
+        }
+
+        // 🔐 Atomic guard (prevents race conditions)
         const result = await User.updateOne(
           {
             walletAddress: user.walletAddress,
@@ -412,8 +426,17 @@ async function pollPendingSubscriptions() {
           }
         );
 
-        // Already notified or race condition
-        if (result.modifiedCount === 0) continue;
+        // Another poller beat us → skip
+        if (result.modifiedCount === 0) {
+          LOG.info(
+            {
+              wallet: user.walletAddress,
+              channelId: sub.channelId,
+            },
+            "⏭ Notification already recorded by another poller"
+          );
+          continue;
+        }
 
         try {
           LOG.info(
@@ -425,6 +448,11 @@ async function pollPendingSubscriptions() {
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
+
+          LOG.info(
+            { wallet: user.walletAddress, channelId: sub.channelId },
+            "✅ Approval request sent successfully"
+          );
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
