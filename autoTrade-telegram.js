@@ -1,4 +1,4 @@
-
+ 
 // autotrader-wallet-mode.js
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
 
@@ -380,8 +380,7 @@ async function loadChannels() {
 }
 
 
-// THE LOCATION
-// ========= Subscription Watcher (STEP 3A — STACK-SAFE FINAL) =========
+// ========= Subscription Watcher (STEP 3A — FINAL FIX) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -404,22 +403,22 @@ async function pollPendingSubscriptions() {
     for (const user of users) {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
-        if (sub.notifiedAt) continue; // in-memory gate
 
-        // 🔒 Correct positional gate — SAME element only
+        // 🔒 Skip if already notified (in-memory safety)
+        if (sub.notifiedAt) {
+          continue;
+        }
+
+        // 🔒 Atomic DB gate: only one poller run can win
         const result = await User.updateOne(
           {
             walletAddress: user.walletAddress,
-            subscribedChannels: {
-              $elemMatch: {
-                channelId: sub.channelId,
-                status: "pending",
-                $or: [
-                  { notifiedAt: { $exists: false } },
-                  { notifiedAt: null },
-                ],
-              },
-            },
+            "subscribedChannels.channelId": sub.channelId,
+            "subscribedChannels.status": "pending",
+            $or: [
+              { "subscribedChannels.notifiedAt": { $exists: false } },
+              { "subscribedChannels.notifiedAt": null },
+            ],
           },
           {
             $set: {
