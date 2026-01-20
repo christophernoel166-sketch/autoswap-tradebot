@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — FIXED) =========
+// ========= Subscription Watcher (STEP 3A — NEW) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -398,32 +398,33 @@ async function pollPendingSubscriptions() {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
 
+        const result = await User.updateOne(
+          {
+            walletAddress: user.walletAddress,
+            "subscribedChannels.channelId": sub.channelId,
+            "subscribedChannels.status": "pending",
+            "subscribedChannels.notifiedAt": { $exists: false },
+          },
+          {
+            $set: {
+              "subscribedChannels.$.notifiedAt": new Date(),
+            },
+          }
+        );
+
+        // Already notified or race condition
+        if (result.modifiedCount === 0) continue;
+
         try {
           LOG.info(
             { wallet: user.walletAddress, channelId: sub.channelId },
             "📩 Sending approval request to channel"
           );
 
-          // 🔥 SEND FIRST
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
-
-          // ✅ MARK NOTIFIED ONLY AFTER SUCCESS
-          await User.updateOne(
-            {
-              walletAddress: user.walletAddress,
-              "subscribedChannels.channelId": sub.channelId,
-              "subscribedChannels.status": "pending",
-            },
-            {
-              $set: {
-                "subscribedChannels.$.notifiedAt": new Date(),
-              },
-            }
-          );
-
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
@@ -438,7 +439,6 @@ async function pollPendingSubscriptions() {
     subscriptionPollRunning = false;
   }
 }
-
 
 
 // ========= Approval Request Helper (FIXED — HARD SAFE) =========
