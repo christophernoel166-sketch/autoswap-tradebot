@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — NEW) =========
+// ========= Subscription Watcher (STEP 3A — FIXED) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -398,33 +398,32 @@ async function pollPendingSubscriptions() {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
 
-        const result = await User.updateOne(
-          {
-            walletAddress: user.walletAddress,
-            "subscribedChannels.channelId": sub.channelId,
-            "subscribedChannels.status": "pending",
-            "subscribedChannels.notifiedAt": { $exists: false },
-          },
-          {
-            $set: {
-              "subscribedChannels.$.notifiedAt": new Date(),
-            },
-          }
-        );
-
-        // Already notified or race condition
-        if (result.modifiedCount === 0) continue;
-
         try {
           LOG.info(
             { wallet: user.walletAddress, channelId: sub.channelId },
             "📩 Sending approval request to channel"
           );
 
+          // 🔥 SEND FIRST
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
+
+          // ✅ MARK NOTIFIED ONLY AFTER SUCCESS
+          await User.updateOne(
+            {
+              walletAddress: user.walletAddress,
+              "subscribedChannels.channelId": sub.channelId,
+              "subscribedChannels.status": "pending",
+            },
+            {
+              $set: {
+                "subscribedChannels.$.notifiedAt": new Date(),
+              },
+            }
+          );
+
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
@@ -441,6 +440,7 @@ async function pollPendingSubscriptions() {
 }
 
 
+
 // ========= Approval Request Helper (FIXED — HARD SAFE) =========
 function escapeTelegram(text) {
   return String(text).replace(/[<>&]/g, (c) => {
@@ -454,8 +454,8 @@ function escapeTelegram(text) {
 async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   const user = await User.findOne({ walletAddress });
 
-  if (!user || !user.telegram?.userId) {
-    throw new Error("User not linked to Telegram");
+  if (!user) {
+    throw new Error("User not found");
   }
 
   // --------------------------------------------------
@@ -479,12 +479,19 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     );
   }
 
-  const username = user.telegram.username
+  // --------------------------------------------------
+  // 🧠 Telegram may not be linked yet — DO NOT BLOCK
+  // --------------------------------------------------
+  const username = user.telegram?.username
     ? `@${user.telegram.username}`
-    : "(no username)";
+    : "(not linked yet)";
+
+  const telegramId = user.telegram?.userId
+    ? String(user.telegram.userId)
+    : "(not linked yet)";
 
   const safeUsername = escapeTelegram(username);
-  const safeTelegramId = escapeTelegram(user.telegram.userId);
+  const safeTelegramId = escapeTelegram(telegramId);
   const safeWallet = escapeTelegram(walletAddress);
 
   const message =
@@ -502,6 +509,7 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   // --------------------------------------------------
   await bot.telegram.sendMessage(channel.channelId, message);
 }
+
 
 // ========= MongoDB + Bot bootstrap =========
 mongoose
