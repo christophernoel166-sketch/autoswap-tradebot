@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — FIXED + DIAGNOSTIC) =========
+// ========= Subscription Watcher (STEP 3A — FINAL FIX) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -390,44 +390,35 @@ async function pollPendingSubscriptions() {
   try {
     const users = await User.find({
       subscribedChannels: {
-        $elemMatch: { status: "pending" },
+        $elemMatch: {
+          status: "pending",
+          $or: [
+            { notifiedAt: { $exists: false } },
+            { notifiedAt: null },
+          ],
+        },
       },
     }).lean();
-
-    LOG.info({ count: users.length }, "🔍 Found users with pending subscriptions");
 
     for (const user of users) {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
 
-        LOG.info(
-          {
-            wallet: user.walletAddress,
-            channelId: sub.channelId,
-            notifiedAt: sub.notifiedAt || null,
-          },
-          "🔍 Inspecting pending subscription"
-        );
-
-        // 🔒 HARD STOP: already notified
+        // 🔒 Skip if already notified (in-memory safety)
         if (sub.notifiedAt) {
-          LOG.info(
-            {
-              wallet: user.walletAddress,
-              channelId: sub.channelId,
-            },
-            "⏭ Skipping — already notified"
-          );
           continue;
         }
 
-        // 🔐 Atomic guard
+        // 🔒 Atomic DB gate: only one poller run can win
         const result = await User.updateOne(
           {
             walletAddress: user.walletAddress,
             "subscribedChannels.channelId": sub.channelId,
             "subscribedChannels.status": "pending",
-            "subscribedChannels.notifiedAt": { $exists: false },
+            $or: [
+              { "subscribedChannels.notifiedAt": { $exists: false } },
+              { "subscribedChannels.notifiedAt": null },
+            ],
           },
           {
             $set: {
@@ -436,23 +427,8 @@ async function pollPendingSubscriptions() {
           }
         );
 
-        LOG.info(
-          {
-            wallet: user.walletAddress,
-            channelId: sub.channelId,
-            modified: result.modifiedCount,
-          },
-          "🔍 Notification update attempt"
-        );
-
+        // Already notified or race condition
         if (result.modifiedCount === 0) {
-          LOG.info(
-            {
-              wallet: user.walletAddress,
-              channelId: sub.channelId,
-            },
-            "⏭ Lost race — already updated"
-          );
           continue;
         }
 
@@ -466,15 +442,23 @@ async function pollPendingSubscriptions() {
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
-
-          LOG.info(
-            { wallet: user.walletAddress, channelId: sub.channelId },
-            "✅ Approval request sent successfully"
-          );
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
             "❌ Failed to send approval request"
+          );
+
+          // 🔁 Roll back notifiedAt so it retries next poll
+          await User.updateOne(
+            {
+              walletAddress: user.walletAddress,
+              "subscribedChannels.channelId": sub.channelId,
+            },
+            {
+              $unset: {
+                "subscribedChannels.$.notifiedAt": "",
+              },
+            }
           );
         }
       }
@@ -485,6 +469,7 @@ async function pollPendingSubscriptions() {
     subscriptionPollRunning = false;
   }
 }
+
 
 // ========= Approval Request Helper (FIXED — HARD SAFE) =========
 function escapeTelegram(text) {
