@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — ACTUALLY FINAL) =========
+// ========= Subscription Watcher (STEP 3A — STACK-SAFE FINAL) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -405,25 +405,25 @@ async function pollPendingSubscriptions() {
         if (sub.status !== "pending") continue;
         if (sub.notifiedAt) continue; // in-memory gate
 
-        // 🔒 ATOMIC ARRAY GATE — SAME ELEMENT ONLY
+        // 🔒 Correct positional gate — SAME element only
         const result = await User.updateOne(
-          { walletAddress: user.walletAddress },
           {
-            $set: {
-              "subscribedChannels.$[s].notifiedAt": new Date(),
+            walletAddress: user.walletAddress,
+            subscribedChannels: {
+              $elemMatch: {
+                channelId: sub.channelId,
+                status: "pending",
+                $or: [
+                  { notifiedAt: { $exists: false } },
+                  { notifiedAt: null },
+                ],
+              },
             },
           },
           {
-            arrayFilters: [
-              {
-                "s.channelId": sub.channelId,
-                "s.status": "pending",
-                $or: [
-                  { "s.notifiedAt": { $exists: false } },
-                  { "s.notifiedAt": null },
-                ],
-              },
-            ],
+            $set: {
+              "subscribedChannels.$.notifiedAt": new Date(),
+            },
           }
         );
 
@@ -448,20 +448,16 @@ async function pollPendingSubscriptions() {
             "❌ Failed to send approval request"
           );
 
-          // 🔁 Roll back notifiedAt so it retries later
+          // 🔁 Roll back notifiedAt so it retries next poll
           await User.updateOne(
-            { walletAddress: user.walletAddress },
             {
-              $unset: {
-                "subscribedChannels.$[s].notifiedAt": "",
-              },
+              walletAddress: user.walletAddress,
+              "subscribedChannels.channelId": sub.channelId,
             },
             {
-              arrayFilters: [
-                {
-                  "s.channelId": sub.channelId,
-                },
-              ],
+              $unset: {
+                "subscribedChannels.$.notifiedAt": "",
+              },
             }
           );
         }
@@ -473,7 +469,6 @@ async function pollPendingSubscriptions() {
     subscriptionPollRunning = false;
   }
 }
-
 
 // ========= Approval Request Helper (FIXED — HARD SAFE) =========
 function escapeTelegram(text) {
