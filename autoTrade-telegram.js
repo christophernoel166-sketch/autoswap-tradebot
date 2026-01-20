@@ -380,7 +380,7 @@ async function loadChannels() {
 }
 
 
-// ========= Subscription Watcher (STEP 3A — FINAL FIX) =========
+// ========= Subscription Watcher (STEP 3A — ACTUALLY FINAL) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -403,27 +403,27 @@ async function pollPendingSubscriptions() {
     for (const user of users) {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
+        if (sub.notifiedAt) continue; // in-memory gate
 
-        // 🔒 Skip if already notified (in-memory safety)
-        if (sub.notifiedAt) {
-          continue;
-        }
-
-        // 🔒 Atomic DB gate: only one poller run can win
+        // 🔒 ATOMIC ARRAY GATE — SAME ELEMENT ONLY
         const result = await User.updateOne(
-          {
-            walletAddress: user.walletAddress,
-            "subscribedChannels.channelId": sub.channelId,
-            "subscribedChannels.status": "pending",
-            $or: [
-              { "subscribedChannels.notifiedAt": { $exists: false } },
-              { "subscribedChannels.notifiedAt": null },
-            ],
-          },
+          { walletAddress: user.walletAddress },
           {
             $set: {
-              "subscribedChannels.$.notifiedAt": new Date(),
+              "subscribedChannels.$[s].notifiedAt": new Date(),
             },
+          },
+          {
+            arrayFilters: [
+              {
+                "s.channelId": sub.channelId,
+                "s.status": "pending",
+                $or: [
+                  { "s.notifiedAt": { $exists: false } },
+                  { "s.notifiedAt": null },
+                ],
+              },
+            ],
           }
         );
 
@@ -448,16 +448,20 @@ async function pollPendingSubscriptions() {
             "❌ Failed to send approval request"
           );
 
-          // 🔁 Roll back notifiedAt so it retries next poll
+          // 🔁 Roll back notifiedAt so it retries later
           await User.updateOne(
-            {
-              walletAddress: user.walletAddress,
-              "subscribedChannels.channelId": sub.channelId,
-            },
+            { walletAddress: user.walletAddress },
             {
               $unset: {
-                "subscribedChannels.$.notifiedAt": "",
+                "subscribedChannels.$[s].notifiedAt": "",
               },
+            },
+            {
+              arrayFilters: [
+                {
+                  "s.channelId": sub.channelId,
+                },
+              ],
             }
           );
         }
