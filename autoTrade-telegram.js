@@ -295,6 +295,96 @@ bot.on("channel_post", async (ctx) => {
 
 
 // ===================================================
+// 🔐 CHANNEL APPROVAL HANDLER (ADMIN MESSAGES FIX)
+// Handles /approve_wallet when sent as a normal message
+// ===================================================
+bot.on("message", async (ctx) => {
+  try {
+    if (!ctx.message?.text) return;
+    if (ctx.chat?.type !== "channel") return;
+
+    const text = ctx.message.text.trim();
+    const channelId = String(ctx.chat.id);
+
+    if (
+      !text.startsWith("/approve_wallet") &&
+      !text.startsWith("/reject_wallet")
+    ) {
+      return;
+    }
+
+    LOG.info("🧪 Approval command received (message)", {
+      text,
+      channelId,
+    });
+
+    const walletAddress = text.split(" ")[1];
+
+    if (!walletAddress) {
+      await ctx.telegram.sendMessage(
+        channelId,
+        "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
+      );
+      return;
+    }
+
+    if (text.startsWith("/approve_wallet")) {
+      const result = await User.updateOne(
+        {
+          walletAddress,
+          "subscribedChannels.channelId": channelId,
+        },
+        {
+          $set: {
+            "subscribedChannels.$.status": "approved",
+            "subscribedChannels.$.enabled": true,
+            "subscribedChannels.$.approvedAt": new Date(),
+          },
+        }
+      );
+
+      LOG.info("🧪 Approval update result", result);
+
+      if (result.modifiedCount === 0) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet did not request this channel."
+        );
+        return;
+      }
+
+      await ctx.telegram.sendMessage(
+        channelId,
+        `✅ Wallet approved:\n${walletAddress}`
+      );
+    }
+
+    if (text.startsWith("/reject_wallet")) {
+      await User.updateOne(
+        {
+          walletAddress,
+          "subscribedChannels.channelId": channelId,
+        },
+        {
+          $set: {
+            "subscribedChannels.$.status": "rejected",
+            "subscribedChannels.$.enabled": false,
+          },
+        }
+      );
+
+      await ctx.telegram.sendMessage(
+        channelId,
+        `🚫 Wallet rejected:\n${walletAddress}`
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "❌ approve/reject handler (message) failed");
+  }
+});
+
+
+// ===================================================
 // 🔗 LINK TELEGRAM ↔ WALLET
 // Usage (private chat):
 // /link_wallet <CODE>
