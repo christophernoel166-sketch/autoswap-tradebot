@@ -379,8 +379,7 @@ async function loadChannels() {
   }
 }
 
-
-// ========= Subscription Watcher (STEP 3A — FINAL FIX) =========
+// ========= Subscription Watcher (FINAL — supports re-requests) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -403,13 +402,9 @@ async function pollPendingSubscriptions() {
     for (const user of users) {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
+        if (sub.notifiedAt) continue; // already handled unless reset
 
-        // 🔒 Skip if already notified (in-memory safety)
-        if (sub.notifiedAt) {
-          continue;
-        }
-
-        // 🔒 Atomic DB gate: only one poller run can win
+        // 🔒 ATOMIC GATE — only one poller can win
         const result = await User.updateOne(
           {
             walletAddress: user.walletAddress,
@@ -427,10 +422,8 @@ async function pollPendingSubscriptions() {
           }
         );
 
-        // Already notified or race condition
-        if (result.modifiedCount === 0) {
-          continue;
-        }
+        // Already handled or race condition
+        if (result.modifiedCount === 0) continue;
 
         try {
           LOG.info(
@@ -442,13 +435,14 @@ async function pollPendingSubscriptions() {
             walletAddress: user.walletAddress,
             channelId: sub.channelId,
           });
+
         } catch (err) {
           LOG.error(
             { err, wallet: user.walletAddress, channelId: sub.channelId },
             "❌ Failed to send approval request"
           );
 
-          // 🔁 Roll back notifiedAt so it retries next poll
+          // 🔁 Roll back so it retries later
           await User.updateOne(
             {
               walletAddress: user.walletAddress,
