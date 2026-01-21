@@ -159,72 +159,49 @@ router.post("/subscribe", async (req, res) => {
       (c) => c.channelId === channelId
     );
 
+    // ---------------------------
+    // 🆕 FIRST-TIME SUBSCRIBE
+    // ---------------------------
     if (!sub) {
       user.subscribedChannels.push({
         channelId,
         enabled: false,
         status: "pending",
         requestedAt: new Date(),
+        notifiedAt: null,
       });
-    } else if (sub.status === "rejected") {
+    }
+
+    // ---------------------------
+    // 🔁 RE-SUBMIT AFTER REJECT
+    // ---------------------------
+    else if (sub.status === "rejected") {
       sub.status = "pending";
       sub.enabled = false;
       sub.requestedAt = new Date();
-    } else {
-      return res.json({ ok: true, status: sub.status });
+      sub.notifiedAt = null; // 🔥 force watcher resend
+    }
+
+    // ---------------------------
+    // 🔁 RE-SUBMIT WHILE PENDING
+    // ---------------------------
+    else if (sub.status === "pending") {
+      sub.requestedAt = new Date();
+      sub.notifiedAt = null; // 🔥 force watcher resend
+    }
+
+    // ---------------------------
+    // ✅ ALREADY APPROVED
+    // ---------------------------
+    else if (sub.status === "approved") {
+      return res.json({ ok: true, status: "approved" });
     }
 
     await user.save();
 
-    // ✅ No HTTP call to bot anymore
-    // Bot will send approval request from DB watcher (STEP 3)
-
     return res.json({ ok: true, status: "pending" });
   } catch (err) {
     console.error("❌ subscribe error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/**
- * ===================================================
- * 🔁 STEP 2.1 — RE-REQUEST CHANNEL APPROVAL (TARGETED)
- * POST /api/users/re-request
- * ===================================================
- */
-router.post("/re-request", async (req, res) => {
-  try {
-    const { walletAddress, channelId } = req.body;
-
-    if (!walletAddress || !channelId) {
-      return res.status(400).json({
-        error: "walletAddress and channelId required",
-      });
-    }
-
-    // 1️⃣ Reset notifiedAt ONLY for this one subscription
-    const result = await User.updateOne(
-      {
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-        "subscribedChannels.status": "pending",
-      },
-      {
-        $unset: {
-          "subscribedChannels.$.notifiedAt": "",
-        },
-      }
-    );
-
-    if (result.modifiedCount === 0) {
-      return res.status(404).json({
-        error: "No pending subscription found for this channel",
-      });
-    }
-
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error("❌ re-request API error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
 });
