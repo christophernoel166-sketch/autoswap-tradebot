@@ -195,7 +195,7 @@ bot.on("channel_post", async (ctx) => {
 
 
 // ===================================================
-// 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY)
+// 🔐 CHANNEL APPROVAL HANDLER (CHANNEL POSTS ONLY) — FIXED
 // ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
@@ -205,6 +205,8 @@ bot.on("channel_post", async (ctx) => {
     if (!chat || !text) return;
 
     const channelId = String(chat.id);
+    const channelUsername = chat.username ? `@${chat.username}` : null;
+    const channelTitle = chat.title || null;
 
     // ===============================
     // APPROVE WALLET
@@ -220,12 +222,24 @@ bot.on("channel_post", async (ctx) => {
         return;
       }
 
-      LOG.info("🧪 APPROVAL START", { walletAddress, channelId });
+      LOG.info("🧪 APPROVAL START", {
+        walletAddress,
+        channelId,
+        channelUsername,
+        channelTitle,
+      });
 
       const result = await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          subscribedChannels: {
+            $elemMatch: {
+              channelId: {
+                $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+              },
+              status: "pending",
+            },
+          },
         },
         {
           $set: {
@@ -241,7 +255,7 @@ bot.on("channel_post", async (ctx) => {
       if (result.modifiedCount === 0) {
         await ctx.telegram.sendMessage(
           channelId,
-          "❌ Wallet did not request this channel."
+          "❌ Wallet did not request this channel (or already processed)."
         );
         return;
       }
@@ -268,10 +282,17 @@ bot.on("channel_post", async (ctx) => {
         return;
       }
 
-      await User.updateOne(
+      const result = await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          subscribedChannels: {
+            $elemMatch: {
+              channelId: {
+                $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+              },
+              status: "pending",
+            },
+          },
         },
         {
           $set: {
@@ -280,6 +301,14 @@ bot.on("channel_post", async (ctx) => {
           },
         }
       );
+
+      if (result.modifiedCount === 0) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet did not request this channel (or already processed)."
+        );
+        return;
+      }
 
       await ctx.telegram.sendMessage(
         channelId,
@@ -293,9 +322,8 @@ bot.on("channel_post", async (ctx) => {
   }
 });
 
-
 // ===================================================
-// 🔐 CHANNEL APPROVAL HANDLER (ADMIN MESSAGES FIX)
+// 🔐 CHANNEL APPROVAL HANDLER (ADMIN MESSAGES FIX) — FIXED
 // Handles /approve_wallet when sent as a normal message
 // ===================================================
 bot.on("message", async (ctx) => {
@@ -305,6 +333,8 @@ bot.on("message", async (ctx) => {
 
     const text = ctx.message.text.trim();
     const channelId = String(ctx.chat.id);
+    const channelUsername = ctx.chat.username ? `@${ctx.chat.username}` : null;
+    const channelTitle = ctx.chat.title || null;
 
     if (
       !text.startsWith("/approve_wallet") &&
@@ -316,6 +346,8 @@ bot.on("message", async (ctx) => {
     LOG.info("🧪 Approval command received (message)", {
       text,
       channelId,
+      channelUsername,
+      channelTitle,
     });
 
     const walletAddress = text.split(" ")[1];
@@ -328,11 +360,21 @@ bot.on("message", async (ctx) => {
       return;
     }
 
+    // ===============================
+    // APPROVE WALLET
+    // ===============================
     if (text.startsWith("/approve_wallet")) {
       const result = await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          subscribedChannels: {
+            $elemMatch: {
+              channelId: {
+                $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+              },
+              status: "pending",
+            },
+          },
         },
         {
           $set: {
@@ -348,7 +390,7 @@ bot.on("message", async (ctx) => {
       if (result.modifiedCount === 0) {
         await ctx.telegram.sendMessage(
           channelId,
-          "❌ Wallet did not request this channel."
+          "❌ Wallet did not request this channel (or already processed)."
         );
         return;
       }
@@ -359,11 +401,21 @@ bot.on("message", async (ctx) => {
       );
     }
 
+    // ===============================
+    // REJECT WALLET
+    // ===============================
     if (text.startsWith("/reject_wallet")) {
-      await User.updateOne(
+      const result = await User.updateOne(
         {
           walletAddress,
-          "subscribedChannels.channelId": channelId,
+          subscribedChannels: {
+            $elemMatch: {
+              channelId: {
+                $in: [channelId, channelUsername, channelTitle].filter(Boolean),
+              },
+              status: "pending",
+            },
+          },
         },
         {
           $set: {
@@ -372,6 +424,14 @@ bot.on("message", async (ctx) => {
           },
         }
       );
+
+      if (result.modifiedCount === 0) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Wallet did not request this channel (or already processed)."
+        );
+        return;
+      }
 
       await ctx.telegram.sendMessage(
         channelId,
