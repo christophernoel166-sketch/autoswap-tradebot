@@ -379,7 +379,7 @@ async function loadChannels() {
   }
 }
 
-// ========= Subscription Watcher (FINAL — supports re-requests) =========
+// ========= Subscription Watcher (STEP 1.1 — FINAL NON-SPAM) =========
 let subscriptionPollRunning = false;
 
 async function pollPendingSubscriptions() {
@@ -397,23 +397,29 @@ async function pollPendingSubscriptions() {
           ],
         },
       },
-    }).lean();
+    });
 
     for (const user of users) {
       for (const sub of user.subscribedChannels) {
         if (sub.status !== "pending") continue;
-        if (sub.notifiedAt) continue; // already handled unless reset
+        if (sub.notifiedAt) continue;
 
-        // 🔒 ATOMIC GATE — only one poller can win
+        const rawChannelId = String(sub.channelId);   // "@xitech101"
+        const normalized = rawChannelId.replace(/^@/, "");
+
         const result = await User.updateOne(
           {
             walletAddress: user.walletAddress,
-            "subscribedChannels.channelId": sub.channelId,
-            "subscribedChannels.status": "pending",
-            $or: [
-              { "subscribedChannels.notifiedAt": { $exists: false } },
-              { "subscribedChannels.notifiedAt": null },
-            ],
+            subscribedChannels: {
+              $elemMatch: {
+                channelId: rawChannelId,
+                status: "pending",
+                $or: [
+                  { notifiedAt: { $exists: false } },
+                  { notifiedAt: null },
+                ],
+              },
+            },
           },
           {
             $set: {
@@ -422,23 +428,28 @@ async function pollPendingSubscriptions() {
           }
         );
 
-        // Already handled or race condition
-        if (result.modifiedCount === 0) continue;
+        if (result.modifiedCount === 0) {
+          LOG.info(
+            { wallet: user.walletAddress, channelId: rawChannelId },
+            "⏭️ Skipping — already notified"
+          );
+          continue;
+        }
 
         try {
           LOG.info(
-            { wallet: user.walletAddress, channelId: sub.channelId },
+            { wallet: user.walletAddress, channelId: rawChannelId },
             "📩 Sending approval request to channel"
           );
 
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
-            channelId: sub.channelId,
+            channelId: normalized,
           });
 
         } catch (err) {
           LOG.error(
-            { err, wallet: user.walletAddress, channelId: sub.channelId },
+            { err, wallet: user.walletAddress, channelId: rawChannelId },
             "❌ Failed to send approval request"
           );
 
@@ -446,7 +457,7 @@ async function pollPendingSubscriptions() {
           await User.updateOne(
             {
               walletAddress: user.walletAddress,
-              "subscribedChannels.channelId": sub.channelId,
+              "subscribedChannels.channelId": rawChannelId,
             },
             {
               $unset: {
@@ -465,7 +476,8 @@ async function pollPendingSubscriptions() {
 }
 
 
-// ========= Approval Request Helper (FIXED — HARD SAFE) =========
+
+// ========= Approval Request Helper (FINAL — SAFE + IDENTITY-CONSISTENT) =========
 function escapeTelegram(text) {
   return String(text).replace(/[<>&]/g, (c) => {
     if (c === "<") return "&lt;";
@@ -492,7 +504,7 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   const channel = await SignalChannel.findOne({
     $or: [
       { username: normalized },          // match @xitech101
-      { channelId: String(channelId) },  // fallback: numeric ID
+      { channelId: String(channelId) },  // fallback numeric ID
     ],
     status: "active",
   });
@@ -528,9 +540,11 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     "Reject:\n" +
     "/reject_wallet " + walletAddress;
 
-  // --------------------------------------------------
-  // 📩 Send approval request to the Telegram channel
-  // --------------------------------------------------
+  LOG.info(
+    { walletAddress, channelId: channel.channelId, username: channel.username },
+    "📩 Dispatching approval message"
+  );
+
   await bot.telegram.sendMessage(channel.channelId, message);
 }
 
