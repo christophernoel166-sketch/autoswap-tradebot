@@ -186,4 +186,47 @@ router.post("/subscribe", async (req, res) => {
   }
 });
 
+/**
+ * ===================================================
+ * 🔁 STEP 2.1 — RE-REQUEST CHANNEL APPROVAL (TARGETED)
+ * POST /api/users/re-request
+ * ===================================================
+ */
+router.post("/re-request", async (req, res) => {
+  try {
+    const { walletAddress, channelId } = req.body;
+
+    if (!walletAddress || !channelId) {
+      return res.status(400).json({
+        error: "walletAddress and channelId required",
+      });
+    }
+
+    // 1️⃣ Reset notifiedAt ONLY for this one subscription
+    const result = await User.updateOne(
+      {
+        walletAddress,
+        "subscribedChannels.channelId": channelId,
+        "subscribedChannels.status": "pending",
+      },
+      {
+        $unset: {
+          "subscribedChannels.$.notifiedAt": "",
+        },
+      }
+    );
+
+    if (result.modifiedCount === 0) {
+      return res.status(404).json({
+        error: "No pending subscription found for this channel",
+      });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ re-request API error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
 export default router;
