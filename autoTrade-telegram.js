@@ -239,25 +239,23 @@ bot.on("channel_post", async (ctx) => {
 
 
 // ===================================================
-// 🔐 UNIFIED CHANNEL APPROVAL HANDLER — FINAL
+// 🔐 UNIFIED CHANNEL APPROVAL HANDLER — FINAL FIX
 // Handles both channel_post + message events safely
 // ===================================================
 bot.on(["channel_post", "message"], async (ctx) => {
   try {
     const text =
-  ctx.channelPost?.text?.trim() ||
-  ctx.channelPost?.caption?.trim() ||
-  ctx.message?.text?.trim() ||
-  ctx.message?.caption?.trim() ||
-  null;
-
-    if (!text) return;
+      ctx.channelPost?.text?.trim() ||
+      ctx.message?.text?.trim() ||
+      null;
 
     const chat = ctx.chat;
-    if (!chat || !["channel", "supergroup"].includes(chat.type)) return;
 
+    if (!text || !chat) return;
 
     const channelId = String(chat.id);
+
+    if (chat.type !== "channel") return;
 
     if (
       !text.startsWith("/approve_wallet") &&
@@ -266,8 +264,9 @@ bot.on(["channel_post", "message"], async (ctx) => {
       return;
     }
 
-    LOG.info("🧪 Approval command received", {
+    LOG.info("🧪 APPROVAL HANDLER HIT", {
       updateType: ctx.updateType,
+      chatType: chat.type,
       text,
       channelId,
     });
@@ -282,84 +281,44 @@ bot.on(["channel_post", "message"], async (ctx) => {
       return;
     }
 
-    // ===============================
-    // APPROVE WALLET
-    // ===============================
-    if (text.startsWith("/approve_wallet")) {
-      LOG.info("🧪 APPROVAL START", { walletAddress, channelId });
+    const newStatus =
+      text.startsWith("/approve_wallet") ? "approved" : "rejected";
 
-      const result = await User.updateOne(
-        {
-          walletAddress,
-          subscribedChannels: {
-            $elemMatch: {
-              channelId: channelId,
-              status: "pending",
-            },
-          },
-        },
-        {
-          $set: {
-            "subscribedChannels.$.status": "approved",
-            "subscribedChannels.$.enabled": true,
+    const newEnabled = newStatus === "approved";
+
+    const result = await User.updateOne(
+      {
+        walletAddress,
+        "subscribedChannels.channelId": channelId,
+        "subscribedChannels.status": "pending",
+      },
+      {
+        $set: {
+          "subscribedChannels.$.status": newStatus,
+          "subscribedChannels.$.enabled": newEnabled,
+          ...(newEnabled && {
             "subscribedChannels.$.approvedAt": new Date(),
-          },
-        }
-      );
-
-      LOG.info("🧪 APPROVAL UPDATE RESULT", result);
-
-      if (result.modifiedCount === 0) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet did not request this channel (or already processed)."
-        );
-        return;
-      }
-
-      await ctx.telegram.sendMessage(
-        channelId,
-        `✅ Wallet approved:\n${walletAddress}`
-      );
-    }
-
-    // ===============================
-    // REJECT WALLET
-    // ===============================
-    if (text.startsWith("/reject_wallet")) {
-      const result = await User.updateOne(
-        {
-          walletAddress,
-          subscribedChannels: {
-            $elemMatch: {
-              channelId: channelId,
-              status: "pending",
-            },
-          },
+          }),
         },
-        {
-          $set: {
-            "subscribedChannels.$.status": "rejected",
-            "subscribedChannels.$.enabled": false,
-          },
-        }
-      );
-
-      LOG.info("🧪 REJECT UPDATE RESULT", result);
-
-      if (result.modifiedCount === 0) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Wallet did not request this channel (or already processed)."
-        );
-        return;
       }
+    );
 
+    LOG.info("🧪 APPROVAL UPDATE RESULT", result);
+
+    if (result.modifiedCount === 0) {
       await ctx.telegram.sendMessage(
         channelId,
-        `🚫 Wallet rejected:\n${walletAddress}`
+        "❌ Wallet did not request this channel (or already processed)."
       );
+      return;
     }
+
+    await ctx.telegram.sendMessage(
+      channelId,
+      newEnabled
+        ? `✅ Wallet approved:\n${walletAddress}`
+        : `🚫 Wallet rejected:\n${walletAddress}`
+    );
   } catch (err) {
     LOG.error(err, "❌ unified approve/reject handler failed");
   }
