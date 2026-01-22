@@ -27,7 +27,7 @@ function optionalEnv(name, def = null) {
  * api            → REST / WebSocket server
  * telegram-bot   → Telegram polling + trade engine
  */
-const SERVICE_ROLE = optionalEnv("SERVICE_ROLE", "api");
+const SERVICE_ROLE = String(optionalEnv("SERVICE_ROLE", "api")).trim();
 
 /**
  * ===================================================
