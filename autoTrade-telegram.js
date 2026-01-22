@@ -245,8 +245,11 @@ bot.on("channel_post", async (ctx) => {
 bot.on(["channel_post", "message"], async (ctx) => {
   try {
     const text =
-      ctx.channelPost?.text?.trim() ||
-      ctx.message?.text?.trim();
+  ctx.channelPost?.text?.trim() ||
+  ctx.channelPost?.caption?.trim() ||
+  ctx.message?.text?.trim() ||
+  ctx.message?.caption?.trim() ||
+  null;
 
     if (!text) return;
 
