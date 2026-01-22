@@ -23,6 +23,21 @@ import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
+// ===================================================
+// 🧪 GLOBAL RAW TELEGRAM UPDATE LOGGER (DEBUG STEP 1)
+// ===================================================
+bot.use(async (ctx, next) => {
+  LOG.info("📥 RAW UPDATE RECEIVED", {
+    updateType: ctx.updateType,
+    chatType: ctx.chat?.type,
+    text: ctx.message?.text,
+    channelPost: ctx.channelPost?.text,
+    chatId: ctx.chat?.id,
+  });
+
+  return next();
+});
+
 
 
 // bot.on("channel_post", async (ctx, next) => {
