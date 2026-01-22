@@ -726,22 +726,16 @@ mongoose
       );
     }, SUBSCRIPTION_POLL_MS);
 
-LOG.info("Launching Telegram bot (wallet-mode)...");
+
+    LOG.info("Launching Telegram bot (wallet-mode)...");
 
 bot.launch({
-  allowedUpdates: [
-    "message",
-    "channel_post",
-    "edited_message",
-    "edited_channel_post",
-    "my_chat_member",
-  ],
-}).then(() => {
-  LOG.info("Telegram bot polling started");
+  allowedUpdates: ["message", "channel_post", "my_chat_member"],
 }).catch((err) => {
   LOG.error(err, "Telegram bot launch failed");
 });
 
+LOG.info("Telegram bot polling started");
 
 
     // ✅ START periodic refresh ONLY AFTER bot is running

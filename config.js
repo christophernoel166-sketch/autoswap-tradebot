@@ -31,6 +31,36 @@ const SERVICE_ROLE = optionalEnv("SERVICE_ROLE", "api");
 
 /**
  * ===================================================
+ * TELEGRAM ENABLE LOGIC (HARDENED + DEBUGGED)
+ * ===================================================
+ */
+const TELEGRAM_TOKEN = optionalEnv("TELEGRAM_BOT_TOKEN", null);
+
+const telegramBotEnabled = (() => {
+  const role = SERVICE_ROLE;
+  const hasToken = Boolean(TELEGRAM_TOKEN);
+
+  const enabled =
+    hasToken &&
+    (
+      role === "telegram-bot" ||
+      role === "production" ||
+      role === "api" ||       // 👈 allow bot even if role mis-set
+      role === "worker" ||
+      role === "bot"
+    );
+
+  console.log("🧪 TELEGRAM ENABLE CHECK", {
+    role,
+    hasToken,
+    enabled,
+  });
+
+  return enabled;
+})();
+
+/**
+ * ===================================================
  * CONFIG
  * ===================================================
  */
@@ -49,7 +79,6 @@ export const config = {
   // SERVER (Railway-safe)
   // -----------------------------------------------
   server: {
-    // ⚠️ DO NOT DEFAULT THIS
     port: process.env.PORT ? Number(process.env.PORT) : undefined,
   },
 
@@ -65,13 +94,11 @@ export const config = {
   // TELEGRAM
   // -----------------------------------------------
   telegram: {
-    token: optionalEnv("TELEGRAM_BOT_TOKEN", null),
+    token: TELEGRAM_TOKEN,
   },
 
-  // ✅ Telegram is ONLY enabled in telegram-bot service
-  telegramBotEnabled:
-    SERVICE_ROLE === "telegram-bot" &&
-    Boolean(optionalEnv("TELEGRAM_BOT_TOKEN")),
+  // ✅ FINAL BOT ENABLE FLAG
+  telegramBotEnabled,
 
   // -----------------------------------------------
   // SOLANA
