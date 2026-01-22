@@ -251,7 +251,8 @@ bot.on(["channel_post", "message"], async (ctx) => {
     if (!text) return;
 
     const chat = ctx.chat;
-    if (!chat || chat.type !== "channel") return;
+    if (!chat || !["channel", "supergroup"].includes(chat.type)) return;
+
 
     const channelId = String(chat.id);
 
