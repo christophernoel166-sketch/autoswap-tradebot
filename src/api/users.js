@@ -123,13 +123,16 @@ router.post("/link-code", async (req, res) => {
 router.post("/subscribe", async (req, res) => {
   try {
     const { walletAddress, channel } = req.body;
-    const channelId = String(channel);
 
-    if (!walletAddress || !channelId) {
+    if (!walletAddress || !channel) {
       return res.status(400).json({
         error: "walletAddress & channel required",
       });
     }
+
+    // 🔧 CRITICAL FIX: CANONICALIZE CHANNEL ID
+    // Always store WITHOUT "@"
+    const channelId = String(channel).replace(/^@/, "");
 
     const user = await User.findOne({ walletAddress });
     if (!user) {
@@ -155,8 +158,9 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
+    // 🔍 Find existing subscription (normalize both sides)
     let sub = user.subscribedChannels.find(
-      (c) => c.channelId === channelId
+      (c) => String(c.channelId).replace(/^@/, "") === channelId
     );
 
     // ---------------------------
@@ -164,7 +168,7 @@ router.post("/subscribe", async (req, res) => {
     // ---------------------------
     if (!sub) {
       user.subscribedChannels.push({
-        channelId,
+        channelId, // ✅ always canonical form now
         enabled: false,
         status: "pending",
         requestedAt: new Date(),
