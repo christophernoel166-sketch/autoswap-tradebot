@@ -38,6 +38,35 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
+// ===================================================
+// 🧪 HARD PROBE — DOES BOT SEE CHANNEL TEXT AT ALL?
+// ===================================================
+bot.on(["message", "channel_post"], async (ctx) => {
+  try {
+    const text =
+      ctx.channelPost?.text ||
+      ctx.message?.text ||
+      null;
+
+    LOG.info("🧪 PROBE HIT", {
+      updateType: ctx.updateType,
+      chatType: ctx.chat?.type,
+      text,
+      chatId: ctx.chat?.id,
+      isChannelPost: Boolean(ctx.channelPost),
+      isMessage: Boolean(ctx.message),
+    });
+
+    if (ctx.chat?.type === "channel" && text) {
+      await ctx.telegram.sendMessage(
+        ctx.chat.id,
+        `🧪 Probe saw: ${text}`
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "🧪 PROBE FAILED");
+  }
+});
 
 
 // bot.on("channel_post", async (ctx, next) => {
