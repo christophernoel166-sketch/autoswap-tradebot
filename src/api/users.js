@@ -1,7 +1,6 @@
 import express from "express";
 import crypto from "crypto";
 import User from "../../models/User.js";
-import SignalChannel from "../../models/SignalChannel.js";
 
 console.log("🔥 LOADED users API ROUTER:", import.meta.url);
 
@@ -45,6 +44,7 @@ router.post("/", async (req, res) => {
       user = await User.create({
         walletAddress,
         createdAt: new Date(),
+        subscribedChannels: [], // 🔧 ensure array exists on new users
       });
       console.log("✅ Created new user:", walletAddress);
     }
@@ -127,7 +127,6 @@ function isInCooldown(sub) {
   return Date.now() - new Date(sub.requestedAt).getTime() < RESUBMIT_COOLDOWN_MS;
 }
 
-
 /**
  * ===================================================
  * POST /api/users/subscribe
@@ -145,12 +144,16 @@ router.post("/subscribe", async (req, res) => {
     }
 
     // 🔧 CRITICAL FIX: CANONICALIZE CHANNEL ID
-    // Always store WITHOUT "@"
     const channelId = String(channel).replace(/^@/, "");
 
     const user = await User.findOne({ walletAddress });
     if (!user) {
       return res.status(404).json({ error: "user_not_found" });
+    }
+
+    // 🔧 HARD FIX: ensure array always exists
+    if (!Array.isArray(user.subscribedChannels)) {
+      user.subscribedChannels = [];
     }
 
     if (!user.telegram?.userId) {
@@ -171,73 +174,72 @@ router.post("/subscribe", async (req, res) => {
         error: "telegram_wallet_locked",
       });
     }
-// 🔍 Find existing subscription (normalize both sides)
-let sub = user.subscribedChannels.find(
-  (c) => String(c.channelId).replace(/^@/, "") === channelId
-);
 
-// ---------------------------
-// 🆕 FIRST-TIME SUBSCRIBE
-// ---------------------------
-if (!sub) {
-  user.subscribedChannels.push({
-    channelId, // ✅ always canonical form now
-    enabled: false,
-    status: "pending",
-    requestedAt: new Date(),
-    notifiedAt: null,
-    approvedAt: null,
-    expiredAt: null,
-  });
-}
+    // 🔍 Find existing subscription (normalize both sides)
+    let sub = user.subscribedChannels.find(
+      (c) => String(c.channelId).replace(/^@/, "") === channelId
+    );
 
-// ---------------------------
-// 🔁 RE-SUBMIT AFTER REJECT
-// ---------------------------
-else if (sub.status === "rejected") {
-  sub.status = "pending";
-  sub.enabled = false;
-  sub.requestedAt = new Date();
-  sub.notifiedAt = null; // 🔥 force watcher resend
-  sub.approvedAt = null;
-  sub.expiredAt = null;
-}
+    // ---------------------------
+    // 🆕 FIRST-TIME SUBSCRIBE
+    // ---------------------------
+    if (!sub) {
+      user.subscribedChannels.push({
+        channelId,
+        enabled: false,
+        status: "pending",
+        requestedAt: new Date(),
+        notifiedAt: null,
+        approvedAt: null,
+        expiredAt: null,
+      });
+    }
 
-// ---------------------------
-// 🔁 RE-SUBMIT AFTER EXPIRE  ✅ NEW
-// ---------------------------
-else if (sub.status === "expired") {
-  sub.status = "pending";
-  sub.enabled = false;
-  sub.requestedAt = new Date();
-  sub.notifiedAt = null; // 🔥 force watcher resend
-  sub.approvedAt = null;
-  sub.expiredAt = null;
-}
+    // ---------------------------
+    // 🔁 RE-SUBMIT AFTER REJECT
+    // ---------------------------
+    else if (sub.status === "rejected") {
+      sub.status = "pending";
+      sub.enabled = false;
+      sub.requestedAt = new Date();
+      sub.notifiedAt = null;
+      sub.approvedAt = null;
+      sub.expiredAt = null;
+    }
 
-// ---------------------------
-// 🔁 RE-SUBMIT WHILE PENDING (WITH COOLDOWN)
-// ---------------------------
-else if (sub.status === "pending") {
-  if (isInCooldown(sub)) {
-    return res.status(429).json({
-      error: "cooldown_active",
-      message: "Please wait a few minutes before resubmitting this request.",
-    });
-  }
+    // ---------------------------
+    // 🔁 RE-SUBMIT AFTER EXPIRE
+    // ---------------------------
+    else if (sub.status === "expired") {
+      sub.status = "pending";
+      sub.enabled = false;
+      sub.requestedAt = new Date();
+      sub.notifiedAt = null;
+      sub.approvedAt = null;
+      sub.expiredAt = null;
+    }
 
-  sub.requestedAt = new Date();
-  sub.notifiedAt = null; // 🔥 force watcher resend
-}
+    // ---------------------------
+    // 🔁 RE-SUBMIT WHILE PENDING
+    // ---------------------------
+    else if (sub.status === "pending") {
+      if (isInCooldown(sub)) {
+        return res.status(429).json({
+          error: "cooldown_active",
+          message: "Please wait a few minutes before resubmitting this request.",
+        });
+      }
 
+      sub.requestedAt = new Date();
+      sub.notifiedAt = null;
+    }
 
-// ---------------------------
-// ✅ ALREADY APPROVED
-// ---------------------------
-else if (sub.status === "approved") {
-  return res.json({ ok: true, status: "approved" });
-}
-
+    // ---------------------------
+    // ✅ ALREADY APPROVED
+    // ---------------------------
+    else if (sub.status === "approved") {
+      return res.json({ ok: true, status: "approved" });
+    }
 
     await user.save();
 
