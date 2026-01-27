@@ -57,11 +57,12 @@ const userSchema = new mongoose.Schema(
             default: true,
           },
 
-          status: {
-            type: String,
-            enum: ["pending", "approved", "rejected"],
-            default: "pending",
-          },
+status: {
+  type: String,
+  enum: ["pending", "approved", "rejected", "expired"],
+  default: "pending",
+},
+
 
           requestedAt: {
             type: Date,
