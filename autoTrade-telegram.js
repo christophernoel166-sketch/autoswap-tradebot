@@ -23,56 +23,259 @@ import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 
+
+// 🔥 MUST BE HERE
+dotenv.config();
+const LOG = pino({ level: process.env.LOG_LEVEL || "info" });
+
 // ===================================================
-// 🧪 GLOBAL RAW TELEGRAM UPDATE LOGGER (DEBUG STEP 1)
+// 🧨 RAW TELEGRAM TAP — MUST LOG ALL COMMANDS
 // ===================================================
-bot.use(async (ctx, next) => {
-  LOG.info("📥 RAW UPDATE RECEIVED", {
+bot.on(["message", "channel_post"], async (ctx, next) => {
+  const text =
+    ctx.channelPost?.text ||
+    ctx.message?.text ||
+    null;
+
+  console.log("🧨 RAW TAP HIT", {
     updateType: ctx.updateType,
     chatType: ctx.chat?.type,
-    text: ctx.message?.text,
-    channelPost: ctx.channelPost?.text,
     chatId: ctx.chat?.id,
+    text,
+    hasChannelPost: Boolean(ctx.channelPost),
+    hasMessage: Boolean(ctx.message),
   });
 
   return next();
 });
 
-// ===================================================
-// 🧪 HARD PROBE — DOES BOT SEE CHANNEL TEXT AT ALL?
-// ===================================================
-bot.on(["message", "channel_post"], async (ctx) => {
-  try {
-    const text =
-      ctx.channelPost?.text ||
-      ctx.message?.text ||
-      null;
 
-    LOG.info("🧪 PROBE HIT", {
-      updateType: ctx.updateType,
-      chatType: ctx.chat?.type,
+// ===================================================
+// 🧪 COMMAND ROUTER PROBE — SHOULD ALWAYS FIRE
+// ===================================================
+bot.command("pending_requests", async (ctx) => {
+  console.log("🔥🔥🔥 COMMAND ROUTER HIT: pending_requests", {
+    updateType: ctx.updateType,
+    chatType: ctx.chat?.type,
+    chatId: ctx.chat?.id,
+    text: ctx.message?.text,
+  });
+
+  await ctx.reply("🧪 pending_requests handler reached");
+});
+
+
+// ===================================================
+// 📋 PENDING REQUESTS (CHANNEL OWNER ONLY) — FIXED + NEXT GUARD
+// ===================================================
+
+// ===================================================
+// 🧭 UNIFIED CHANNEL COMMAND ROUTER (FINAL)
+// Handles: /pending_requests, /claim_channel, /approve_wallet, /reject_wallet
+// ===================================================
+bot.on("channel_post", async (ctx) => {
+  try {
+    const text = ctx.channelPost?.text?.trim();
+    const chat = ctx.chat;
+    if (!text || !chat) return;
+
+    const channelId = String(chat.id);
+    const [command, arg] = text.split(/\s+/);
+
+    console.log("🧭 CHANNEL ROUTER HIT", {
+      command,
+      channelId,
       text,
-      chatId: ctx.chat?.id,
-      isChannelPost: Boolean(ctx.channelPost),
-      isMessage: Boolean(ctx.message),
     });
 
-    if (ctx.chat?.type === "channel" && text) {
-      await ctx.telegram.sendMessage(
-        ctx.chat.id,
-        `🧪 Probe saw: ${text}`
-      );
+    // ===================================================
+    // 📋 /pending_requests
+    // ===================================================
+    if (command === "/pending_requests") {
+      const channel = await SignalChannel.findOne({ channelId });
+      if (!channel?.ownerWallet) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Channel not claimed yet. Use /claim_channel first."
+        );
+        return;
+      }
+
+      const users = await User.find({
+        subscribedChannels: {
+          $elemMatch: { channelId, status: "pending" },
+        },
+      }).lean();
+
+      if (!users.length) {
+        await ctx.telegram.sendMessage(channelId, "✅ No pending requests.");
+        return;
+      }
+
+      let msg = "⏳ Pending Wallet Requests:\n\n";
+      for (const user of users) {
+        const sub = user.subscribedChannels.find(
+          (s) => String(s.channelId) === channelId
+        );
+
+        msg += `• ${user.walletAddress}\n`;
+        msg += `  Requested: ${new Date(sub.requestedAt).toLocaleString()}\n\n`;
+      }
+
+      await ctx.telegram.sendMessage(channelId, msg);
+      return;
     }
+
+    // ===================================================
+    // 🔐 /claim_channel WALLET
+    // ===================================================
+    if (command === "/claim_channel") {
+      const walletAddress = arg;
+      if (!walletAddress) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Usage: /claim_channel <WALLET_ADDRESS>"
+        );
+        return;
+      }
+
+      const botMember = await ctx.telegram.getChatMember(
+        chat.id,
+        ctx.botInfo.id
+      );
+
+      if (botMember.status !== "administrator") {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Bot must be an admin to claim this channel."
+        );
+        return;
+      }
+
+      const channel = await SignalChannel.findOne({ channelId });
+      if (!channel) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          "❌ Channel not registered. Add bot as admin first."
+        );
+        return;
+      }
+
+      if (channel.ownerWallet) {
+        await ctx.telegram.sendMessage(
+          channelId,
+          `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
+        );
+        return;
+      }
+
+      channel.ownerWallet = walletAddress;
+      channel.claimedAt = new Date();
+      await channel.save();
+
+      await ctx.telegram.sendMessage(
+        channelId,
+        `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
+      );
+
+      console.log("🔐 CLAIM SUCCESS", { channelId, walletAddress });
+      return;
+    }
+
+// ===================================================
+// 🔐 /approve_wallet & /reject_wallet
+// ===================================================
+if (command === "/approve_wallet" || command === "/reject_wallet") {
+  const walletAddress = arg;
+  if (!walletAddress) {
+    await ctx.telegram.sendMessage(
+      channelId,
+      "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
+    );
+    return;
+  }
+
+  const user = await User.findOne({ walletAddress });
+  if (!user) {
+    await ctx.telegram.sendMessage(
+      channelId,
+      "❌ Wallet not found in database."
+    );
+    return;
+  }
+
+  const sub = user.subscribedChannels?.find(
+    (s) => String(s.channelId) === channelId
+  );
+
+  if (!sub) {
+    await ctx.telegram.sendMessage(
+      channelId,
+      "❌ Wallet did not request this channel."
+    );
+    return;
+  }
+
+  if (sub.status !== "pending") {
+    await ctx.telegram.sendMessage(
+      channelId,
+      `❌ Request not pending (current: ${sub.status})`
+    );
+    return;
+  }
+
+  const isApprove = command === "/approve_wallet";
+
+  sub.status = isApprove ? "approved" : "rejected";
+  sub.enabled = isApprove;
+  sub.approvedAt = new Date();
+  await user.save();
+
+  // 🔔 STEP 4B-A — DM user about approval result
+  notifyUserOfApproval(user, channelId, isApprove).catch((err) =>
+    LOG.error({ err, walletAddress, channelId }, "notifyUserOfApproval failed")
+  );
+
+  // 🔔 STEP 4B-B — Sync approval to dashboard
+  notifyDashboardOfApproval({
+    walletAddress,
+    channelId,
+    status: isApprove ? "approved" : "rejected",
+  }).catch((err) =>
+    LOG.error(
+      { err, walletAddress, channelId },
+      "notifyDashboardOfApproval failed"
+    )
+  );
+
+  await ctx.telegram.sendMessage(
+    channelId,
+    isApprove
+      ? `✅ Wallet approved:\n${walletAddress}`
+      : `🚫 Wallet rejected:\n${walletAddress}`
+  );
+
+  console.log("🔐 APPROVAL SUCCESS", {
+    walletAddress,
+    channelId,
+    action: isApprove ? "approved" : "rejected",
+  });
+
+  return; // 🔥 exit router cleanly
+}
+
+
+    // ===================================================
+    // 🔁 Not a channel command → ignore
+    // ===================================================
+    return;
   } catch (err) {
-    LOG.error(err, "🧪 PROBE FAILED");
+    console.error("❌ Unified channel router crashed", err);
   }
 });
 
 
-// bot.on("channel_post", async (ctx, next) => {
-  // console.log("🧪 RAW CHANNEL POST RECEIVED:", ctx.channelPost?.text);
-  // return next(); // 🔥 REQUIRED
-// });
+
 
 
 
@@ -92,7 +295,7 @@ function isUserApprovedForChannel(user, channelId) {
 
 
 
-dotenv.config();
+
 
 function isChannelEnabledForUser(user, channelId) {
   if (!Array.isArray(user.subscribedChannels)) return false;
@@ -103,7 +306,6 @@ function isChannelEnabledForUser(user, channelId) {
 
 
 // ========= Config =========
-const LOG = pino({ level: process.env.LOG_LEVEL || "info" });
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const RPC_URL = process.env.RPC_URL;
 const MONGO_URI = process.env.MONGO_URI;
@@ -174,155 +376,6 @@ if (status === "administrator" || status === "member") {
 });
 
 
-// ===================================================
-// 🔐 CLAIM CHANNEL (owner verification)
-// Usage inside channel:
-// /claim_channel WALLET_ADDRESS
-// ===================================================
-bot.on("channel_post", async (ctx) => {
-  try {
-    const text = ctx.channelPost?.text;
-    if (!text?.startsWith("/claim_channel")) return;
-
-    const chat = ctx.chat;
-    const walletAddress = text.split(" ")[1];
-
-    if (!walletAddress) {
-      return ctx.telegram.sendMessage(
-        chat.id,
-        "❌ Usage: /claim_channel <WALLET_ADDRESS>"
-      );
-    }
-
-    const botMember = await ctx.telegram.getChatMember(
-      chat.id,
-      ctx.botInfo.id
-    );
-
-    if (botMember.status !== "administrator") {
-      return ctx.telegram.sendMessage(
-        chat.id,
-        "❌ Bot must be an admin to claim this channel."
-      );
-    }
-
-    const channel = await SignalChannel.findOne({
-      channelId: String(chat.id),
-    });
-
-    if (!channel) {
-      return ctx.telegram.sendMessage(
-        chat.id,
-        "❌ Channel not registered. Add bot as admin first."
-      );
-    }
-
-    if (channel.ownerWallet) {
-      return ctx.telegram.sendMessage(
-        chat.id,
-        `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
-      );
-    }
-
-    channel.ownerWallet = walletAddress;
-    channel.claimedAt = new Date();
-    await channel.save();
-
-    ctx.telegram.sendMessage(
-      chat.id,
-      `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
-    );
-  } catch (err) {
-    console.error("claim_channel error:", err);
-  }
-});
-
-
-// ===================================================
-// 🔐 UNIFIED CHANNEL APPROVAL HANDLER — FINAL FIX
-// Handles both channel_post + message events safely
-// ===================================================
-bot.on(["channel_post", "message"], async (ctx) => {
-  try {
-    const text =
-      ctx.channelPost?.text?.trim() ||
-      ctx.message?.text?.trim() ||
-      null;
-
-    const chat = ctx.chat;
-
-    if (!text || !chat) return;
-
-    const channelId = String(chat.id);
-
-    if (chat.type !== "channel") return;
-
-    if (
-      !text.startsWith("/approve_wallet") &&
-      !text.startsWith("/reject_wallet")
-    ) {
-      return;
-    }
-
-    LOG.info("🧪 APPROVAL HANDLER HIT", {
-      updateType: ctx.updateType,
-      chatType: chat.type,
-      text,
-      channelId,
-    });
-
-    const walletAddress = text.split(" ")[1];
-
-    if (!walletAddress) {
-      await ctx.telegram.sendMessage(
-        channelId,
-        "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
-      );
-      return;
-    }
-
-    const newStatus =
-      text.startsWith("/approve_wallet") ? "approved" : "rejected";
-
-    const newEnabled = newStatus === "approved";
-
-    const result = await User.updateOne(
-      {
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-        "subscribedChannels.status": "pending",
-      },
-      {
-        $set: {
-          "subscribedChannels.$.status": newStatus,
-          "subscribedChannels.$.enabled": newEnabled,
-          ...(newEnabled && {
-            "subscribedChannels.$.approvedAt": new Date(),
-          }),
-        },
-      }
-    );
-
-    LOG.info("🧪 APPROVAL UPDATE RESULT", result);
-
-    if (result.modifiedCount === 0) {
-      await ctx.telegram.sendMessage(
-        channelId,
-        "❌ Wallet did not request this channel (or already processed)."
-      );
-      return;
-    }
-
-    await ctx.telegram.sendMessage(
-      channelId,
-      newEnabled
-        ? `✅ Wallet approved:\n${walletAddress}`
-        : `🚫 Wallet rejected:\n${walletAddress}`
-    );
-  } catch (err) {
-    LOG.error(err, "❌ unified approve/reject handler failed");
-  }
-});
 
 // ===================================================
 // 🔗 LINK TELEGRAM ↔ WALLET
@@ -578,6 +631,134 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   await bot.telegram.sendMessage(channel.channelId, message);
 }
 
+// ===================================================
+// 📣 STEP 4 — APPROVAL NOTIFICATIONS + DASHBOARD SYNC
+// ===================================================
+async function notifyUserOfApproval(user, channelId, isApprove) {
+  try {
+    if (!user.telegram?.userId) {
+      LOG.warn(
+        { wallet: user.walletAddress },
+        "User not linked to Telegram — skipping DM"
+      );
+      return;
+    }
+
+    const message = isApprove
+      ? `✅ Your wallet has been APPROVED for channel ${channelId}`
+      : `🚫 Your wallet has been REJECTED for channel ${channelId}`;
+
+    await bot.telegram.sendMessage(user.telegram.userId, message);
+
+    LOG.info(
+      {
+        wallet: user.walletAddress,
+        telegramId: user.telegram.userId,
+        channelId,
+        action: isApprove ? "approved" : "rejected",
+      },
+      "📣 Sent approval DM to user"
+    );
+  } catch (err) {
+    LOG.error(
+      { err, wallet: user.walletAddress, channelId },
+      "❌ Failed to notify user of approval"
+    );
+  }
+}
+
+async function notifyDashboardOfApproval({ walletAddress, channelId, status }) {
+  try {
+    const base = BACKEND_BASE.replace(/\/$/, "");
+    const endpoint = `${base}/api/channels/approval-event`;
+
+    const payload = {
+      walletAddress,
+      channelId,
+      status, // approved | rejected
+      at: new Date().toISOString(),
+      source: "telegram",
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      LOG.error(
+        { status: res.status, body: text, walletAddress, channelId },
+        "Dashboard approval sync failed"
+      );
+    } else {
+      LOG.info(
+        { walletAddress, channelId, status },
+        "📊 Dashboard approval synced"
+      );
+    }
+  } catch (err) {
+    LOG.error(
+      { err, walletAddress, channelId },
+      "❌ Dashboard approval notify crashed"
+    );
+  }
+}
+
+
+// ===================================================
+// ⏳ STEP 3 — AUTO-EXPIRE PENDING CHANNEL REQUESTS
+// ===================================================
+const PENDING_EXPIRY_MS = parseInt(
+  process.env.PENDING_EXPIRY_MS || String(24 * 60 * 60 * 1000), // default 24h
+  10
+);
+
+async function expireOldPendingRequests() {
+  try {
+    const cutoff = new Date(Date.now() - PENDING_EXPIRY_MS);
+
+    const result = await User.updateMany(
+      {
+        "subscribedChannels": {
+          $elemMatch: {
+            status: "pending",
+            requestedAt: { $lt: cutoff },
+          },
+        },
+      },
+      {
+        $set: {
+          "subscribedChannels.$[elem].status": "expired",
+          "subscribedChannels.$[elem].enabled": false,
+          "subscribedChannels.$[elem].expiredAt": new Date(),
+        },
+      },
+      {
+        arrayFilters: [
+          {
+            "elem.status": "pending",
+            "elem.requestedAt": { $lt: cutoff },
+          },
+        ],
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      LOG.info(
+        {
+          expired: result.modifiedCount,
+          cutoff: cutoff.toISOString(),
+        },
+        "⏳ Auto-expired pending channel requests"
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "❌ expireOldPendingRequests failed");
+  }
+}
+
 
 // ========= MongoDB + Bot bootstrap =========
 mongoose
@@ -606,17 +787,33 @@ mongoose
       );
     }, SUBSCRIPTION_POLL_MS);
 
+    // ========= STEP 3 — Auto-expiry scheduler =========
+    const EXPIRY_POLL_MS = parseInt(
+      process.env.EXPIRY_POLL_MS || "600000", // default: every 10 minutes
+      10
+    );
+
+    // initial run
+    expireOldPendingRequests().catch((err) =>
+      LOG.error({ err }, "Initial expiry sweep failed")
+    );
+
+    // periodic sweep
+    setInterval(() => {
+      expireOldPendingRequests().catch((err) =>
+        LOG.error({ err }, "Periodic expiry sweep failed")
+      );
+    }, EXPIRY_POLL_MS);
 
     LOG.info("Launching Telegram bot (wallet-mode)...");
 
-bot.launch({
-  allowedUpdates: ["message", "channel_post", "my_chat_member"],
-}).catch((err) => {
-  LOG.error(err, "Telegram bot launch failed");
-});
+    bot.launch({
+      allowedUpdates: ["message", "channel_post", "my_chat_member"],
+    }).catch((err) => {
+      LOG.error(err, "Telegram bot launch failed");
+    });
 
-LOG.info("Telegram bot polling started");
-
+    LOG.info("Telegram bot polling started");
 
     // ✅ START periodic refresh ONLY AFTER bot is running
     const CHANNEL_REFRESH_MS = parseInt(
@@ -634,7 +831,6 @@ LOG.info("Telegram bot polling started");
     LOG.error(err, "MongoDB Error");
     process.exit(1);
   });
-
 
 
 // ========= Utils =========
@@ -1130,54 +1326,6 @@ app.post("/bot/request-approval", async (req, res) => {
 // });
 
 
-// ================= TEST ENDPOINT — create fake open position =================
-// app.post("/test-open", async (req, res) => {
-  // try {
-    // const { wallet, mint } = req.body;
-
-    // if (!wallet || !mint) {
-      // return res.status(400).json({ error: "wallet & mint required" });
-    // }
-
-    // Create a fake monitor entry if not existing
-    // if (!monitored.has(mint)) {
-      // monitored.set(mint, {
-        // lastPrice: 0.50,
-        // users: new Map(),
-        // entryPrices: new Map(),
-      // });
-    // }
-
-    // const state = monitored.get(mint);
-
-    // const entry = 0.40;
-    // const current = 0.50;
-
-    // state.lastPrice = current;
-
-    // state.users.set(wallet, {
-      // entryPrice: entry,
-      // solAmount: 0.01,
-      // tpStage: 1,
-    // });
-
-    // state.entryPrices.set(wallet, entry);
-
-    // res.json({
-      // ok: true,
-      // created: {
-        // wallet,
-        // mint,
-        // entryPrice: entry,
-        // currentPrice: current,
-        // tpStage: 1,
-      // },
-    // });
-  // } catch (err) {
-    // console.error("test-open error:", err);
-    // res.status(500).json({ error: "internal_error" });
-  // }
-// });
 
 // ========= Step C: Manual Sell API (frontend-triggered, wallet-based) =========
 // app.post("/api/manual-sell", async (req, res) => {
@@ -1311,16 +1459,12 @@ bot.command("admin_channels", async (ctx) => {
   ctx.reply("📢 Current allowed channels: " + list);
 });
 
-// ========= Channel self-connect handler (Option 4) =========
 
 
-
-    
-
-// ========= Signal handler: supports multiple channels (channel -> mint) =========
-bot.on("message", async (ctx) => {
+// ========= Signal handler: supports multiple channels (channel -> mint) — FIXED =========
+bot.on("message", async (ctx, next) => {
   try {
-    if (!ctx.message || !ctx.message.text) return;
+    if (!ctx.message || !ctx.message.text) return next();
 
     let chatUser = null;
     if (ctx.message.sender_chat && ctx.message.sender_chat.username) {
@@ -1330,7 +1474,7 @@ bot.on("message", async (ctx) => {
     } else if (ctx.chat && ctx.chat.title) {
       chatUser = ctx.chat.title;
     } else {
-      return; // Not a channel message
+      return next(); // 🔥 WAS: return;
     }
 
     const cleaned = chatUser.replace(/^@/, "");
@@ -1338,46 +1482,46 @@ bot.on("message", async (ctx) => {
     // Skip if channel isn't allowed
     if (!CHANNELS.includes(cleaned)) {
       LOG.debug({ from: cleaned }, "Channel not allowed");
-      return;
+      return next(); // 🔥 WAS: return;
     }
 
     // Extract mint address from message text
     const text = ctx.message.text;
     const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
-    if (!mintMatch) return;
+    if (!mintMatch) return next();
+
     const mint = mintMatch[0];
-    if (!looksLikeMint(mint)) return;
+    if (!looksLikeMint(mint)) return next();
 
     LOG.info({ mint, from: cleaned }, "signal detected");
 
-    // Find users subscribed to this channel (by walletAddress stored in DB)
-
     const users = await User.find({
-  subscribedChannels: {
-    $elemMatch: {
-      channelId: cleaned,
-      enabled: true,   // 👈 USER_TOGGLE enforced here
-    },
-  },
-  active: { $ne: false },
-}).lean();
-
+      subscribedChannels: {
+        $elemMatch: {
+          channelId: cleaned,
+          enabled: true,
+        },
+      },
+      active: { $ne: false },
+    }).lean();
 
     if (!users || users.length === 0) {
       LOG.warn(`No users subscribed to channel: ${cleaned}`);
-      return;
+      return next(); // 🔥 WAS: return;
     }
 
     LOG.info(`Executing trades for ${users.length} subscribed users...`);
 
     for (const user of users) {
-      // user is DB document with walletAddress
       executeUserTrade(user, mint, cleaned).catch((err) =>
         LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
       );
     }
+
+    return next(); // 🔥 THIS IS THE KEY LINE
   } catch (err) {
     LOG.error({ err }, "message handler error");
+    return next(); // 🔥 ALSO REQUIRED
   }
 });
 

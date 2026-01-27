@@ -114,6 +114,20 @@ router.post("/link-code", async (req, res) => {
   }
 });
 
+// ===================================================
+// 🛑 ANTI-SPAM COOLDOWN (e.g., 5 minutes)
+// ===================================================
+const RESUBMIT_COOLDOWN_MS = parseInt(
+  process.env.RESUBMIT_COOLDOWN_MS || String(5 * 60 * 1000),
+  10
+);
+
+function isInCooldown(sub) {
+  if (!sub?.requestedAt) return false;
+  return Date.now() - new Date(sub.requestedAt).getTime() < RESUBMIT_COOLDOWN_MS;
+}
+
+
 /**
  * ===================================================
  * POST /api/users/subscribe
@@ -157,49 +171,73 @@ router.post("/subscribe", async (req, res) => {
         error: "telegram_wallet_locked",
       });
     }
+// 🔍 Find existing subscription (normalize both sides)
+let sub = user.subscribedChannels.find(
+  (c) => String(c.channelId).replace(/^@/, "") === channelId
+);
 
-    // 🔍 Find existing subscription (normalize both sides)
-    let sub = user.subscribedChannels.find(
-      (c) => String(c.channelId).replace(/^@/, "") === channelId
-    );
+// ---------------------------
+// 🆕 FIRST-TIME SUBSCRIBE
+// ---------------------------
+if (!sub) {
+  user.subscribedChannels.push({
+    channelId, // ✅ always canonical form now
+    enabled: false,
+    status: "pending",
+    requestedAt: new Date(),
+    notifiedAt: null,
+    approvedAt: null,
+    expiredAt: null,
+  });
+}
 
-    // ---------------------------
-    // 🆕 FIRST-TIME SUBSCRIBE
-    // ---------------------------
-    if (!sub) {
-      user.subscribedChannels.push({
-        channelId, // ✅ always canonical form now
-        enabled: false,
-        status: "pending",
-        requestedAt: new Date(),
-        notifiedAt: null,
-      });
-    }
+// ---------------------------
+// 🔁 RE-SUBMIT AFTER REJECT
+// ---------------------------
+else if (sub.status === "rejected") {
+  sub.status = "pending";
+  sub.enabled = false;
+  sub.requestedAt = new Date();
+  sub.notifiedAt = null; // 🔥 force watcher resend
+  sub.approvedAt = null;
+  sub.expiredAt = null;
+}
 
-    // ---------------------------
-    // 🔁 RE-SUBMIT AFTER REJECT
-    // ---------------------------
-    else if (sub.status === "rejected") {
-      sub.status = "pending";
-      sub.enabled = false;
-      sub.requestedAt = new Date();
-      sub.notifiedAt = null; // 🔥 force watcher resend
-    }
+// ---------------------------
+// 🔁 RE-SUBMIT AFTER EXPIRE  ✅ NEW
+// ---------------------------
+else if (sub.status === "expired") {
+  sub.status = "pending";
+  sub.enabled = false;
+  sub.requestedAt = new Date();
+  sub.notifiedAt = null; // 🔥 force watcher resend
+  sub.approvedAt = null;
+  sub.expiredAt = null;
+}
 
-    // ---------------------------
-    // 🔁 RE-SUBMIT WHILE PENDING
-    // ---------------------------
-    else if (sub.status === "pending") {
-      sub.requestedAt = new Date();
-      sub.notifiedAt = null; // 🔥 force watcher resend
-    }
+// ---------------------------
+// 🔁 RE-SUBMIT WHILE PENDING (WITH COOLDOWN)
+// ---------------------------
+else if (sub.status === "pending") {
+  if (isInCooldown(sub)) {
+    return res.status(429).json({
+      error: "cooldown_active",
+      message: "Please wait a few minutes before resubmitting this request.",
+    });
+  }
 
-    // ---------------------------
-    // ✅ ALREADY APPROVED
-    // ---------------------------
-    else if (sub.status === "approved") {
-      return res.json({ ok: true, status: "approved" });
-    }
+  sub.requestedAt = new Date();
+  sub.notifiedAt = null; // 🔥 force watcher resend
+}
+
+
+// ---------------------------
+// ✅ ALREADY APPROVED
+// ---------------------------
+else if (sub.status === "approved") {
+  return res.json({ ok: true, status: "approved" });
+}
+
 
     await user.save();
 
