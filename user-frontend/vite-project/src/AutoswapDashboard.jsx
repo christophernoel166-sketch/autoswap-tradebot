@@ -719,8 +719,29 @@ async function reRequestChannel(channelId) {
      🔗 LINK TELEGRAM MODAL (POPUP)
 =================================================== */}
 {showLinkPopup && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm text-center shadow-xl border border-gray-200 dark:border-gray-700">
+  <div
+    className="fixed inset-0 bg-black/60 flex items-center justify-center z-50"
+    onClick={() => {
+      setShowLinkPopup(false);
+      setLinkCode(null);
+    }}
+  >
+    <div
+      className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-sm text-center shadow-xl border border-gray-200 dark:border-gray-700 relative"
+      onClick={(e) => e.stopPropagation()} // prevent closing when clicking inside
+    >
+
+      {/* ❌ CLOSE BUTTON */}
+      <button
+        onClick={() => {
+          setShowLinkPopup(false);
+          setLinkCode(null);
+        }}
+        className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+        aria-label="Close"
+      >
+        ✕
+      </button>
 
       <h3 className="text-lg font-semibold mb-2 text-gray-900 dark:text-gray-100">
         Link Telegram Account
@@ -753,6 +774,10 @@ async function reRequestChannel(channelId) {
           🚀 Open Telegram Bot
         </a>
       </div>
+
+      <p className="text-xs text-gray-500 dark:text-gray-400 mt-4">
+        You can close this window and link Telegram later.
+      </p>
     </div>
   </div>
 )}
