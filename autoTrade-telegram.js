@@ -1462,19 +1462,25 @@ bot.command("admin_channels", async (ctx) => {
 
 
 // ========= Signal handler: supports multiple channels (channel -> mint) — FIXED =========
-bot.on("message", async (ctx, next) => {
+bot.on(["message", "channel_post"], async (ctx, next) => {
   try {
-    if (!ctx.message || !ctx.message.text) return next();
+    const text =
+      ctx.message?.text ||
+      ctx.channelPost?.text ||
+      null;
+
+    if (!text) return next();
 
     let chatUser = null;
-    if (ctx.message.sender_chat && ctx.message.sender_chat.username) {
-      chatUser = ctx.message.sender_chat.username;
-    } else if (ctx.chat && ctx.chat.username) {
+
+    if (ctx.channelPost && ctx.chat?.username) {
       chatUser = ctx.chat.username;
-    } else if (ctx.chat && ctx.chat.title) {
-      chatUser = ctx.chat.title;
+    } else if (ctx.message?.sender_chat?.username) {
+      chatUser = ctx.message.sender_chat.username;
+    } else if (ctx.chat?.username) {
+      chatUser = ctx.chat.username;
     } else {
-      return next(); // 🔥 WAS: return;
+      return next();
     }
 
     const cleaned = chatUser.replace(/^@/, "");
@@ -1482,11 +1488,9 @@ bot.on("message", async (ctx, next) => {
     // Skip if channel isn't allowed
     if (!CHANNELS.includes(cleaned)) {
       LOG.debug({ from: cleaned }, "Channel not allowed");
-      return next(); // 🔥 WAS: return;
+      return next();
     }
 
-    // Extract mint address from message text
-    const text = ctx.message.text;
     const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
     if (!mintMatch) return next();
 
@@ -1507,7 +1511,7 @@ bot.on("message", async (ctx, next) => {
 
     if (!users || users.length === 0) {
       LOG.warn(`No users subscribed to channel: ${cleaned}`);
-      return next(); // 🔥 WAS: return;
+      return next();
     }
 
     LOG.info(`Executing trades for ${users.length} subscribed users...`);
@@ -1518,12 +1522,13 @@ bot.on("message", async (ctx, next) => {
       );
     }
 
-    return next(); // 🔥 THIS IS THE KEY LINE
+    return next();
   } catch (err) {
-    LOG.error({ err }, "message handler error");
-    return next(); // 🔥 ALSO REQUIRED
+    LOG.error({ err }, "signal handler error");
+    return next();
   }
 });
+
 
 
 
