@@ -13,6 +13,9 @@ import ActivePositions from "./positions/ActivePositions";
 import TradeHistory from "./history/TradeHistory";
 import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
+import SessionAuthorization from "./settings/SessionAuthorization";
+import { buildSessionAuthMessage } from "./utils/sessionAuthMessage";
+
 import {
   createSessionKey,
   saveSessionKey,
@@ -53,6 +56,8 @@ const isTelegramLinked = !!user?.telegram?.userId;
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [solPerTrade, setSolPerTrade] = useState(0.01);
+const [sessionExpiryHours, setSessionExpiryHours] = useState(24);
+
   const [stopLoss, setStopLoss] = useState(10);
   const [trailingTrigger, setTrailingTrigger] = useState(5);
   const [trailingDistance, setTrailingDistance] = useState(3);
@@ -410,6 +415,44 @@ function canReRequest(channelId) {
   return sub && sub.status === "rejected";
 }
 
+// ===================================================
+// 🔐 STEP 3B.1 — SESSION AUTH MESSAGE BUILDER
+// Appears logically BEFORE Save Settings
+// ===================================================
+function buildSessionAuthMessage({
+  wallet,
+  sessionPubkey,
+  solPerTrade,
+  expiresAt,
+}) {
+  return `AUTOSWAP SESSION AUTHORIZATION
+
+Wallet:
+${wallet}
+
+Session Key:
+${sessionPubkey}
+
+Permissions:
+• Buy only
+• SOL per trade: ${solPerTrade} SOL
+• Channels: approved only
+
+Network: Solana Mainnet
+Purpose: Automated copy trading
+
+Expires at:
+${expiresAt}
+
+By signing this message, I authorize Autoswap
+to execute trades using the session key
+under the limits above.
+
+No withdrawals.
+No unlimited approvals.
+`;
+}
+
 
   /* --- SAVE SETTINGS --- */
   async function saveSettings() {
@@ -438,6 +481,67 @@ function canReRequest(channelId) {
       setMessage({ type: "error", text: "Failed to save settings" });
     }
   }
+
+// ===================================================
+// 🔐 STEP 3B.3 — AUTHORIZE TRADING (SIGN MESSAGE)
+// ===================================================
+async function authorizeTrading() {
+  if (!connected || !publicKey) {
+    return setMessage({ type: "error", text: "Connect wallet first" });
+  }
+
+  if (!solPerTrade || solPerTrade <= 0) {
+    return setMessage({
+      type: "error",
+      text: "Set SOL per trade before authorizing",
+    });
+  }
+
+  const session = loadSessionKey(publicKey.toString());
+  if (!session) {
+    return setMessage({
+      type: "error",
+      text: "Session key missing. Refresh page.",
+    });
+  }
+
+  const expiresAt = new Date(
+    Date.now() + sessionExpiryHours * 60 * 60 * 1000
+  ).toISOString();
+
+  const messageToSign = buildSessionAuthMessage({
+    wallet: publicKey.toString(),
+    sessionPubkey: session.publicKey,
+    solPerTrade,
+    expiresAt,
+  });
+
+  try {
+    const encoded = new TextEncoder().encode(messageToSign);
+
+    const signed = await window.solana.signMessage(encoded, "utf8");
+
+    console.log("✅ SESSION AUTH SIGNED", {
+      wallet: publicKey.toString(),
+      sessionPubkey: session.publicKey,
+      solPerTrade,
+      expiresAt,
+      signature: Array.from(signed.signature),
+    });
+
+    setMessage({
+      type: "success",
+      text: "Trading authorized successfully",
+    });
+  } catch (err) {
+    console.error("signMessage error:", err);
+    setMessage({
+      type: "error",
+      text: "Authorization rejected in wallet",
+    });
+  }
+}
+
 
   /* --- Manual sells (keep existing behavior) --- */
   async function manualSell(mint) {
@@ -883,6 +987,21 @@ async function reRequestChannel(channelId) {
     reRequestChannel={reRequestChannel}
     getChannelStatusBadge={getChannelStatusBadge}
   />
+
+<SessionAuthorization
+  sessionExpiryHours={sessionExpiryHours}
+  setSessionExpiryHours={setSessionExpiryHours}
+/>
+
+
+<button
+  onClick={authorizeTrading}
+  className="w-full bg-purple-600 hover:bg-purple-700
+             text-white text-sm py-2 rounded"
+>
+  🔐 Authorize Trading
+</button>
+
 
   <TradingSettings
     solPerTrade={solPerTrade}
