@@ -1,40 +1,54 @@
-import { Keypair } from "@solana/web3.js";
+import nacl from "tweetnacl";
+import bs58 from "bs58";
+
+const STORAGE_PREFIX = "autoswap_session_key";
 
 /**
- * Generates a temporary session keypair for auto trading
- * This key NEVER holds user funds
+ * Creates a new ephemeral signing keypair (session key)
  */
 export function createSessionKey() {
-  const keypair = Keypair.generate();
+  const kp = nacl.sign.keyPair();
 
   return {
-    publicKey: keypair.publicKey.toBase58(),
-    secretKey: Array.from(keypair.secretKey), // Uint8Array → JSON-safe
-    createdAt: Date.now(),
+    publicKey: bs58.encode(kp.publicKey),
+    secretKey: bs58.encode(kp.secretKey),
+    createdAt: new Date().toISOString(),
   };
 }
 
 /**
- * Store session key securely in sessionStorage
+ * Save session key to localStorage (scoped per wallet)
  */
-export function saveSessionKey(sessionKey) {
-  sessionStorage.setItem(
-    "autoTradeSessionKey",
-    JSON.stringify(sessionKey)
+export function saveSessionKey(walletAddress, session) {
+  localStorage.setItem(
+    `${STORAGE_PREFIX}:${walletAddress}`,
+    JSON.stringify(session)
   );
 }
 
 /**
- * Load session key from storage
+ * Load session key from localStorage
  */
-export function loadSessionKey() {
-  const raw = sessionStorage.getItem("autoTradeSessionKey");
-  return raw ? JSON.parse(raw) : null;
+export function loadSessionKey(walletAddress) {
+  const raw = localStorage.getItem(
+    `${STORAGE_PREFIX}:${walletAddress}`
+  );
+
+  if (!raw) return null;
+
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.error("Failed to parse session key", err);
+    return null;
+  }
 }
 
 /**
- * Clear session key (logout / revoke)
+ * Optional helper — clear session
  */
-export function clearSessionKey() {
-  sessionStorage.removeItem("autoTradeSessionKey");
+export function clearSessionKey(walletAddress) {
+  localStorage.removeItem(
+    `${STORAGE_PREFIX}:${walletAddress}`
+  );
 }
