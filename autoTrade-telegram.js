@@ -22,6 +22,18 @@ import bot from "./src/telegram/bot.js";
 import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
+import cors from "cors";
+import express from "express";
+
+const SIGNAL_TEST_MODE = true; // 🔥 turn OFF after test
+
+
+// ===================================================
+// 🔐 HARD LIVE TEST MODE (STEP 1 — CONFIG ONLY)
+// ===================================================
+const LIVE_TEST_WALLET = "7NzMhjyvbr4W5pVTuQ1prJcBoAWsw9G7VoVC3K2eisae";
+const LIVE_TEST_SOL = 0.001;
+const LIVE_TEST_BUY_ONLY = true;
 
 
 // 🔥 MUST BE HERE
@@ -49,6 +61,101 @@ bot.on(["message", "channel_post"], async (ctx, next) => {
   return next();
 });
 
+
+// ========= STEP 3 — SIGNAL HANDLER (LIVE TEST BUY, SINGLE WALLET) =========
+bot.on("channel_post", async (ctx) => {
+  try {
+    const text = ctx.channelPost?.text;
+    if (!text) return;
+
+    const channelId = String(ctx.chat?.id);
+    if (!channelId) return;
+
+    console.log("🧪 SIGNAL HANDLER HIT (CHANNEL_POST)", {
+      channelId,
+      chatTitle: ctx.chat?.title,
+      chatUsername: ctx.chat?.username,
+      text,
+    });
+
+    // 🔍 Extract mint
+    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+    if (!mintMatch) {
+      console.log("🧪 NO MINT FOUND IN CHANNEL POST");
+      return;
+    }
+
+    const mint = mintMatch[0];
+
+    console.log("🧪 MINT DETECTED", {
+      mint,
+      channel: ctx.chat?.username || ctx.chat?.title,
+    });
+
+    // ===================================================
+    // 🔎 FIND ELIGIBLE WALLETS (APPROVED + ENABLED)
+    // ===================================================
+    const users = await User.find({
+      active: { $ne: false },
+      subscribedChannels: {
+        $elemMatch: {
+          channelId,
+          enabled: true,
+          status: "approved",
+        },
+      },
+    }).lean();
+
+    if (!users.length) {
+      console.log("🧪 NO ELIGIBLE WALLETS FOR THIS SIGNAL", {
+        channelId,
+        mint,
+      });
+      return;
+    }
+
+    // ===================================================
+    // 🔐 LIVE TEST WALLET FILTER (HARD LOCK)
+    // ===================================================
+    const testUser = users.find(
+      (u) => u.walletAddress === LIVE_TEST_WALLET
+    );
+
+    if (!testUser) {
+      console.log("🧪 LIVE TEST WALLET NOT FOUND — SIGNAL IGNORED", {
+        liveTestWallet: LIVE_TEST_WALLET,
+        eligibleWallets: users.map((u) => u.walletAddress),
+      });
+      return;
+    }
+
+    // ===================================================
+    // 🚀 STEP 3B — EXECUTE SINGLE LIVE BUY (NO MONITOR)
+    // ===================================================
+    console.log("🚀 LIVE TEST BUY INITIATED", {
+      wallet: testUser.walletAddress,
+      mint,
+      sol: LIVE_TEST_SOL,
+      channelId,
+    });
+
+    // Force test size (override anything in DB)
+    testUser.solPerTrade = LIVE_TEST_SOL;
+
+    try {
+      await executeUserTrade(testUser, mint, channelId);
+      console.log("✅ LIVE TEST BUY EXECUTED");
+    } catch (err) {
+      console.error("❌ LIVE TEST BUY FAILED", err);
+    }
+
+    // 🔒 HARD STOP — NO REPEAT, NO SELL
+    return;
+
+  } catch (err) {
+    console.error("❌ STEP 3 signal handler error", err);
+  }
+});
 
 // ===================================================
 // 🧪 COMMAND ROUTER PROBE — SHOULD ALWAYS FIRE
@@ -80,6 +187,11 @@ bot.on("channel_post", async (ctx) => {
     if (!text || !chat) return;
 
     const channelId = String(chat.id);
+
+// ✅ ADD THIS GUARD
+if (!text.startsWith("/")) {
+  return; // let signal handlers handle non-command posts
+}
     const [command, arg] = text.split(/\s+/);
 
     console.log("🧭 CHANNEL ROUTER HIT", {
@@ -1213,35 +1325,36 @@ if (sub.status !== "approved") {
     LOG.warn({ err }, "Failed to fetch entry price");
   }
 
-  const state = await ensureMonitor(mint);
+
+  // const state = await ensureMonitor(mint);
 
   // store user info keyed by walletAddress
-  state.users.set(String(user.walletAddress), {
-    walletAddress: user.walletAddress,
-    tpStage: 0,
-    profile: {
-      tp1Percent: user.tp1 || 10,
-      tp1SellPercent: user.tp1SellPercent || 50,
-      tp2Percent: user.tp2 || 20,
-      tp2SellPercent: user.tp2SellPercent || 25,
-      tp3Percent: user.tp3 || 30,
-      tp3SellPercent: user.tp3SellPercent || 25,
-      stopLossPercent: user.stopLoss || 6,
-      trailingPercent: user.trailingDistance || 5,
-    },
-    buyTxid,
-    solAmount,
-    entryPrice,
-    sourceChannel,
-  });
+  // state.users.set(String(user.walletAddress), {
+   // walletAddress: user.walletAddress,
+   // tpStage: 0,
+   // profile: {
+     // tp1Percent: user.tp1 || 10,
+     // tp1SellPercent: user.tp1SellPercent || 50,
+     // tp2Percent: user.tp2 || 20,
+     // tp2SellPercent: user.tp2SellPercent || 25,
+     // tp3Percent: user.tp3 || 30,
+     // tp3SellPercent: user.tp3SellPercent || 25,
+     // stopLossPercent: user.stopLoss || 6,
+     // trailingPercent: user.trailingDistance || 5,
+   // },
+   // buyTxid,
+   // solAmount,
+   // entryPrice,
+   // sourceChannel,
+ // });
 
-  if (entryPrice) state.entryPrices.set(user.walletAddress, entryPrice);
-  if (!state.highest && entryPrice) state.highest = entryPrice;
+ // if (entryPrice) state.entryPrices.set(user.walletAddress, entryPrice);
+ // if (!state.highest && entryPrice) state.highest = entryPrice;
 
-  LOG.info({ wallet: user.walletAddress, mint }, "User added to monitor for multi-channel trading");
-}
+ // LOG.info({ wallet: user.walletAddress, mint }, "User added to monitor for multi-channel trading");
+ }
 
-// // ======= Step A: lightweight Express server for bot APIs =======
+ // ======= Step A: lightweight Express server for bot APIs =======
 // import expressModule from "express"; // avoid name clash
 // import cors from "cors";
 
@@ -1253,8 +1366,8 @@ if (sub.status !== "approved") {
 
 
 
-import cors from "cors";
-import express from "express";
+// import cors from "cors";
+// import express from "express";
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -1460,74 +1573,77 @@ bot.command("admin_channels", async (ctx) => {
 });
 
 
+// ========= STEP 2 — SIGNAL HANDLER (INSTRUMENTED, NON-DESTRUCTIVE) =========
+
+
 
 // ========= Signal handler: supports multiple channels (channel -> mint) — FIXED =========
-bot.on(["message", "channel_post"], async (ctx, next) => {
-  try {
-    const text =
-      ctx.message?.text ||
-      ctx.channelPost?.text ||
-      null;
+// bot.on(["message", "channel_post"], async (ctx, next) => {
+  // try {
+    // const text =
+      // ctx.message?.text ||
+      // ctx.channelPost?.text ||
+      // null;
 
-    if (!text) return next();
+    // if (!text) return next();
 
-    let chatUser = null;
+    // let chatUser = null;
 
-    if (ctx.channelPost && ctx.chat?.username) {
-      chatUser = ctx.chat.username;
-    } else if (ctx.message?.sender_chat?.username) {
-      chatUser = ctx.message.sender_chat.username;
-    } else if (ctx.chat?.username) {
-      chatUser = ctx.chat.username;
-    } else {
-      return next();
-    }
+    // if (ctx.channelPost && ctx.chat?.username) {
+     // chatUser = ctx.chat.username;
+    // } else if (ctx.message?.sender_chat?.username) {
+    //  chatUser = ctx.message.sender_chat.username;
+    // } else if (ctx.chat?.username) {
+     // chatUser = ctx.chat.username;
+   // } else {
+    //  return next();
+    // }
 
-    const cleaned = chatUser.replace(/^@/, "");
+    //const cleaned = chatUser.replace(/^@/, "");
 
     // Skip if channel isn't allowed
-    if (!CHANNELS.includes(cleaned)) {
-      LOG.debug({ from: cleaned }, "Channel not allowed");
-      return next();
-    }
+    // if (!CHANNELS.includes(cleaned)) {
+     // LOG.debug({ from: cleaned }, "Channel not allowed");
+     // return next();
+    // }
 
-    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
-    if (!mintMatch) return next();
+    // const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+    // if (!mintMatch) return next();
 
-    const mint = mintMatch[0];
-    if (!looksLikeMint(mint)) return next();
+    // const mint = mintMatch[0];
+    // if (!looksLikeMint(mint)) return next();
 
-    LOG.info({ mint, from: cleaned }, "signal detected");
+    // LOG.info({ mint, from: cleaned }, "signal detected");
 
-    const users = await User.find({
-      subscribedChannels: {
-        $elemMatch: {
-          channelId: cleaned,
-          enabled: true,
-        },
-      },
-      active: { $ne: false },
-    }).lean();
+    // const users = await User.find({
+     // subscribedChannels: {
+       // $elemMatch: {
+         // channelId: cleaned,
+         // enabled: true,
+       // },
+     // },
+     // active: { $ne: false },
+   // }).lean();
 
-    if (!users || users.length === 0) {
-      LOG.warn(`No users subscribed to channel: ${cleaned}`);
-      return next();
-    }
+   // if (!users || users.length === 0) {
+     // LOG.warn(`No users subscribed to channel: ${cleaned}`);
+     // return next();
+   // }
 
-    LOG.info(`Executing trades for ${users.length} subscribed users...`);
+   // LOG.info(`Executing trades for ${users.length} subscribed users...`);
 
-    for (const user of users) {
-      executeUserTrade(user, mint, cleaned).catch((err) =>
-        LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
-      );
-    }
+   // for (const user of users) {
+     // executeUserTrade(user, mint, cleaned).catch((err) =>
+       // LOG.error({ err, wallet: user.walletAddress }, "executeUserTrade error")
+     // );
+   // }
 
-    return next();
-  } catch (err) {
-    LOG.error({ err }, "signal handler error");
-    return next();
-  }
-});
+   // return next();
+ // } catch (err) {
+   // LOG.error({ err }, "signal handler error");
+   // return next();
+ // }
+// });
 
 
 
@@ -1544,7 +1660,7 @@ process.once("SIGTERM", () => {
 
 
 // ========= Named exports (for other modules to import) =========
-export { bot, ensureMonitor, monitored, safeSellAll };
+// export { bot, ensureMonitor, monitored, safeSellAll };
 
-export default { bot, ensureMonitor, monitored, safeSellAll };
+// export default { bot, ensureMonitor, monitored, safeSellAll };
 

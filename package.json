@@ -4,21 +4,16 @@
   "description": "Solana automated trading bot",
   "main": "index.js",
   "type": "module",
-
   "scripts": {
     "start": "node index.js",
-
     "start:api": "node index.js",
     "start:bot": "node autoTrade-telegram.js",
-
     "railway-api": "node index.js",
     "railway-bot": "node autoTrade-telegram.js"
   },
-
   "engines": {
     "node": ">=18"
   },
-
   "keywords": [
     "solana",
     "trading-bot",
@@ -26,19 +21,19 @@
     "telegram",
     "crypto"
   ],
-
   "author": "",
   "license": "ISC",
-
   "dependencies": {
     "@jup-ag/api": "^6.0.45",
     "@solana/spl-token": "^0.1.8",
     "@solana/web3.js": "^1.98.4",
     "argon2": "^0.31.2",
     "axios": "^1.12.2",
+    "bip39": "^3.1.0",
     "bs58": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
+    "ed25519-hd-key": "^1.3.0",
     "express": "^5.1.0",
     "inquirer": "^12.10.0",
     "jsonwebtoken": "^9.0.3",

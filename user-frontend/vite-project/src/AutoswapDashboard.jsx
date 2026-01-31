@@ -13,6 +13,12 @@ import ActivePositions from "./positions/ActivePositions";
 import TradeHistory from "./history/TradeHistory";
 import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
+import {
+  createSessionKey,
+  saveSessionKey,
+  loadSessionKey,
+} from "./utils/sessionKey";
+
 
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
@@ -70,6 +76,30 @@ useEffect(() => {
     setUser(null);
   }
 }, [connected, publicKey]);
+
+
+// ================================
+// 🔐 SESSION KEY (FRONTEND ONLY TEST)
+// ================================
+useEffect(() => {
+  if (!connected || !publicKey) return;
+
+  let session = loadSessionKey(publicKey.toString());
+
+  if (!session) {
+    session = createSessionKey();
+    saveSessionKey(publicKey.toString(), session);
+
+    console.log("🔐 New session key created", {
+      pubkey: session.publicKey,
+    });
+  } else {
+    console.log("🔁 Existing session key loaded", {
+      pubkey: session.publicKey,
+    });
+  }
+}, [connected, publicKey]);
+
 
 /* --- LOAD CHANNELS (ADMIN) --- */
 useEffect(() => {
