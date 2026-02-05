@@ -44,7 +44,10 @@ router.post("/", async (req, res) => {
       user = await User.create({
         walletAddress,
         createdAt: new Date(),
-        subscribedChannels: [], // 🔧 ensure array exists on new users
+        subscribedChannels: [],
+        balanceSol: 0,
+        lockedBalanceSol: 0,
+        tradingEnabled: false, // 🔒 SAFE DEFAULT
       });
       console.log("✅ Created new user:", walletAddress);
     }
@@ -53,6 +56,46 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("❌ ensure user error:", err);
     return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/**
+ * ===================================================
+ * 🔒 POST /api/users/toggle-trading
+ * Enable / disable automated trading
+ * ===================================================
+ */
+router.post("/toggle-trading", async (req, res) => {
+  try {
+    const { walletAddress, enabled } = req.body;
+
+    if (!walletAddress || typeof enabled !== "boolean") {
+      return res.status(400).json({
+        error: "invalid_request",
+      });
+    }
+
+    const user = await User.findOneAndUpdate(
+      { walletAddress },
+      { $set: { tradingEnabled: enabled } },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({
+        error: "user_not_found",
+      });
+    }
+
+    return res.json({
+      ok: true,
+      tradingEnabled: user.tradingEnabled,
+    });
+  } catch (err) {
+    console.error("❌ toggle-trading error:", err);
+    return res.status(500).json({
+      error: "internal_error",
+    });
   }
 });
 
@@ -115,7 +158,7 @@ router.post("/link-code", async (req, res) => {
 });
 
 // ===================================================
-// 🛑 ANTI-SPAM COOLDOWN (e.g., 5 minutes)
+// 🛑 ANTI-SPAM COOLDOWN
 // ===================================================
 const RESUBMIT_COOLDOWN_MS = parseInt(
   process.env.RESUBMIT_COOLDOWN_MS || String(5 * 60 * 1000),
@@ -130,7 +173,7 @@ function isInCooldown(sub) {
 /**
  * ===================================================
  * POST /api/users/subscribe
- * Wallet → Channel subscription request (DB only)
+ * Wallet → Channel subscription request
  * ===================================================
  */
 router.post("/subscribe", async (req, res) => {
@@ -143,15 +186,13 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
-    // 🔧 CRITICAL FIX: CANONICALIZE CHANNEL ID
     const channelId = String(channel).replace(/^@/, "");
-
     const user = await User.findOne({ walletAddress });
+
     if (!user) {
       return res.status(404).json({ error: "user_not_found" });
     }
 
-    // 🔧 HARD FIX: ensure array always exists
     if (!Array.isArray(user.subscribedChannels)) {
       user.subscribedChannels = [];
     }
@@ -163,7 +204,6 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
-    // 🔒 One Telegram account → One wallet
     const telegramOwner = await User.findOne({
       "telegram.userId": user.telegram.userId,
       walletAddress: { $ne: walletAddress },
@@ -175,74 +215,33 @@ router.post("/subscribe", async (req, res) => {
       });
     }
 
-    // 🔍 Find existing subscription (normalize both sides)
     let sub = user.subscribedChannels.find(
       (c) => String(c.channelId).replace(/^@/, "") === channelId
     );
 
-    // ---------------------------
-    // 🆕 FIRST-TIME SUBSCRIBE
-    // ---------------------------
     if (!sub) {
       user.subscribedChannels.push({
         channelId,
         enabled: false,
         status: "pending",
         requestedAt: new Date(),
-        notifiedAt: null,
-        approvedAt: null,
-        expiredAt: null,
       });
-    }
-
-    // ---------------------------
-    // 🔁 RE-SUBMIT AFTER REJECT
-    // ---------------------------
-    else if (sub.status === "rejected") {
+    } else if (sub.status === "rejected" || sub.status === "expired") {
       sub.status = "pending";
       sub.enabled = false;
       sub.requestedAt = new Date();
-      sub.notifiedAt = null;
-      sub.approvedAt = null;
-      sub.expiredAt = null;
-    }
-
-    // ---------------------------
-    // 🔁 RE-SUBMIT AFTER EXPIRE
-    // ---------------------------
-    else if (sub.status === "expired") {
-      sub.status = "pending";
-      sub.enabled = false;
-      sub.requestedAt = new Date();
-      sub.notifiedAt = null;
-      sub.approvedAt = null;
-      sub.expiredAt = null;
-    }
-
-    // ---------------------------
-    // 🔁 RE-SUBMIT WHILE PENDING
-    // ---------------------------
-    else if (sub.status === "pending") {
+    } else if (sub.status === "pending") {
       if (isInCooldown(sub)) {
         return res.status(429).json({
           error: "cooldown_active",
-          message: "Please wait a few minutes before resubmitting this request.",
         });
       }
-
       sub.requestedAt = new Date();
-      sub.notifiedAt = null;
-    }
-
-    // ---------------------------
-    // ✅ ALREADY APPROVED
-    // ---------------------------
-    else if (sub.status === "approved") {
+    } else if (sub.status === "approved") {
       return res.json({ ok: true, status: "approved" });
     }
 
     await user.save();
-
     return res.json({ ok: true, status: "pending" });
   } catch (err) {
     console.error("❌ subscribe error:", err);

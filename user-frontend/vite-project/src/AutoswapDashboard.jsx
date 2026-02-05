@@ -13,18 +13,17 @@ import ActivePositions from "./positions/ActivePositions";
 import TradeHistory from "./history/TradeHistory";
 import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
-import SessionAuthorization from "./settings/SessionAuthorization";
-import { buildSessionAuthMessage } from "./utils/sessionAuthMessage";
-
-import {
-  createSessionKey,
-  saveSessionKey,
-  loadSessionKey,
-} from "./utils/sessionKey";
-
+import DepositModal from "./wallet/DepositModal";
+import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
+import WalletBalanceCard from "./walletBalanceCard";
+import WithdrawStatusList from "./wallet/withdrawStatusList";
+import WalletHistoryTable from "./wallet/WalletHistoryTable";
 
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
+const INTERNAL_DEPOSIT_ADDRESS =
+  import.meta.env.VITE_INTERNAL_DEPOSIT_ADDRESS;
+
 
 export default function AutoswapDashboard() {
   const { publicKey, connected } = useWallet();
@@ -35,6 +34,17 @@ export default function AutoswapDashboard() {
   const [availableChannels, setAvailableChannels] = useState([]);
   const [userChannels, setUserChannels] = useState([]);
   const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
+  const [showDepositModal, setShowDepositModal] = useState(false);
+const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+
+const [withdrawLoading, setWithdrawLoading] = useState(false);
+const [walletHistory, setWalletHistory] = useState([]);
+const [withdrawals, setWithdrawals] = useState([]);
+const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
+
+
+
+
 // ================================
 // LINK TELEGRAM POPUP STATE
 // ================================
@@ -50,14 +60,15 @@ const [mobileTab, setMobileTab] = useState("dashboard");
 
 
 const isTelegramLinked = !!user?.telegram?.userId;
+const availableBalance = Number(user?.balanceSol || 0);
+const lockedBalance = Number(user?.lockedBalanceSol || 0);
+
 
 
   const [loading, setLoading] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   const [solPerTrade, setSolPerTrade] = useState(0.01);
-const [sessionExpiryHours, setSessionExpiryHours] = useState(24);
-
   const [stopLoss, setStopLoss] = useState(10);
   const [trailingTrigger, setTrailingTrigger] = useState(5);
   const [trailingDistance, setTrailingDistance] = useState(3);
@@ -79,29 +90,6 @@ useEffect(() => {
   } else {
     setWalletAddress("");
     setUser(null);
-  }
-}, [connected, publicKey]);
-
-
-// ================================
-// 🔐 SESSION KEY (FRONTEND ONLY TEST)
-// ================================
-useEffect(() => {
-  if (!connected || !publicKey) return;
-
-  let session = loadSessionKey(publicKey.toString());
-
-  if (!session) {
-    session = createSessionKey();
-    saveSessionKey(publicKey.toString(), session);
-
-    console.log("🔐 New session key created", {
-      pubkey: session.publicKey,
-    });
-  } else {
-    console.log("🔁 Existing session key loaded", {
-      pubkey: session.publicKey,
-    });
   }
 }, [connected, publicKey]);
 
@@ -260,6 +248,46 @@ useEffect(() => {
 }, [showLinkPopup]);
 
 
+// ===================================================
+// 🔄 A6 — AUTO REFRESH (BALANCE, POSITIONS, HISTORY)
+// ===================================================
+useEffect(() => {
+  if (!walletAddress) return;
+
+  // initial sync
+  refreshUser();
+  fetchPositions();
+  fetchHistory();
+
+  const userInterval = setInterval(() => {
+    refreshUser(); // balance, locked, tradingEnabled
+  }, 5000);
+
+  const positionsInterval = setInterval(() => {
+    fetchPositions();
+  }, 7000);
+
+  const historyInterval = setInterval(() => {
+    fetchHistory();
+  }, 15000);
+
+  return () => {
+    clearInterval(userInterval);
+    clearInterval(positionsInterval);
+    clearInterval(historyInterval);
+  };
+}, [walletAddress]);
+
+
+useEffect(() => {
+  if (!walletAddress) return;
+
+  fetchWithdrawals();
+
+  const interval = setInterval(fetchWithdrawals, 7000);
+  return () => clearInterval(interval);
+}, [walletAddress]);
+
 
 
   /* --- FETCH SETTINGS --- */
@@ -376,6 +404,8 @@ function isChannelEnabled(channelId) {
   );
 }
 
+
+
 // ================================
 // CHANNEL STATUS HELPERS (STEP 5)
 // ================================
@@ -415,42 +445,118 @@ function canReRequest(channelId) {
   return sub && sub.status === "rejected";
 }
 
-// ===================================================
-// 🔐 STEP 3B.1 — SESSION AUTH MESSAGE BUILDER
-// Appears logically BEFORE Save Settings
-// ===================================================
-function buildSessionAuthMessage({
-  wallet,
-  sessionPubkey,
-  solPerTrade,
-  expiresAt,
-}) {
-  return `AUTOSWAP SESSION AUTHORIZATION
 
-Wallet:
-${wallet}
 
-Session Key:
-${sessionPubkey}
+async function toggleTrading(enabled) {
+  if (!walletAddress) {
+    return setMessage({
+      type: "error",
+      text: "Connect wallet first",
+    });
+  }
 
-Permissions:
-• Buy only
-• SOL per trade: ${solPerTrade} SOL
-• Channels: approved only
+  try {
+    const r = await fetch(`${API_BASE}/api/users/toggle-trading`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        enabled,
+      }),
+    });
 
-Network: Solana Mainnet
-Purpose: Automated copy trading
+    if (!r.ok) {
+      throw new Error("toggle failed");
+    }
 
-Expires at:
-${expiresAt}
+    // refresh user so balance + tradingEnabled sync
+    await refreshUser();
 
-By signing this message, I authorize Autoswap
-to execute trades using the session key
-under the limits above.
+    setMessage({
+      type: "success",
+      text: enabled
+        ? "Trading enabled"
+        : "Trading disabled",
+    });
+  } catch (err) {
+    console.warn("toggleTrading error:", err);
+    setMessage({
+      type: "error",
+      text: "Failed to update trading status",
+    });
+  }
+}
 
-No withdrawals.
-No unlimited approvals.
-`;
+
+async function submitWithdraw(amountSol) {
+  if (!walletAddress) return;
+
+  try {
+    setWithdrawLoading(true);
+
+    const r = await fetch(`${API_BASE}/api/withdraw`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        amountSol,
+      }),
+    });
+
+    const data = await r.json();
+
+    if (!r.ok) {
+      throw new Error(data?.error || "withdraw_failed");
+    }
+
+    setShowWithdrawModal(false);
+    await refreshUser();
+
+    setMessage({
+      type: "success",
+      text: "Withdrawal submitted successfully",
+    });
+  } catch (err) {
+    setMessage({
+      type: "error",
+      text: err.message || "Withdrawal failed",
+    });
+  } finally {
+    setWithdrawLoading(false);
+  }
+}
+
+async function fetchWalletHistory() {
+  if (!walletAddress) return;
+
+  try {
+    const r = await fetch(
+      `${API_BASE}/api/wallet/history?walletAddress=${encodeURIComponent(walletAddress)}`
+    );
+    const data = await r.json();
+    setWalletHistory(data.records || []);
+  } catch (err) {
+    console.warn("wallet history fetch failed", err);
+  }
+}
+
+async function fetchWithdrawals() {
+  if (!walletAddress) return;
+
+  try {
+    setWithdrawalsLoading(true);
+    const r = await fetch(
+      `${API_BASE}/api/withdrawals?walletAddress=${encodeURIComponent(walletAddress)}`
+    );
+    if (!r.ok) return;
+
+    const data = await r.json();
+    setWithdrawals(data.withdrawals || []);
+  } catch (err) {
+    console.warn("fetchWithdrawals error:", err);
+  } finally {
+    setWithdrawalsLoading(false);
+  }
 }
 
 
@@ -481,66 +587,6 @@ No unlimited approvals.
       setMessage({ type: "error", text: "Failed to save settings" });
     }
   }
-
-// ===================================================
-// 🔐 STEP 3B.3 — AUTHORIZE TRADING (SIGN MESSAGE)
-// ===================================================
-async function authorizeTrading() {
-  if (!connected || !publicKey) {
-    return setMessage({ type: "error", text: "Connect wallet first" });
-  }
-
-  if (!solPerTrade || solPerTrade <= 0) {
-    return setMessage({
-      type: "error",
-      text: "Set SOL per trade before authorizing",
-    });
-  }
-
-  const session = loadSessionKey(publicKey.toString());
-  if (!session) {
-    return setMessage({
-      type: "error",
-      text: "Session key missing. Refresh page.",
-    });
-  }
-
-  const expiresAt = new Date(
-    Date.now() + sessionExpiryHours * 60 * 60 * 1000
-  ).toISOString();
-
-  const messageToSign = buildSessionAuthMessage({
-    wallet: publicKey.toString(),
-    sessionPubkey: session.publicKey,
-    solPerTrade,
-    expiresAt,
-  });
-
-  try {
-    const encoded = new TextEncoder().encode(messageToSign);
-
-    const signed = await window.solana.signMessage(encoded, "utf8");
-
-    console.log("✅ SESSION AUTH SIGNED", {
-      wallet: publicKey.toString(),
-      sessionPubkey: session.publicKey,
-      solPerTrade,
-      expiresAt,
-      signature: Array.from(signed.signature),
-    });
-
-    setMessage({
-      type: "success",
-      text: "Trading authorized successfully",
-    });
-  } catch (err) {
-    console.error("signMessage error:", err);
-    setMessage({
-      type: "error",
-      text: "Authorization rejected in wallet",
-    });
-  }
-}
 
 
   /* --- Manual sells (keep existing behavior) --- */
@@ -917,6 +963,24 @@ async function reRequestChannel(channelId) {
 )}
 
 
+
+<DepositModal
+  open={showDepositModal}
+  onClose={() => setShowDepositModal(false)}
+  depositAddress={INTERNAL_DEPOSIT_ADDRESS} // env or constant
+  memo={`DEPOSIT:${walletAddress}`}
+/>
+
+
+<WalletWithdrawModal
+  open={showWithdrawModal}
+  onClose={() => setShowWithdrawModal(false)}
+  availableSol={Number(user?.balanceSol || 0)}
+  onSubmit={submitWithdraw}
+  loading={withdrawLoading}
+/>
+
+
 <div className="grid grid-cols-12 gap-6 w-full">
 
 
@@ -988,20 +1052,31 @@ async function reRequestChannel(channelId) {
     getChannelStatusBadge={getChannelStatusBadge}
   />
 
-<SessionAuthorization
-  sessionExpiryHours={sessionExpiryHours}
-  setSessionExpiryHours={setSessionExpiryHours}
+{/* 💰 WALLET BALANCE (AUTOSNIPE STYLE) */}
+<WalletBalanceCard
+  availableSol={Number(user?.balanceSol || 0)}
+  lockedSol={Number(user?.lockedBalanceSol || 0)}
+  onDeposit={() => setShowDepositModal(true)}
+  onWithdraw={() => setShowWithdrawModal(true)}
+  withdrawDisabled={Number(user?.balanceSol || 0) < 0.02}
 />
 
+{/* 📤 WITHDRAW STATUS */}
+<WithdrawStatusList
+  withdrawals={withdrawals}
+  loading={withdrawalsLoading}
+/>
 
-<button
-  onClick={authorizeTrading}
-  className="w-full bg-purple-600 hover:bg-purple-700
-             text-white text-sm py-2 rounded"
->
-  🔐 Authorize Trading
-</button>
+{/* 📜 WALLET HISTORY */}
+<WalletHistoryTable records={walletHistory} />
 
+
+
+<Toggle
+  label="Enable Trading"
+  checked={user?.tradingEnabled}
+  onChange={toggleTrading}
+/>
 
   <TradingSettings
     solPerTrade={solPerTrade}

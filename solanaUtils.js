@@ -85,6 +85,7 @@ export async function executeSwap(wallet, quote) {
     const tx = VersionedTransaction.deserialize(txBuf);
 
     tx.sign([wallet]);
+
     const txid = await connection.sendTransaction(tx, {
       skipPreflight: true,
     });
@@ -117,7 +118,7 @@ export async function getCurrentPrice(mintAddress) {
 }
 
 /* =========================================================
-   SELL PARTIAL
+   SELL PARTIAL (RETURNS SOL RECEIVED)
 ========================================================= */
 export async function sellPartial(wallet, mint, percent) {
   const connection = getConnection();
@@ -149,11 +150,23 @@ export async function sellPartial(wallet, mint, percent) {
     amountRaw
   );
 
-  return executeSwap(wallet, quote);
+  if (!quote?.outAmount) {
+    throw new Error("Invalid quote for partial sell");
+  }
+
+  const txid = await executeSwap(wallet, quote);
+
+  const solReceived =
+    Number(quote.outAmount) / LAMPORTS_PER_SOL;
+
+  return {
+    txid,
+    solReceived,
+  };
 }
 
 /* =========================================================
-   SELL ALL
+   SELL ALL (RETURNS SOL RECEIVED)
 ========================================================= */
 export async function sellAll(wallet, mint) {
   const connection = getConnection();
@@ -182,5 +195,17 @@ export async function sellAll(wallet, mint) {
     amountRaw
   );
 
-  return executeSwap(wallet, quote);
+  if (!quote?.outAmount) {
+    throw new Error("Invalid quote for sell all");
+  }
+
+  const txid = await executeSwap(wallet, quote);
+
+  const solReceived =
+    Number(quote.outAmount) / LAMPORTS_PER_SOL;
+
+  return {
+    txid,
+    solReceived,
+  };
 }

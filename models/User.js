@@ -3,12 +3,41 @@ import mongoose from "mongoose";
 const userSchema = new mongoose.Schema(
   {
     // ===================================================
-    // WALLET (PRIMARY LOGIN ID)
+    // 🆔 WALLET (PRIMARY LOGIN ID)
     // ===================================================
     walletAddress: {
       type: String,
       required: true,
-      index: true, // ❌ NOT unique
+      index: true, // ❌ NOT unique (intentionally)
+    },
+
+    // ===================================================
+    // 💰 AUTOSNIPE-STYLE CUSTODY (STEP 2.1)
+    // ===================================================
+    balanceSol: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    lockedBalanceSol: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+
+    tradingEnabled: {
+      type: Boolean,
+      default: false, // 🔒 user must explicitly enable trading
+    },
+
+    // ===================================================
+    // 🔐 CUSTODY SAFETY
+    // Withdrawals ONLY go here
+    // ===================================================
+    depositWallet: {
+      type: String, // original Phantom wallet
+      index: true,
     },
 
     // ===================================================
@@ -17,8 +46,8 @@ const userSchema = new mongoose.Schema(
     telegram: {
       userId: {
         type: String,
-        unique: true,        // ✅ ENFORCES 1 TELEGRAM = 1 WALLET
-        sparse: true,        // ✅ allows users without Telegram yet
+        unique: true, // ✅ ENFORCES 1 TELEGRAM = 1 WALLET
+        sparse: true, // ✅ allows users without Telegram yet
         index: true,
       },
 
@@ -57,12 +86,11 @@ const userSchema = new mongoose.Schema(
             default: true,
           },
 
-status: {
-  type: String,
-  enum: ["pending", "approved", "rejected", "expired"],
-  default: "pending",
-},
-
+          status: {
+            type: String,
+            enum: ["pending", "approved", "rejected", "expired"],
+            default: "pending",
+          },
 
           requestedAt: {
             type: Date,
@@ -72,13 +100,17 @@ status: {
           approvedAt: {
             type: Date,
           },
+
+          expiredAt: {
+            type: Date,
+          },
         },
       ],
       default: [],
     },
 
     // ===================================================
-    // TRADING PARAMETERS
+    // 📊 TRADING PARAMETERS (UNCHANGED)
     // ===================================================
     solPerTrade: { type: Number, default: 0.01 },
 
@@ -102,15 +134,18 @@ status: {
     },
   },
   {
-    strict: false,
+    strict: false, // 👈 preserves backward compatibility
   }
 );
 
 /**
- * IMPORTANT:
- * - telegram.userId is UNIQUE
- * - sparse:true allows users without Telegram linked yet
- * - One Telegram account → one wallet (hard guarantee)
+ * IMPORTANT GUARANTEES
+ * ---------------------------------------------------
+ * - walletAddress = login identity
+ * - depositWallet = immutable withdrawal destination
+ * - balanceSol / lockedBalanceSol = custodial funds
+ * - tradingEnabled = manual user consent
+ * - telegram.userId is UNIQUE (1 Telegram → 1 wallet)
  */
 
 export default mongoose.model("User", userSchema);

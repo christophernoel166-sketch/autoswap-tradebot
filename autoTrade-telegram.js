@@ -18,6 +18,10 @@ if (typeof global.fetch !== "function") global.fetch = nodeFetch;
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
+import { requireValidSession } from "./src/security/requireSession.js";
+import { INTERNAL_TRADING_WALLET } from "./solana/internalWallet.js";
+import { pollDeposits } from "./src/solana/depositListener.js";
+
 
 import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
@@ -945,6 +949,18 @@ mongoose
   });
 
 
+// ================================
+// 💰 Deposit watcher (READ-ONLY)
+// ================================
+setInterval(() => {
+  pollDeposits().catch((err) =>
+    LOG.error({ err }, "Deposit watcher failed")
+  );
+}, 15_000); // every 15 seconds
+
+LOG.info("💰 Deposit watcher started (read-only)");
+
+
 // ========= Utils =========
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 function isMapLike(x) {
@@ -1100,133 +1116,213 @@ async function ensureMonitor(mint) {
 }
 
 async function monitorUser(mint, price, walletAddress, info, state) {
-  const { walletAddress: waFromInfo, profile, buyTxid, solAmount, entryPrice: storedEntryPrice, sourceChannel } = info;
+  const {
+    profile,
+    buyTxid,
+    solAmount,
+    entryPrice: storedEntryPrice,
+    sourceChannel,
+  } = info;
 
-  // prefer explicit stored entry price in state.entryPrices, else the entry included in info
   const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
   if (!entry) return;
-  const change = ((price - entry) / entry) * 100;
 
+  const change = ((price - entry) / entry) * 100;
   if (typeof info.tpStage === "undefined") info.tpStage = 0;
 
-  // Stop-loss
-  if (change <= -profile.stopLossPercent) {
-    LOG.info({ walletAddress, mint, change }, "stop-loss hit — selling all");
-    try {
-      const sellRes = await safeSellAll(walletAddress, mint);
-      const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
-      const exitPrice = price;
+  /**
+   * ===================================================
+   * 🔁 INTERNAL HELPER — FINALIZE TRADE
+   * ===================================================
+   */
+  async function finalizeTrade({ reason, percent = 100 }) {
+    let sellRes;
+    let exitPrice = price;
+    let sellTxid = null;
 
-      await saveTradeToBackend({
-        walletAddress,
-        mint,
-        solAmount,
-        entryPrice: entry,
-        exitPrice,
-        buyTxid,
-        sellTxid,
-        sourceChannel,
-        reason: "stop_loss",
-      });
+    try {
+      // Execute sell via INTERNAL WALLET
+      if (percent === 100) {
+        sellRes = await safeSellAll(INTERNAL_TRADING_WALLET, mint);
+      } else {
+        sellRes = await safeSellPartial(
+          INTERNAL_TRADING_WALLET,
+          mint,
+          percent
+        );
+      }
+
+      sellTxid =
+        sellRes?.txid ||
+        sellRes?.signature ||
+        sellRes?.sig ||
+        sellRes ||
+        null;
     } catch (err) {
-      LOG.error({ err, walletAddress, mint }, "sellAll failed on stop-loss");
+      LOG.error(
+        { err, walletAddress, mint, reason },
+        "❌ Sell execution failed"
+      );
+      return;
     }
+
+    // -----------------------------------------------
+    // 💰 Calculate PnL in SOL (approximation)
+    // -----------------------------------------------
+    const pnlSol = ((exitPrice - entry) / entry) * solAmount;
+    const creditSol = solAmount + pnlSol;
+
+    // -----------------------------------------------
+    // 💰 Update user balances atomically
+    // -----------------------------------------------
+    await User.updateOne(
+      { walletAddress },
+      {
+        $inc: {
+          lockedBalanceSol: -solAmount,
+          balanceSol: creditSol,
+        },
+      }
+    );
+
+    // -----------------------------------------------
+    // 📦 Save trade record
+    // -----------------------------------------------
+    await saveTradeToBackend({
+      walletAddress,
+      mint,
+      solAmount,
+      entryPrice: entry,
+      exitPrice,
+      buyTxid,
+      sellTxid,
+      sourceChannel,
+      reason,
+    });
+
+    // -----------------------------------------------
+    // 🧹 Cleanup monitoring state
+    // -----------------------------------------------
     state.users.delete(walletAddress);
     state.entryPrices.delete(walletAddress);
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        reason,
+        creditSol,
+      },
+      "✅ Trade finalized & balance credited"
+    );
+  }
+
+  /**
+   * ===================================================
+   * 🛑 STOP LOSS — SELL ALL
+   * ===================================================
+   */
+  if (change <= -profile.stopLossPercent) {
+    LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit");
+    await finalizeTrade({ reason: "stop_loss", percent: 100 });
     return;
   }
 
-  // TP1 — partial
+  /**
+   * ===================================================
+   * 🎯 TP1 — PARTIAL SELL
+   * ===================================================
+   */
   if (info.tpStage < 1 && change >= profile.tp1Percent) {
-    LOG.info({ walletAddress, mint, change }, "TP1 reached — partial sell");
-    try {
-      await safeSellPartial(walletAddress, mint, profile.tp1SellPercent);
-    } catch (err) {
-      LOG.error({ err, walletAddress, mint }, "sellPartial TP1 failed");
-    }
+    LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached");
+
+    await finalizeTrade({
+      reason: "tp1",
+      percent: profile.tp1SellPercent,
+    });
+
     profile.stopLossPercent = 0;
     info.tpStage = 1;
     return;
   }
 
-  // TP2 — partial
+  /**
+   * ===================================================
+   * 🎯 TP2 — PARTIAL SELL
+   * ===================================================
+   */
   if (info.tpStage < 2 && change >= profile.tp2Percent) {
-    LOG.info({ walletAddress, mint, change }, "TP2 reached — partial sell");
-    try {
-      await safeSellPartial(walletAddress, mint, profile.tp2SellPercent);
-    } catch (err) {
-      LOG.error({ err, walletAddress, mint }, "sellPartial TP2 failed");
-    }
+    LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached");
+
+    await finalizeTrade({
+      reason: "tp2",
+      percent: profile.tp2SellPercent,
+    });
+
     profile.stopLossPercent = profile.tp2Percent;
     info.tpStage = 2;
     return;
   }
 
-  // TP3 — sell all
+  /**
+   * ===================================================
+   * 🎯 TP3 — SELL ALL
+   * ===================================================
+   */
   if (info.tpStage < 3 && change >= profile.tp3Percent) {
-    LOG.info({ walletAddress, mint, change }, "TP3 reached — sell all");
-    try {
-      const sellRes = await safeSellAll(walletAddress, mint);
-      const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
-      const exitPrice = price;
-
-      await saveTradeToBackend({
-        walletAddress,
-        mint,
-        solAmount,
-        entryPrice: entry,
-        exitPrice,
-        buyTxid,
-        sellTxid,
-        sourceChannel,
-        reason: "tp3",
-      });
-    } catch (err) {
-      LOG.error({ err, walletAddress, mint }, "sellAll TP3 failed");
-    }
-    state.users.delete(walletAddress);
-    state.entryPrices.delete(walletAddress);
+    LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached");
+    await finalizeTrade({ reason: "tp3", percent: 100 });
     return;
   }
 
-  // Trailing (only after TP1)
+  /**
+   * ===================================================
+   * 📉 TRAILING STOP — SELL ALL
+   * ===================================================
+   */
   if (info.tpStage >= 1 && state.highest) {
     const drop = ((state.highest - price) / state.highest) * 100;
-    if (drop >= profile.trailingPercent) {
-      LOG.info({ walletAddress, mint, drop }, "trailing stop hit — sell all");
-      try {
-        const sellRes = await safeSellAll(walletAddress, mint);
-        const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
-        const exitPrice = price;
 
-        await saveTradeToBackend({
-          walletAddress,
-          mint,
-          solAmount,
-          entryPrice: entry,
-          exitPrice,
-          buyTxid,
-          sellTxid,
-          sourceChannel,
-          reason: "trailing",
-        });
-      } catch (err) {
-        LOG.error({ err, walletAddress, mint }, "sellAll trailing failed");
-      }
-      state.users.delete(walletAddress);
-      state.entryPrices.delete(walletAddress);
+    if (drop >= profile.trailingPercent) {
+      LOG.info({ walletAddress, mint, drop }, "📉 Trailing stop hit");
+      await finalizeTrade({ reason: "trailing", percent: 100 });
       return;
     }
   }
 }
 
+
 // ========= Safe wrappers =========
-async function safeExecuteSwap(opts, retries = 3) {
+async function safeExecuteSwap(
+  {
+    mint,
+    solAmount,
+    side,
+    feeWallet,
+  },
+  retries = 3
+) {
   for (let i = 0; i < retries; i++) {
     try {
-      return await executeSwap(opts);
+      return await executeSwap({
+        wallet: INTERNAL_TRADING_WALLET, // 🔐 backend custody wallet
+        mint,
+        solAmount,
+        side,
+        feeWallet,
+      });
     } catch (err) {
-      LOG.warn({ err, attempt: i + 1, opts: { wallet: opts.wallet, mint: opts.mint } }, "swap failed — retrying");
+      LOG.warn(
+        {
+          err,
+          attempt: i + 1,
+          mint,
+          solAmount,
+          side,
+        },
+        "swap failed — retrying"
+      );
+
       if (i === retries - 1) throw err;
       await sleep(1000 * (i + 1));
     }
@@ -1257,102 +1353,165 @@ async function safeSellAll(walletAddress, mint, retries = 2) {
   }
 }
 
-// ========= Trade execution for multi-channel users (wallet-based) =========
+// ========= Trade execution for multi-channel users (custodial) =========
 async function executeUserTrade(user, mint, sourceChannel) {
   if (!user || user.active === false) return;
 
- 
-// 🔒 STEP 3: ENFORCE CHANNEL APPROVAL
-// ===================================================
-const sub = user.subscribedChannels?.find(
-  (s) => String(s.channelId) === String(sourceChannel)
-);
+  // ===================================================
+  // 🔒 STEP 2.4.1 — REQUIRE USER TO ENABLE TRADING
+  // ===================================================
+  if (!user.tradingEnabled) {
+    LOG.info(
+      { wallet: user.walletAddress },
+      "⛔ Trade blocked: trading not enabled by user"
+    );
+    return;
+  }
 
-if (!sub) {
-  LOG.info(
-    { wallet: user.walletAddress, channel: sourceChannel },
-    "Wallet not subscribed to channel"
+  // ===================================================
+  // 🔒 STEP 3 — ENFORCE CHANNEL APPROVAL (BEFORE BUY)
+  // ===================================================
+  const sub = user.subscribedChannels?.find(
+    (s) => String(s.channelId) === String(sourceChannel)
   );
-  return;
-}
 
-if (sub.enabled !== true) {
-  LOG.info(
-    { wallet: user.walletAddress, channel: sourceChannel },
-    "Channel disabled by user"
-  );
-  return;
-}
+  if (!sub || sub.enabled !== true || sub.status !== "approved") {
+    LOG.warn(
+      {
+        wallet: user.walletAddress,
+        channel: sourceChannel,
+        status: sub?.status,
+      },
+      "⛔ Trade blocked: channel not approved"
+    );
+    return;
+  }
 
-if (sub.status !== "approved") {
-  LOG.warn(
-    {
-      wallet: user.walletAddress,
-      channel: sourceChannel,
-      status: sub.status,
-    },
-    "Trade blocked: wallet not approved by channel owner"
-  );
-  return;
-}
-
+  // ---------------------------------------------------
+  // Resolve SOL amount
+  // ---------------------------------------------------
   const solAmount = user.solPerTrade || 0.01;
   if (solAmount <= 0) {
     LOG.warn(`Invalid solPerTrade for user ${user.walletAddress}`);
     return;
   }
 
-  LOG.info({ wallet: user.walletAddress, mint, solAmount, sourceChannel }, "Executing multi-channel BUY");
+  // ===================================================
+  // 💰 STEP 2.4.2 — CHECK USER BALANCE
+  // ===================================================
+  if (user.balanceSol < solAmount) {
+    LOG.warn(
+      {
+        wallet: user.walletAddress,
+        balance: user.balanceSol,
+        required: solAmount,
+      },
+      "⛔ Trade blocked: insufficient balance"
+    );
+    return;
+  }
 
+  // ===================================================
+  // 🔐 STEP 2.4.3 — LOCK FUNDS ATOMICALLY
+  // ===================================================
+  const lockRes = await User.updateOne(
+    {
+      walletAddress: user.walletAddress,
+      balanceSol: { $gte: solAmount },
+    },
+    {
+      $inc: {
+        balanceSol: -solAmount,
+        lockedBalanceSol: solAmount,
+      },
+    }
+  );
+
+  if (lockRes.modifiedCount !== 1) {
+    LOG.warn(
+      { wallet: user.walletAddress },
+      "⛔ Failed to lock funds (race condition)"
+    );
+    return;
+  }
+
+  // ===================================================
+  // 🚀 STEP 2.4.4 — EXECUTE BUY (INTERNAL WALLET)
+  // ===================================================
   let buyTxid;
   try {
     buyTxid = await safeExecuteSwap({
-      wallet: user.walletAddress,
+      wallet: INTERNAL_TRADING_WALLET,
       mint,
       solAmount,
       side: "buy",
       feeWallet: FEE_WALLET,
     });
+
+    LOG.info(
+      { wallet: user.walletAddress, mint, solAmount, buyTxid },
+      "✅ Buy executed"
+    );
   } catch (err) {
-    LOG.error({ err, wallet: user.walletAddress }, "Buy failed");
+    LOG.error(
+      { err, wallet: user.walletAddress, mint },
+      "❌ Buy failed — reverting funds"
+    );
+
+    // 🔁 UNLOCK FUNDS ON FAILURE
+    await User.updateOne(
+      { walletAddress: user.walletAddress },
+      {
+        $inc: {
+          balanceSol: solAmount,
+          lockedBalanceSol: -solAmount,
+        },
+      }
+    );
+
     return;
   }
 
+  // ===================================================
+  // 📈 STEP 2.4.5 — REGISTER POSITION FOR MONITORING
+  // ===================================================
   let entryPrice = null;
   try {
     entryPrice = await getCurrentPrice(mint);
-  } catch (err) {
-    LOG.warn({ err }, "Failed to fetch entry price");
+  } catch {}
+
+  const state = await ensureMonitor(mint);
+
+  state.users.set(String(user.walletAddress), {
+    walletAddress: user.walletAddress,
+    tpStage: 0,
+    profile: {
+      tp1Percent: user.tp1,
+      tp1SellPercent: user.tp1SellPercent,
+      tp2Percent: user.tp2,
+      tp2SellPercent: user.tp2SellPercent,
+      tp3Percent: user.tp3,
+      tp3SellPercent: user.tp3SellPercent,
+      stopLossPercent: user.stopLoss,
+      trailingPercent: user.trailingDistance,
+    },
+    buyTxid,
+    solAmount,
+    entryPrice,
+    sourceChannel,
+  });
+
+  if (entryPrice) {
+    state.entryPrices.set(user.walletAddress, entryPrice);
+    if (!state.highest) state.highest = entryPrice;
   }
 
+  LOG.info(
+    { wallet: user.walletAddress, mint },
+    "📈 Position registered for monitoring"
+  );
+}
 
-  // const state = await ensureMonitor(mint);
-
-  // store user info keyed by walletAddress
-  // state.users.set(String(user.walletAddress), {
-   // walletAddress: user.walletAddress,
-   // tpStage: 0,
-   // profile: {
-     // tp1Percent: user.tp1 || 10,
-     // tp1SellPercent: user.tp1SellPercent || 50,
-     // tp2Percent: user.tp2 || 20,
-     // tp2SellPercent: user.tp2SellPercent || 25,
-     // tp3Percent: user.tp3 || 30,
-     // tp3SellPercent: user.tp3SellPercent || 25,
-     // stopLossPercent: user.stopLoss || 6,
-     // trailingPercent: user.trailingDistance || 5,
-   // },
-   // buyTxid,
-   // solAmount,
-   // entryPrice,
-   // sourceChannel,
- // });
-
- // if (entryPrice) state.entryPrices.set(user.walletAddress, entryPrice);
- // if (!state.highest && entryPrice) state.highest = entryPrice;
-
- // LOG.info({ wallet: user.walletAddress, mint }, "User added to monitor for multi-channel trading");
- }
 
  // ======= Step A: lightweight Express server for bot APIs =======
 // import expressModule from "express"; // avoid name clash
