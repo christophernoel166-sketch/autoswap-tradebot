@@ -16,6 +16,7 @@ import MainPanel from "./layout/MainPanel";
 import DepositModal from "./wallet/DepositModal";
 import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
 import WalletBalanceCard from "./WalletBalanceCard";
+import Toggle from "./ui/Toggle";
 
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 
