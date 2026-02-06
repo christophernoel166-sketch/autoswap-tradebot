@@ -971,7 +971,6 @@ async function reRequestChannel(channelId) {
   open={showDepositModal}
   onClose={() => setShowDepositModal(false)}
   depositAddress={INTERNAL_DEPOSIT_ADDRESS} // env or constant
-  memo={`DEPOSIT:${walletAddress}`}
 />
 
 
