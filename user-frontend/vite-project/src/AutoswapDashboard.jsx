@@ -15,7 +15,8 @@ import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
 import DepositModal from "./wallet/DepositModal";
 import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
-import WalletBalanceCard from "./walletBalanceCard";
+import WalletBalanceCard from "./WalletBalanceCard";
+
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
