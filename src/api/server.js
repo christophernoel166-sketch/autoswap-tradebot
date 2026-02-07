@@ -17,7 +17,6 @@ import manualSellRoute from "./manualSell.js";
 import tradeHistoryRoute from "./tradeHistory.js";
 import channelsRoutes from "../../routes/channels.js";
 import adminChannels from "../../routes/adminChannels.js";
-import sessionRoutes from "./session.js";
 import withdrawRoute from "../routes/withdraw.js";
 import withdrawApi from "./withdraw.js";
 import adminFees from "./adminFees.js";
@@ -120,7 +119,6 @@ app.use((req, res, next) => {
   app.use("/api/manual-sell", manualSellRoute);
   app.use("/api/channels", channelsRoutes);
   app.use("/api/admin", adminChannels);
-  app.use("/api/session", sessionRoutes);
   app.use("/api", withdrawRoute);
   app.use("/api", withdrawApi);
 app.use("/api/admin", adminFees);
