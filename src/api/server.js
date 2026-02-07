@@ -21,7 +21,8 @@ import withdrawRouter from "../../routes/withdraw.js";
 
 import withdrawApi from "./withdraw.js";
 import adminFees from "./adminFees.js";
-import userBalance from "./routes/userBalance.js";
+import userBalance from "./userBalance.js";
+
 
 import userDepositsRouter from "./api/userDeposits.js";
 import userWithdrawalsRouter from "./api/userWithdrawals.js";
