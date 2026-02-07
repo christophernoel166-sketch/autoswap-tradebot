@@ -4,10 +4,12 @@ import {
   Transaction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { INTERNAL_TRADING_WALLET } from "../../solana/internalWallet.js";
+import { INTERNAL_TRADING_WALLET } from "./internalWallet.js";
+
 import { getConnection } from "../utils/solanaConnection.js";
 
-export async function sendSolToUser({ to, amountSol }) {
+export async function sendSol({ to, amountSol }) {
+
   const connection = getConnection();
 
   const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);

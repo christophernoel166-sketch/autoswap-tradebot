@@ -1,12 +1,20 @@
 // src/solana/depositListener.js
+
 import {
   Connection,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { INTERNAL_TRADING_WALLET } from "../../solana/internalWallet.js";
+
+import { INTERNAL_TRADING_WALLET } from "./internalWallet.js";
+import { sendSol } from "./sendSol.js";
+
 import bs58 from "bs58";
+
+// 👇👇 THIS IS WHERE IT GOES
 import Deposit from "../../models/Deposit.js";
 import User from "../../models/User.js";
+
+
 
 // ===================================================
 // 🔐 CUSTODY LIMITS

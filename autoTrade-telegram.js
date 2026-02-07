@@ -18,10 +18,8 @@ if (typeof global.fetch !== "function") global.fetch = nodeFetch;
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
-import { requireValidSession } from "./src/security/requireSession.js";
-import { INTERNAL_TRADING_WALLET } from "./solana/internalWallet.js";
+import { INTERNAL_TRADING_WALLET } from "./src/solana/internalWallet.js";
 import { pollDeposits } from "./src/solana/depositListener.js";
-
 
 import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
@@ -47,14 +45,14 @@ const LOG = pino({ level: process.env.LOG_LEVEL || "info" });
 // ===================================================
 // 🧨 RAW TELEGRAM TAP — MUST LOG ALL COMMANDS
 // ===================================================
-bot.on(["message", "channel_post"], async (ctx, next) => {
+ bot.on(["message", "channel_post"], async (ctx, next) => {
   const text =
-    ctx.channelPost?.text ||
+   ctx.channelPost?.text ||
     ctx.message?.text ||
     null;
 
-  console.log("🧨 RAW TAP HIT", {
-    updateType: ctx.updateType,
+    console.log("🧨 RAW TAP HIT", {
+   updateType: ctx.updateType,
     chatType: ctx.chat?.type,
     chatId: ctx.chat?.id,
     text,
@@ -63,26 +61,229 @@ bot.on(["message", "channel_post"], async (ctx, next) => {
   });
 
   return next();
-});
+ });
 
 
-// ========= STEP 3 — SIGNAL HANDLER (LIVE TEST BUY, SINGLE WALLET) =========
+// ===================================================
+// 🧭 + 🧪 SINGLE CHANNEL_POST ROUTER
+// Commands FIRST, Signals SECOND
+// ===================================================
 bot.on("channel_post", async (ctx) => {
   try {
-    const text = ctx.channelPost?.text;
-    if (!text) return;
+    const text = ctx.channelPost?.text?.trim();
+    const chat = ctx.chat;
+    if (!text || !chat) return;
 
-    const channelId = String(ctx.chat?.id);
-    if (!channelId) return;
+    const channelId = String(chat.id);
 
+    // ===================================================
+    // 🧭 COMMAND ROUTER (ALWAYS FIRST)
+    // ===================================================
+    if (text.startsWith("/")) {
+      const [command, arg] = text.split(/\s+/);
+
+      console.log("🧭 CHANNEL ROUTER HIT", {
+        command,
+        channelId,
+        text,
+      });
+
+      // ---------------------------------------------------
+      // 📋 /pending_requests
+      // ---------------------------------------------------
+      if (command === "/pending_requests") {
+        const channel = await SignalChannel.findOne({ channelId });
+        if (!channel?.ownerWallet) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Channel not claimed yet. Use /claim_channel first."
+          );
+          return;
+        }
+
+        const users = await User.find({
+          subscribedChannels: {
+            $elemMatch: { channelId, status: "pending" },
+          },
+        }).lean();
+
+        if (!users.length) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "✅ No pending requests."
+          );
+          return;
+        }
+
+        let msg = "⏳ Pending Wallet Requests:\n\n";
+        for (const user of users) {
+          const sub = user.subscribedChannels.find(
+            (s) => String(s.channelId) === channelId
+          );
+
+          msg += `• ${user.walletAddress}\n`;
+          msg += `  Requested: ${new Date(
+            sub.requestedAt
+          ).toLocaleString()}\n\n`;
+        }
+
+        await ctx.telegram.sendMessage(channelId, msg);
+        return;
+      }
+
+      // ---------------------------------------------------
+      // 🔐 /claim_channel <WALLET>
+      // ---------------------------------------------------
+      if (command === "/claim_channel") {
+        const walletAddress = arg;
+        if (!walletAddress) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Usage: /claim_channel <WALLET_ADDRESS>"
+          );
+          return;
+        }
+
+        const botMember = await ctx.telegram.getChatMember(
+          chat.id,
+          ctx.botInfo.id
+        );
+
+        if (botMember.status !== "administrator") {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Bot must be an admin to claim this channel."
+          );
+          return;
+        }
+
+        const channel = await SignalChannel.findOne({ channelId });
+        if (!channel) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Channel not registered. Add bot as admin first."
+          );
+          return;
+        }
+
+        if (channel.ownerWallet) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
+          );
+          return;
+        }
+
+        channel.ownerWallet = walletAddress;
+        channel.claimedAt = new Date();
+        await channel.save();
+
+        await ctx.telegram.sendMessage(
+          channelId,
+          `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
+        );
+
+        console.log("🔐 CLAIM SUCCESS", { channelId, walletAddress });
+        return;
+      }
+
+      // ---------------------------------------------------
+      // 🔐 /approve_wallet & /reject_wallet
+      // ---------------------------------------------------
+      if (command === "/approve_wallet" || command === "/reject_wallet") {
+        const walletAddress = arg;
+        if (!walletAddress) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
+          );
+          return;
+        }
+
+        const user = await User.findOne({ walletAddress });
+        if (!user) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Wallet not found in database."
+          );
+          return;
+        }
+
+        const sub = user.subscribedChannels?.find(
+          (s) => String(s.channelId) === channelId
+        );
+
+        if (!sub) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Wallet did not request this channel."
+          );
+          return;
+        }
+
+        if (sub.status !== "pending") {
+          await ctx.telegram.sendMessage(
+            channelId,
+            `❌ Request not pending (current: ${sub.status})`
+          );
+          return;
+        }
+
+        const isApprove = command === "/approve_wallet";
+
+        sub.status = isApprove ? "approved" : "rejected";
+        sub.enabled = isApprove;
+        sub.approvedAt = new Date();
+        await user.save();
+
+        notifyUserOfApproval(user, channelId, isApprove).catch((err) =>
+          LOG.error(
+            { err, walletAddress, channelId },
+            "notifyUserOfApproval failed"
+          )
+        );
+
+        notifyDashboardOfApproval({
+          walletAddress,
+          channelId,
+          status: isApprove ? "approved" : "rejected",
+        }).catch((err) =>
+          LOG.error(
+            { err, walletAddress, channelId },
+            "notifyDashboardOfApproval failed"
+          )
+        );
+
+        await ctx.telegram.sendMessage(
+          channelId,
+          isApprove
+            ? `✅ Wallet approved:\n${walletAddress}`
+            : `🚫 Wallet rejected:\n${walletAddress}`
+        );
+
+        console.log("🔐 APPROVAL SUCCESS", {
+          walletAddress,
+          channelId,
+          action: isApprove ? "approved" : "rejected",
+        });
+
+        return;
+      }
+
+      // Unknown command → ignore
+      return;
+    }
+
+    // ===================================================
+    // 🧪 SIGNAL HANDLER (NON-COMMAND POSTS ONLY)
+    // ===================================================
     console.log("🧪 SIGNAL HANDLER HIT (CHANNEL_POST)", {
       channelId,
-      chatTitle: ctx.chat?.title,
-      chatUsername: ctx.chat?.username,
+      chatTitle: chat.title,
+      chatUsername: chat.username,
       text,
     });
 
-    // 🔍 Extract mint
     const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
     if (!mintMatch) {
       console.log("🧪 NO MINT FOUND IN CHANNEL POST");
@@ -93,12 +294,9 @@ bot.on("channel_post", async (ctx) => {
 
     console.log("🧪 MINT DETECTED", {
       mint,
-      channel: ctx.chat?.username || ctx.chat?.title,
+      channel: chat.username || chat.title,
     });
 
-    // ===================================================
-    // 🔎 FIND ELIGIBLE WALLETS (APPROVED + ENABLED)
-    // ===================================================
     const users = await User.find({
       active: { $ne: false },
       subscribedChannels: {
@@ -118,9 +316,6 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
 
-    // ===================================================
-    // 🔐 LIVE TEST WALLET FILTER (HARD LOCK)
-    // ===================================================
     const testUser = users.find(
       (u) => u.walletAddress === LIVE_TEST_WALLET
     );
@@ -133,9 +328,6 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
 
-    // ===================================================
-    // 🚀 STEP 3B — EXECUTE SINGLE LIVE BUY (NO MONITOR)
-    // ===================================================
     console.log("🚀 LIVE TEST BUY INITIATED", {
       wallet: testUser.walletAddress,
       mint,
@@ -143,7 +335,6 @@ bot.on("channel_post", async (ctx) => {
       channelId,
     });
 
-    // Force test size (override anything in DB)
     testUser.solPerTrade = LIVE_TEST_SOL;
 
     try {
@@ -153,246 +344,11 @@ bot.on("channel_post", async (ctx) => {
       console.error("❌ LIVE TEST BUY FAILED", err);
     }
 
-    // 🔒 HARD STOP — NO REPEAT, NO SELL
-    return;
-
-  } catch (err) {
-    console.error("❌ STEP 3 signal handler error", err);
-  }
-});
-
-// ===================================================
-// 🧪 COMMAND ROUTER PROBE — SHOULD ALWAYS FIRE
-// ===================================================
-bot.command("pending_requests", async (ctx) => {
-  console.log("🔥🔥🔥 COMMAND ROUTER HIT: pending_requests", {
-    updateType: ctx.updateType,
-    chatType: ctx.chat?.type,
-    chatId: ctx.chat?.id,
-    text: ctx.message?.text,
-  });
-
-  await ctx.reply("🧪 pending_requests handler reached");
-});
-
-
-// ===================================================
-// 📋 PENDING REQUESTS (CHANNEL OWNER ONLY) — FIXED + NEXT GUARD
-// ===================================================
-
-// ===================================================
-// 🧭 UNIFIED CHANNEL COMMAND ROUTER (FINAL)
-// Handles: /pending_requests, /claim_channel, /approve_wallet, /reject_wallet
-// ===================================================
-bot.on("channel_post", async (ctx) => {
-  try {
-    const text = ctx.channelPost?.text?.trim();
-    const chat = ctx.chat;
-    if (!text || !chat) return;
-
-    const channelId = String(chat.id);
-
-// ✅ ADD THIS GUARD
-if (!text.startsWith("/")) {
-  return; // let signal handlers handle non-command posts
-}
-    const [command, arg] = text.split(/\s+/);
-
-    console.log("🧭 CHANNEL ROUTER HIT", {
-      command,
-      channelId,
-      text,
-    });
-
-    // ===================================================
-    // 📋 /pending_requests
-    // ===================================================
-    if (command === "/pending_requests") {
-      const channel = await SignalChannel.findOne({ channelId });
-      if (!channel?.ownerWallet) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Channel not claimed yet. Use /claim_channel first."
-        );
-        return;
-      }
-
-      const users = await User.find({
-        subscribedChannels: {
-          $elemMatch: { channelId, status: "pending" },
-        },
-      }).lean();
-
-      if (!users.length) {
-        await ctx.telegram.sendMessage(channelId, "✅ No pending requests.");
-        return;
-      }
-
-      let msg = "⏳ Pending Wallet Requests:\n\n";
-      for (const user of users) {
-        const sub = user.subscribedChannels.find(
-          (s) => String(s.channelId) === channelId
-        );
-
-        msg += `• ${user.walletAddress}\n`;
-        msg += `  Requested: ${new Date(sub.requestedAt).toLocaleString()}\n\n`;
-      }
-
-      await ctx.telegram.sendMessage(channelId, msg);
-      return;
-    }
-
-    // ===================================================
-    // 🔐 /claim_channel WALLET
-    // ===================================================
-    if (command === "/claim_channel") {
-      const walletAddress = arg;
-      if (!walletAddress) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Usage: /claim_channel <WALLET_ADDRESS>"
-        );
-        return;
-      }
-
-      const botMember = await ctx.telegram.getChatMember(
-        chat.id,
-        ctx.botInfo.id
-      );
-
-      if (botMember.status !== "administrator") {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Bot must be an admin to claim this channel."
-        );
-        return;
-      }
-
-      const channel = await SignalChannel.findOne({ channelId });
-      if (!channel) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          "❌ Channel not registered. Add bot as admin first."
-        );
-        return;
-      }
-
-      if (channel.ownerWallet) {
-        await ctx.telegram.sendMessage(
-          channelId,
-          `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
-        );
-        return;
-      }
-
-      channel.ownerWallet = walletAddress;
-      channel.claimedAt = new Date();
-      await channel.save();
-
-      await ctx.telegram.sendMessage(
-        channelId,
-        `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
-      );
-
-      console.log("🔐 CLAIM SUCCESS", { channelId, walletAddress });
-      return;
-    }
-
-// ===================================================
-// 🔐 /approve_wallet & /reject_wallet
-// ===================================================
-if (command === "/approve_wallet" || command === "/reject_wallet") {
-  const walletAddress = arg;
-  if (!walletAddress) {
-    await ctx.telegram.sendMessage(
-      channelId,
-      "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
-    );
-    return;
-  }
-
-  const user = await User.findOne({ walletAddress });
-  if (!user) {
-    await ctx.telegram.sendMessage(
-      channelId,
-      "❌ Wallet not found in database."
-    );
-    return;
-  }
-
-  const sub = user.subscribedChannels?.find(
-    (s) => String(s.channelId) === channelId
-  );
-
-  if (!sub) {
-    await ctx.telegram.sendMessage(
-      channelId,
-      "❌ Wallet did not request this channel."
-    );
-    return;
-  }
-
-  if (sub.status !== "pending") {
-    await ctx.telegram.sendMessage(
-      channelId,
-      `❌ Request not pending (current: ${sub.status})`
-    );
-    return;
-  }
-
-  const isApprove = command === "/approve_wallet";
-
-  sub.status = isApprove ? "approved" : "rejected";
-  sub.enabled = isApprove;
-  sub.approvedAt = new Date();
-  await user.save();
-
-  // 🔔 STEP 4B-A — DM user about approval result
-  notifyUserOfApproval(user, channelId, isApprove).catch((err) =>
-    LOG.error({ err, walletAddress, channelId }, "notifyUserOfApproval failed")
-  );
-
-  // 🔔 STEP 4B-B — Sync approval to dashboard
-  notifyDashboardOfApproval({
-    walletAddress,
-    channelId,
-    status: isApprove ? "approved" : "rejected",
-  }).catch((err) =>
-    LOG.error(
-      { err, walletAddress, channelId },
-      "notifyDashboardOfApproval failed"
-    )
-  );
-
-  await ctx.telegram.sendMessage(
-    channelId,
-    isApprove
-      ? `✅ Wallet approved:\n${walletAddress}`
-      : `🚫 Wallet rejected:\n${walletAddress}`
-  );
-
-  console.log("🔐 APPROVAL SUCCESS", {
-    walletAddress,
-    channelId,
-    action: isApprove ? "approved" : "rejected",
-  });
-
-  return; // 🔥 exit router cleanly
-}
-
-
-    // ===================================================
-    // 🔁 Not a channel command → ignore
-    // ===================================================
     return;
   } catch (err) {
-    console.error("❌ Unified channel router crashed", err);
+    console.error("❌ channel_post unified handler crashed", err);
   }
 });
-
-
-
-
 
 
 function isUserApprovedForChannel(user, channelId) {
