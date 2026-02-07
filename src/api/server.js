@@ -2,19 +2,21 @@ import express from "express";
 import http from "http";
 import cors from "cors";
 import { Server as IOServer } from "socket.io";
-import fetch from "node-fetch";
+
+// APIs & routes
 import tradesApi from "./trades.js";
 import usersApi from "./users.js";
 import statsApi from "./stats.js";
-import tradeRecordRoute from "../../routes/tradeRecordRoute.js";
 import analyticsApi from "./analytics.js";
-import notificationRoute from "../../routes/notificationRoute.js";
 import channelsApi from "./channels.js";
-import authWalletRouter from "../../routes/authWallet.js";
-import updateSettingsRoute from "../../routes/updateSettingsRoute.js";
 import activePositionsRoute from "./activePositions.js";
 import manualSellRoute from "./manualSell.js";
 import tradeHistoryRoute from "./tradeHistory.js";
+
+import tradeRecordRoute from "../../routes/tradeRecordRoute.js";
+import notificationRoute from "../../routes/notificationRoute.js";
+import authWalletRouter from "../../routes/authWallet.js";
+import updateSettingsRoute from "../../routes/updateSettingsRoute.js";
 import channelsRoutes from "../../routes/channels.js";
 import adminChannels from "../../routes/adminChannels.js";
 import withdrawRouter from "../../routes/withdraw.js";
@@ -23,46 +25,40 @@ import withdrawApi from "./withdraw.js";
 import adminFees from "./adminFees.js";
 import userBalance from "./userBalance.js";
 import userDeposits from "./userDeposits.js";
-
 import userWithdrawals from "./userWithdrawals.js";
 import walletHistory from "./walletHistory.js";
-
-
-
 
 export function createApiServer() {
   const app = express();
   const server = http.createServer(app);
 
-  const io = new IOServer(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] },
-  });
+  // ============================
+  // ✅ GLOBAL CORS (FIXED)
+  // ============================
+  app.use(
+    cors({
+      origin: [
+        "https://www.autoswaps.online",
+        "https://autoswaps.online",
+        "http://localhost:5173",
+        "http://localhost:3000",
+      ],
+      credentials: true,
+      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    })
+  );
 
-  app.use(cors({ origin: "*", methods: ["GET", "POST"] }));
   app.use(express.json());
 
-// ============================
-// GLOBAL CORS FIX (REQUIRED)
-// ============================
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header(
-    "Access-Control-Allow-Headers",
-    "Origin, X-Requested-With, Content-Type, Accept, Authorization"
-  );
-  res.header(
-    "Access-Control-Allow-Methods",
-    "GET, POST, PUT, PATCH, DELETE, OPTIONS"
-  );
-
-  // Handle preflight requests
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
-
+  // ============================
+  // Socket.io
+  // ============================
+  const io = new IOServer(server, {
+    cors: {
+      origin: "*",
+      methods: ["GET", "POST"],
+    },
+  });
 
   // Attach socket.io to requests
   app.use((req, _res, next) => {
@@ -70,28 +66,21 @@ app.use((req, res, next) => {
     next();
   });
 
-  /**
-   * ============================
-   * ROOT ROUTE (IMPORTANT)
-   * ============================
-   * Prevents "Cannot GET /"
-   * Confirms app is alive
-   */
+  // ============================
+  // ROOT ROUTE
+  // ============================
   app.get("/", (_req, res) => {
     res.status(200).json({
       service: "autoswap-tradebot",
       status: "running",
-      message: "API is live",
       health: "/api/health",
       timestamp: Date.now(),
     });
   });
 
-  /**
-   * ============================
-   * HEALTH CHECK (Railway)
-   * ============================
-   */
+  // ============================
+  // HEALTH CHECK (Railway)
+  // ============================
   app.get("/api/health", (_req, res) => {
     res.status(200).json({
       ok: true,
@@ -100,13 +89,9 @@ app.use((req, res, next) => {
     });
   });
 
-
-
-  /**
-   * ============================
-   * API ROUTES
-   * ============================
-   */
+  // ============================
+  // API ROUTES
+  // ============================
   app.use("/api/trades", tradesApi);
   app.use("/api/trades/record", tradeRecordRoute);
   app.use("/api/users", usersApi);
@@ -124,33 +109,26 @@ app.use((req, res, next) => {
   app.use("/api", withdrawRouter);
 
   app.use("/api", withdrawApi);
-app.use("/api/admin", adminFees);
-app.use("/api", userBalanceRouter);
-app.use("/api", userDepositsRouter);
-app.use("/api", userWithdrawalsRouter);
-app.use("/api/wallet", walletHistory);
+  app.use("/api/admin", adminFees);
+  app.use("/api", userBalance);
+  app.use("/api", userDeposits);
+  app.use("/api", userWithdrawals);
+  app.use("/api/wallet", walletHistory);
 
-
-
-
-  /**
-   * ============================
-   * NOTE: Socket.io
-   * ============================
-   */
+  // ============================
+  // Socket.io connection
+  // ============================
   io.on("connection", (socket) => {
     console.log("🔌 socket connected:", socket.id);
   });
 
-  /**
-   * ============================
-   * START SERVER
-   * ============================
-   */
+  // ============================
+  // START SERVER
+  // ============================
   function listen() {
     const port = Number(process.env.PORT);
     if (!port) {
-      throw new Error("PORT is not defined (Railway injects process.env.PORT)");
+      throw new Error("PORT is not defined");
     }
 
     server.listen(port, "0.0.0.0", () => {
