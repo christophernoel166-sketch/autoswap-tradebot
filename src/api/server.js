@@ -24,7 +24,7 @@ import adminFees from "./adminFees.js";
 import userBalance from "./userBalance.js";
 import userDeposits from "./userDeposits.js";
 
-import userWithdrawalsRouter from "./api/userWithdrawals.js";
+import userWithdrawals from "./userWithdrawals.js";
 import walletHistory from "./walletHistory.js";
 
 
