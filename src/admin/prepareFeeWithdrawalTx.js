@@ -7,7 +7,8 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 
-import { INTERNAL_TRADING_WALLET } from "../../solana/internalWallet.js";
+import { INTERNAL_TRADING_WALLET } from "../solana/internalWallet.js";
+
 import { getFeeBalance } from "./getFeeBalance.js";
 
 const RPC_URL = process.env.RPC_URL;
