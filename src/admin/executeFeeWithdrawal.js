@@ -5,7 +5,6 @@ import {
 
 import { INTERNAL_TRADING_WALLET } from "../solana/internalWallet.js";
 
-import Fee from "../../models/Fee.js";
 import { prepareFeeWithdrawalTx } from "./prepareFeeWithdrawalTx.js";
 
 const RPC_URL = process.env.RPC_URL;
