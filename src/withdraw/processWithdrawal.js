@@ -10,7 +10,7 @@ import {
 import User from "../../models/User.js";
 import Withdrawal from "../../models/Withdrawal.js";
 import FeeLedger from "../../models/FeeLedger.js";
-import { INTERNAL_TRADING_WALLET } from "../../solana/internalWallet.js";
+import { INTERNAL_TRADING_WALLET } from "../solana/internalWallet.js";
 
 const RPC_URL = process.env.RPC_URL;
 if (!RPC_URL) throw new Error("RPC_URL missing");
