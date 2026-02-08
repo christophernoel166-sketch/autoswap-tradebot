@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import AdminToken from "../models/AdminToken.js";
-import { verifyAdminToken } from "../admin/adminJwt.js";
+import { verifyAdminToken } from "../models/adminJwt.js";
+
 
 const ADMIN_IP_ALLOWLIST = (process.env.ADMIN_IP_ALLOWLIST || "")
   .split(",")
