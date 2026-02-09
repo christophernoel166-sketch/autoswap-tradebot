@@ -19,7 +19,7 @@ import WalletBalanceCard from "./WalletBalanceCard";
 import Toggle from "./ui/Toggle";
 
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
-
+import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
 
 
@@ -39,6 +39,8 @@ export default function AutoswapDashboard() {
   const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
   const [showDepositModal, setShowDepositModal] = useState(false);
 const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
+const [mevProtection, setMevProtection] = useState(true);
 
 const [withdrawLoading, setWithdrawLoading] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
@@ -311,6 +313,8 @@ useEffect(() => {
       setTp2Sell(u.tp2SellPercent ?? tp2Sell);
       setTp3(u.tp3 ?? tp3);
       setTp3Sell(u.tp3SellPercent ?? tp3Sell);
+      setMaxSlippagePercent(u.maxSlippagePercent ?? 2);
+      setMevProtection(u.mevProtection ?? true);
     } catch (err) {
       console.warn("fetchUserSettings error:", err);
     }
@@ -581,6 +585,9 @@ async function fetchWithdrawals() {
           tp2SellPercent: tp2Sell,
           tp3,
           tp3SellPercent: tp3Sell,
+          maxSlippagePercent,
+          mevProtection,
+
         }),
       });
       setMessage({ type: "success", text: "Settings saved" });
@@ -1078,6 +1085,13 @@ async function reRequestChannel(channelId) {
   label="Enable Trading"
   checked={user?.tradingEnabled}
   onChange={toggleTrading}
+/>
+
+<ExecutionSettings
+  maxSlippagePercent={maxSlippagePercent}
+  setMaxSlippagePercent={setMaxSlippagePercent}
+  mevProtection={mevProtection}
+  setMevProtection={setMevProtection}
 />
 
   <TradingSettings

@@ -40,19 +40,28 @@ const jupiter = createJupiterApiClient({
   defaultHeaders: { "x-api-user": "mainnet" },
 });
 
-const SLIPPAGE_BPS = config.solana.slippageBps;
+// Global fallback slippage (bps)
+const DEFAULT_SLIPPAGE_BPS = config.solana.slippageBps ?? 200;
 
 /* =========================================================
-   QUOTE
+   QUOTE (MEV-SAFE, SLIPPAGE-ENFORCED)
 ========================================================= */
-export async function getQuote(inputMint, outputMint, amountLamports) {
+export async function getQuote(
+  inputMint,
+  outputMint,
+  amountLamports,
+  slippageBps = DEFAULT_SLIPPAGE_BPS
+) {
   try {
     return await jupiter.quoteGet({
       inputMint,
       outputMint,
       amount: amountLamports,
-      slippageBps: SLIPPAGE_BPS,
+      slippageBps,
+
+      // 🔐 MEV PROTECTION
       restrictIntermediateTokens: true,
+      onlyDirectRoutes: true,
     });
   } catch (err) {
     console.error("[getQuote] Error:", err?.message ?? err);
@@ -61,7 +70,27 @@ export async function getQuote(inputMint, outputMint, amountLamports) {
 }
 
 /* =========================================================
-   EXECUTE SWAP
+   🆕 BUY QUOTE (USER SLIPPAGE AWARE)
+   🔐 THIS IS THE ONLY PLACE USER SLIPPAGE IS APPLIED
+========================================================= */
+export async function getBuyQuote({
+  mint,
+  solAmount,
+  slippageBps = DEFAULT_SLIPPAGE_BPS,
+}) {
+  const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+
+  return getQuote(
+    "So11111111111111111111111111111111111111112", // SOL
+    mint,
+    lamports,
+    slippageBps
+  );
+}
+
+/* =========================================================
+   EXECUTE SWAP (MEV-PROTECTED)
+   ⚠️ Slippage is ALREADY baked into quote
 ========================================================= */
 export async function executeSwap(wallet, quote) {
   try {
@@ -72,8 +101,17 @@ export async function executeSwap(wallet, quote) {
         quoteResponse: quote,
         userPublicKey: wallet.publicKey.toBase58(),
         wrapAndUnwrapSol: true,
+
+        // 🔐 MEV PROTECTION
         dynamicComputeUnitLimit: true,
-        asLegacyTransaction: true,
+        asLegacyTransaction: false,
+
+        prioritizationFeeLamports: {
+          priorityLevelWithMaxLamports: {
+            priorityLevel: "veryHigh",
+            maxLamports: 1_500_000, // ~0.0015 SOL
+          },
+        },
       },
     });
 
@@ -98,7 +136,7 @@ export async function executeSwap(wallet, quote) {
 }
 
 /* =========================================================
-   PRICE CHECK
+   PRICE CHECK (READ-ONLY)
 ========================================================= */
 export async function getCurrentPrice(mintAddress) {
   try {
@@ -118,9 +156,14 @@ export async function getCurrentPrice(mintAddress) {
 }
 
 /* =========================================================
-   SELL PARTIAL (RETURNS SOL RECEIVED)
+   SELL PARTIAL (NOW SLIPPAGE-AWARE, BACKWARD SAFE)
 ========================================================= */
-export async function sellPartial(wallet, mint, percent) {
+export async function sellPartial(
+  wallet,
+  mint,
+  percent,
+  slippageBps = DEFAULT_SLIPPAGE_BPS
+) {
   const connection = getConnection();
 
   const accounts = await connection.getTokenAccountsByOwner(
@@ -147,7 +190,8 @@ export async function sellPartial(wallet, mint, percent) {
   const quote = await getQuote(
     mint,
     "So11111111111111111111111111111111111111112",
-    amountRaw
+    amountRaw,
+    slippageBps // 🔐 USER SLIPPAGE WIRED IN
   );
 
   if (!quote?.outAmount) {
@@ -166,9 +210,13 @@ export async function sellPartial(wallet, mint, percent) {
 }
 
 /* =========================================================
-   SELL ALL (RETURNS SOL RECEIVED)
+   SELL ALL (NOW SLIPPAGE-AWARE, BACKWARD SAFE)
 ========================================================= */
-export async function sellAll(wallet, mint) {
+export async function sellAll(
+  wallet,
+  mint,
+  slippageBps = DEFAULT_SLIPPAGE_BPS
+) {
   const connection = getConnection();
 
   const accounts = await connection.getTokenAccountsByOwner(
@@ -192,7 +240,8 @@ export async function sellAll(wallet, mint) {
   const quote = await getQuote(
     mint,
     "So11111111111111111111111111111111111111112",
-    amountRaw
+    amountRaw,
+    slippageBps // 🔐 USER SLIPPAGE WIRED IN
   );
 
   if (!quote?.outAmount) {

@@ -1078,6 +1078,8 @@ async function monitorUser(mint, price, walletAddress, info, state) {
     solAmount,
     entryPrice: storedEntryPrice,
     sourceChannel,
+    slippageBps, // 🔐 REQUIRED
+
   } = info;
 
   const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
@@ -1095,32 +1097,37 @@ async function monitorUser(mint, price, walletAddress, info, state) {
     let sellRes;
     let exitPrice = price;
     let sellTxid = null;
+try {
+  // Execute sell via INTERNAL WALLET
+  if (percent === 100) {
+  sellRes = await safeSellAll(
+    INTERNAL_TRADING_WALLET,
+    mint,
+    slippageBps
+  );
+} else {
+  sellRes = await safeSellPartial(
+    INTERNAL_TRADING_WALLET,
+    mint,
+    percent,
+    slippageBps
+  );
+}
 
-    try {
-      // Execute sell via INTERNAL WALLET
-      if (percent === 100) {
-        sellRes = await safeSellAll(INTERNAL_TRADING_WALLET, mint);
-      } else {
-        sellRes = await safeSellPartial(
-          INTERNAL_TRADING_WALLET,
-          mint,
-          percent
-        );
-      }
+  sellTxid =
+    sellRes?.txid ||
+    sellRes?.signature ||
+    sellRes?.sig ||
+    sellRes ||
+    null;
+} catch (err) {
+  LOG.error(
+    { err, walletAddress, mint, reason },
+    "❌ Sell execution failed"
+  );
+  return;
+}
 
-      sellTxid =
-        sellRes?.txid ||
-        sellRes?.signature ||
-        sellRes?.sig ||
-        sellRes ||
-        null;
-    } catch (err) {
-      LOG.error(
-        { err, walletAddress, mint, reason },
-        "❌ Sell execution failed"
-      );
-      return;
-    }
 
     // -----------------------------------------------
     // 💰 Calculate PnL in SOL (approximation)
@@ -1255,6 +1262,7 @@ async function safeExecuteSwap(
     solAmount,
     side,
     feeWallet,
+    slippageBps, // 🔐 STEP 3.5 — USER SLIPPAGE WIRED IN
   },
   retries = 3
 ) {
@@ -1266,6 +1274,7 @@ async function safeExecuteSwap(
         solAmount,
         side,
         feeWallet,
+        slippageBps, // ✅ PASSED THROUGH TO EXECUTION LAYER
       });
     } catch (err) {
       LOG.warn(
@@ -1275,6 +1284,7 @@ async function safeExecuteSwap(
           mint,
           solAmount,
           side,
+          slippageBps,
         },
         "swap failed — retrying"
       );
@@ -1285,22 +1295,34 @@ async function safeExecuteSwap(
   }
 }
 
-async function safeSellPartial(walletAddress, mint, percent, retries = 2) {
+async function safeSellPartial(walletAddress, mint, percent, slippageBps, retries = 2) {
   for (let i = 0; i < retries; i++) {
     try {
-      return await sellPartial({ wallet: walletAddress, mint, percent });
+      // slippageBps is REQUIRED
+      return await sellPartial({
+        wallet: walletAddress,
+        mint,
+        percent,
+        slippageBps,
+      });
     } catch (err) {
-      LOG.error({ err, walletAddress, mint, percent, attempt: i + 1 }, "sellPartial failed");
+      LOG.error(
+        { err, walletAddress, mint, percent, attempt: i + 1 },
+        "sellPartial failed"
+      );
+
       if (i === retries - 1) throw err;
       await sleep(1000 * (i + 1));
     }
   }
 }
 
-async function safeSellAll(walletAddress, mint, retries = 2) {
+
+async function safeSellAll(walletAddress, mint, slippageBps, retries = 2) {
   for (let i = 0; i < retries; i++) {
     try {
-      return await sellAll({ wallet: walletAddress, mint });
+      return await sellAll({ wallet: walletAddress, mint, slippageBps, // ✅ MUST be passed down
+ });
     } catch (err) {
       LOG.error({ err, walletAddress, mint, attempt: i + 1 }, "sellAll failed");
       if (i === retries - 1) throw err;
@@ -1342,6 +1364,31 @@ async function executeUserTrade(user, mint, sourceChannel) {
     );
     return;
   }
+
+
+// ===================================================
+// 🔐 STEP 2 — RESOLVE USER SLIPPAGE (PRE-MEV)
+// ===================================================
+const userSlippagePercent =
+  typeof user.maxSlippagePercent === "number"
+    ? user.maxSlippagePercent
+    : 2; // ✅ hard safety fallback
+
+// Convert percent → basis points + HARD SAFETY CLAMP
+const slippageBps = Math.min(
+  Math.max(Math.round(userSlippagePercent * 100), 50), // 🔒 min 0.5%
+  2000 // 🔒 max 20%
+);
+
+LOG.info(
+  {
+    wallet: user.walletAddress,
+    slippagePercent: userSlippagePercent,
+    slippageBps,
+  },
+  "🔐 Slippage resolved for user"
+);
+
 
   // ---------------------------------------------------
   // Resolve SOL amount
@@ -1402,6 +1449,7 @@ async function executeUserTrade(user, mint, sourceChannel) {
       solAmount,
       side: "buy",
       feeWallet: FEE_WALLET,
+       slippageBps, // 🔥 THIS IS MISSING
     });
 
     LOG.info(
@@ -1455,6 +1503,7 @@ async function executeUserTrade(user, mint, sourceChannel) {
     solAmount,
     entryPrice,
     sourceChannel,
+    slippageBps,
   });
 
   if (entryPrice) {
@@ -1554,7 +1603,6 @@ app.post("/bot/request-approval", async (req, res) => {
 // });
 
 
-
 // ========= Step C: Manual Sell API (frontend-triggered, wallet-based) =========
 // app.post("/api/manual-sell", async (req, res) => {
   // try {
@@ -1574,31 +1622,63 @@ app.post("/bot/request-approval", async (req, res) => {
       // return res.status(400).json({ error: "no_wallet_registered" });
     // }
 
+    // ===================================================
+    // 🔐 RESOLVE USER SLIPPAGE (MANUAL SELL)
+    // ===================================================
+    // const slippageBps =
+      // typeof user.maxSlippagePercent === "number"
+        // ? Math.min(
+            // Math.max(Math.round(user.maxSlippagePercent * 100), 50), // min 0.5%
+            // 2000 // max 20%
+          // )
+        // : 200; // fallback 2%
+
+    // LOG.info(
+      // {
+        // wallet: walletAddress,
+        // slippageBps,
+      // },
+      // "🔐 Manual sell slippage resolved"
+    // );
+
+    // ---------------------------------------------------
     // Is this token currently being monitored?
+    // ---------------------------------------------------
     // const state = monitored.get(mint);
     // const info = state?.users?.get(String(wallet));
 
     // let entryPrice = null;
     // if (info && info.entryPrice) entryPrice = info.entryPrice;
 
-    // Execute 100% sell
+    // ---------------------------------------------------
+    // Execute 100% sell with slippage protection
+    // ---------------------------------------------------
     // let sellRes;
     // try {
-      // sellRes = await safeSellAll(wallet, mint);
+      // sellRes = await safeSellAll(wallet, mint, slippageBps);
     // } catch (err) {
       // console.error("manual sell error:", err);
       // return res.status(500).json({ error: "sell_failed" });
     // }
 
-    // const sellTxid = sellRes?.txid || sellRes?.signature || sellRes?.sig || sellRes || null;
+    // const sellTxid =
+      // sellRes?.txid ||
+      // sellRes?.signature ||
+      // sellRes?.sig ||
+      // sellRes ||
+      // null;
 
-    // Fetch exit price
+    // ---------------------------------------------------
+    // Fetch exit price (best-effort)
+    // ---------------------------------------------------
     // let exitPrice = 0;
     // try {
       // exitPrice = await getCurrentPrice(mint);
     // } catch {}
 
+    // ---------------------------------------------------
     // Save trade to backend DB
+    // ---------------------------------------------------
     // await saveTradeToBackend({
       // walletAddress: wallet,
       // mint,
@@ -1612,7 +1692,9 @@ app.post("/bot/request-approval", async (req, res) => {
       // tradeType: "manual",
     // });
 
+    // ---------------------------------------------------
     // Remove from monitoring
+    // ---------------------------------------------------
     // if (state) {
       // state.users.delete(String(wallet));
       // state.entryPrices.delete(wallet);
@@ -1628,8 +1710,6 @@ app.post("/bot/request-approval", async (req, res) => {
     // return res.status(500).json({ error: "internal_error" });
   // }
 // });
-
-
 
 
 // ========= Admin channel management commands via Telegram (keep admin only) =========

@@ -48,7 +48,12 @@ router.post("/", async (req, res) => {
         balanceSol: 0,
         lockedBalanceSol: 0,
         tradingEnabled: false, // 🔒 SAFE DEFAULT
+
+        // ✅ Execution defaults (F5)
+        maxSlippagePercent: 2,
+        mevProtection: true,
       });
+
       console.log("✅ Created new user:", walletAddress);
     }
 
@@ -70,9 +75,7 @@ router.post("/toggle-trading", async (req, res) => {
     const { walletAddress, enabled } = req.body;
 
     if (!walletAddress || typeof enabled !== "boolean") {
-      return res.status(400).json({
-        error: "invalid_request",
-      });
+      return res.status(400).json({ error: "invalid_request" });
     }
 
     const user = await User.findOneAndUpdate(
@@ -82,9 +85,7 @@ router.post("/toggle-trading", async (req, res) => {
     );
 
     if (!user) {
-      return res.status(404).json({
-        error: "user_not_found",
-      });
+      return res.status(404).json({ error: "user_not_found" });
     }
 
     return res.json({
@@ -93,9 +94,79 @@ router.post("/toggle-trading", async (req, res) => {
     });
   } catch (err) {
     console.error("❌ toggle-trading error:", err);
-    return res.status(500).json({
-      error: "internal_error",
-    });
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/**
+ * ===================================================
+ * 🧠 POST /api/users/update-settings
+ * Trading + Execution settings (F5)
+ * ===================================================
+ */
+router.post("/update-settings", async (req, res) => {
+  try {
+    const {
+      walletAddress,
+
+      // Trading params
+      solPerTrade,
+      stopLoss,
+      trailingTrigger,
+      trailingDistance,
+      tp1,
+      tp1SellPercent,
+      tp2,
+      tp2SellPercent,
+      tp3,
+      tp3SellPercent,
+
+      // 🔐 Execution params
+      maxSlippagePercent,
+      mevProtection,
+    } = req.body;
+
+    if (!walletAddress) {
+      return res.status(400).json({ error: "walletAddress_required" });
+    }
+
+    const update = {
+      solPerTrade,
+      stopLoss,
+      trailingTrigger,
+      trailingDistance,
+      tp1,
+      tp1SellPercent,
+      tp2,
+      tp2SellPercent,
+      tp3,
+      tp3SellPercent,
+    };
+
+    // ---------------------------------------------------
+    // 🔐 Execution settings (SAFE + OPTIONAL)
+    // ---------------------------------------------------
+    if (typeof maxSlippagePercent === "number") {
+      update.maxSlippagePercent = maxSlippagePercent;
+    }
+
+    if (typeof mevProtection === "boolean") {
+      update.mevProtection = mevProtection;
+    }
+
+    const result = await User.updateOne(
+      { walletAddress },
+      { $set: update }
+    );
+
+    if (result.matchedCount === 0) {
+      return res.status(404).json({ error: "user_not_found" });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("❌ update-settings error:", err);
+    return res.status(500).json({ error: "internal_error" });
   }
 });
 
@@ -210,9 +281,7 @@ router.post("/subscribe", async (req, res) => {
     });
 
     if (telegramOwner) {
-      return res.status(403).json({
-        error: "telegram_wallet_locked",
-      });
+      return res.status(403).json({ error: "telegram_wallet_locked" });
     }
 
     let sub = user.subscribedChannels.find(
@@ -232,9 +301,7 @@ router.post("/subscribe", async (req, res) => {
       sub.requestedAt = new Date();
     } else if (sub.status === "pending") {
       if (isInCooldown(sub)) {
-        return res.status(429).json({
-          error: "cooldown_active",
-        });
+        return res.status(429).json({ error: "cooldown_active" });
       }
       sub.requestedAt = new Date();
     } else if (sub.status === "approved") {

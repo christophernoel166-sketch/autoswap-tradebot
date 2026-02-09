@@ -110,7 +110,7 @@ const userSchema = new mongoose.Schema(
     },
 
     // ===================================================
-    // 📊 TRADING PARAMETERS (UNCHANGED)
+    // 📊 TRADING PARAMETERS
     // ===================================================
     solPerTrade: { type: Number, default: 0.01 },
 
@@ -127,6 +127,22 @@ const userSchema = new mongoose.Schema(
 
     trailingTrigger: { type: Number, default: 5 },
     trailingDistance: { type: Number, default: 3 },
+
+    // ===================================================
+    // 🔐 SLIPPAGE CONTROL (STEP 1 — NEW)
+    // ===================================================
+    maxSlippagePercent: {
+      type: Number,
+      default: 2,   // ✅ SAFE DEFAULT (2%)
+      min: 0.1,     // ❌ avoid dust / broken trades
+      max: 10,      // ❌ prevent reckless slippage
+    },
+
+    // (Future-ready: per-channel override)
+    slippageByChannel: {
+      type: Map,
+      of: Number,   // channelId -> slippage %
+    },
 
     createdAt: {
       type: Date,
@@ -146,6 +162,7 @@ const userSchema = new mongoose.Schema(
  * - balanceSol / lockedBalanceSol = custodial funds
  * - tradingEnabled = manual user consent
  * - telegram.userId is UNIQUE (1 Telegram → 1 wallet)
+ * - maxSlippagePercent is enforced later at execution
  */
 
 export default mongoose.model("User", userSchema);
