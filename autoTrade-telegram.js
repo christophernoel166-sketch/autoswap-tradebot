@@ -740,6 +740,15 @@ async function notifyUserOfApproval(user, channelId, isApprove) {
 }
 
 async function notifyDashboardOfApproval({ walletAddress, channelId, status }) {
+  // 🛡️ HARD GUARD — dashboard sync must NEVER crash the bot
+  if (!BACKEND_BASE) {
+    LOG.warn(
+      { walletAddress, channelId, status },
+      "⚠️ BACKEND_BASE not set — skipping dashboard approval sync"
+    );
+    return;
+  }
+
   try {
     const base = BACKEND_BASE.replace(/\/$/, "");
     const endpoint = `${base}/api/channels/approval-event`;
