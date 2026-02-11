@@ -9,8 +9,9 @@ import usersApi from "./users.js";
 import statsApi from "./stats.js";
 import analyticsApi from "./analytics.js";
 import channelsApi from "./channels.js";
-import activePositionsRoute from "./activePositions.js";
-import manualSellRoute from "./manualSell.js";
+import activePositionsApi from "./activePositions.js";
+
+import manualSellApi from "./manualSell.js";
 import tradeHistoryRoute from "./tradeHistory.js";
 
 import tradeRecordRoute from "../../routes/tradeRecordRoute.js";
@@ -102,8 +103,9 @@ export function createApiServer() {
   app.use("/api/analytics", analyticsApi);
   app.use("/api/notifications", notificationRoute);
   app.use("/auth", authWalletRouter);
-  app.use("/api/active-positions", activePositionsRoute);
-  app.use("/api/manual-sell", manualSellRoute);
+  app.use("/api", activePositionsApi);
+
+  app.use("/api", manualSellApi);
   app.use("/api/channels", channelsRoutes);
   app.use("/api/admin", adminChannels);
   app.use("/api", withdrawRouter);

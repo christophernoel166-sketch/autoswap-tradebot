@@ -26,6 +26,22 @@ import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
 import cors from "cors";
 import express from "express";
+// 🔴 Redis (shared state between bot & API)
+import { redis } from "./src/utils/redis.js";
+import {
+  positionKey,
+  walletActiveSet,
+} from "./src/redis/positionKeys.js";
+
+
+import { manualSellCommandKey } from "./src/redis/commandKeys.js";
+
+redis.ping().then((res) => {
+  console.log("🧠 BOT Redis ping:", res);
+});
+
+
+
 
 const SIGNAL_TEST_MODE = true; // 🔥 turn OFF after test
 
@@ -1030,6 +1046,107 @@ async function saveTradeToBackend({
 // ========= Centralized monitoring (wallet keyed) =========
 const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, highest, lastPrice, intervalId }>
 
+// ===================================================
+// 🔒 REDIS POSITION CLOSE GUARD (ATOMIC)
+// Prevents double-sell across bot instances
+// ===================================================
+
+async function tryMarkPositionClosing(walletAddress, mint) {
+  const key = positionKey(walletAddress, mint);
+
+  while (true) {
+    await redis.watch(key);
+
+    const currentStatus = await redis.hget(key, "status");
+
+    if (!currentStatus) {
+      await redis.unwatch();
+      LOG.warn({ walletAddress, mint }, "Redis position missing");
+      return false;
+    }
+
+    if (currentStatus !== "open") {
+      await redis.unwatch();
+      LOG.warn(
+        { walletAddress, mint, currentStatus },
+        "Position already closing/closed"
+      );
+      return false;
+    }
+
+    const multi = redis.multi();
+    multi.hset(key, "status", "closing");
+
+    const result = await multi.exec();
+
+    if (result) {
+      LOG.info(
+        { walletAddress, mint },
+        "🔒 Position atomically marked as closing"
+      );
+      return true;
+    }
+
+    // Retry if transaction failed due to race
+  }
+}
+
+
+
+// ===================================================
+// 🔔 REDIS → BOT: MANUAL SELL COMMAND LISTENER
+// (after monitored map is initialized)
+// ===================================================
+
+const redisSub = redis.duplicate();
+
+redisSub.subscribe(manualSellCommandKey()).then(() => {
+  LOG.info("📡 Subscribed to manual sell Redis channel");
+});
+
+redisSub.on("message", async (channel, message) => {
+  if (channel !== manualSellCommandKey()) return;
+
+  try {
+    const cmd = JSON.parse(message);
+    const { walletAddress, mint } = cmd;
+
+    LOG.info(
+      { walletAddress, mint },
+      "🔥 Manual sell command received"
+    );
+
+    // 🔒 Verify position still exists in memory
+    const state = monitored.get(mint);
+    const info = state?.users?.get(String(walletAddress));
+
+    if (!info) {
+      LOG.warn(
+        { walletAddress, mint },
+        "Manual sell ignored — position not found"
+      );
+      return;
+    }
+
+    // 🔥 Execute FULL sell via internal wallet
+  const allowed = await tryMarkPositionClosing(walletAddress, mint);
+
+if (!allowed) return;
+
+await safeSellAll(INTERNAL_TRADING_WALLET, mint);
+
+
+    LOG.info(
+      { walletAddress, mint },
+      "✅ Manual sell executed"
+    );
+  } catch (err) {
+    LOG.error({ err }, "❌ Manual sell command failed");
+  }
+});
+
+
+
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
   const state = {
@@ -1098,97 +1215,137 @@ async function monitorUser(mint, price, walletAddress, info, state) {
   if (typeof info.tpStage === "undefined") info.tpStage = 0;
 
   /**
-   * ===================================================
-   * 🔁 INTERNAL HELPER — FINALIZE TRADE
-   * ===================================================
-   */
-  async function finalizeTrade({ reason, percent = 100 }) {
-    let sellRes;
-    let exitPrice = price;
-    let sellTxid = null;
-try {
-  // Execute sell via INTERNAL WALLET
-  if (percent === 100) {
-  sellRes = await safeSellAll(
-    INTERNAL_TRADING_WALLET,
-    mint,
-    slippageBps
-  );
-} else {
-  sellRes = await safeSellPartial(
-    INTERNAL_TRADING_WALLET,
-    mint,
-    percent,
-    slippageBps
-  );
-}
+ * ===================================================
+ * 🔁 INTERNAL HELPER — FINALIZE TRADE
+ * ===================================================
+ */
+async function finalizeTrade({ reason, percent = 100 }) {
+  let sellRes;
+  let exitPrice = price;
+  let sellTxid = null;
 
-  sellTxid =
-    sellRes?.txid ||
-    sellRes?.signature ||
-    sellRes?.sig ||
-    sellRes ||
-    null;
-} catch (err) {
-  LOG.error(
-    { err, walletAddress, mint, reason },
-    "❌ Sell execution failed"
-  );
-  return;
-}
-
-
-    // -----------------------------------------------
-    // 💰 Calculate PnL in SOL (approximation)
-    // -----------------------------------------------
-    const pnlSol = ((exitPrice - entry) / entry) * solAmount;
-    const creditSol = solAmount + pnlSol;
-
-    // -----------------------------------------------
-    // 💰 Update user balances atomically
-    // -----------------------------------------------
-    await User.updateOne(
-      { walletAddress },
-      {
-        $inc: {
-          lockedBalanceSol: -solAmount,
-          balanceSol: creditSol,
-        },
+  try {
+    // ===================================================
+    // 🔒 ONLY GUARD FULL CLOSE (100%)
+    // Prevent double-sell across bot instances
+    // ===================================================
+    if (percent === 100) {
+      const allowed = await tryMarkPositionClosing(walletAddress, mint);
+      if (!allowed) {
+        LOG.warn(
+          { walletAddress, mint },
+          "Finalize aborted — already closing/closed"
+        );
+        return;
       }
-    );
+    }
 
-    // -----------------------------------------------
-    // 📦 Save trade record
-    // -----------------------------------------------
-    await saveTradeToBackend({
-      walletAddress,
-      mint,
-      solAmount,
-      entryPrice: entry,
-      exitPrice,
-      buyTxid,
-      sellTxid,
-      sourceChannel,
-      reason,
-    });
-
-    // -----------------------------------------------
-    // 🧹 Cleanup monitoring state
-    // -----------------------------------------------
-    state.users.delete(walletAddress);
-    state.entryPrices.delete(walletAddress);
-
-    LOG.info(
-      {
-        walletAddress,
+    // ===================================================
+    // 🚀 EXECUTE SELL (INTERNAL WALLET)
+    // ===================================================
+    if (percent === 100) {
+      sellRes = await safeSellAll(
+        INTERNAL_TRADING_WALLET,
         mint,
-        reason,
-        creditSol,
-      },
-      "✅ Trade finalized & balance credited"
+        slippageBps
+      );
+    } else {
+      sellRes = await safeSellPartial(
+        INTERNAL_TRADING_WALLET,
+        mint,
+        percent,
+        slippageBps
+      );
+    }
+
+    sellTxid =
+      sellRes?.txid ||
+      sellRes?.signature ||
+      sellRes?.sig ||
+      sellRes ||
+      null;
+
+  } catch (err) {
+    LOG.error(
+      { err, walletAddress, mint, reason },
+      "❌ Sell execution failed"
     );
+
+    // 🔄 If full close failed → revert status back to open
+    if (percent === 100) {
+      await redis.hset(positionKey(walletAddress, mint), "status", "open");
+    }
+
+    return;
   }
 
+  // ===================================================
+  // 🔒 MARK POSITION CLOSED (REDIS)
+  // ===================================================
+  if (percent === 100) {
+    const key = positionKey(walletAddress, mint);
+
+    await redis.hset(key, "status", "closed");
+
+    // Remove mint from wallet active set
+    await redis.srem(walletPositionsKey(walletAddress), mint);
+  }
+
+  // ===================================================
+  // 💰 CALCULATE PNL
+  // ===================================================
+  const pnlSol = ((exitPrice - entry) / entry) * solAmount;
+  const creditSol = solAmount + pnlSol;
+
+  // ===================================================
+  // 💰 UPDATE USER BALANCES (ATOMIC)
+  // ===================================================
+  await User.updateOne(
+    { walletAddress },
+    {
+      $inc: {
+        lockedBalanceSol: -solAmount,
+        balanceSol: creditSol,
+      },
+    }
+  );
+
+  // ===================================================
+  // 📦 SAVE TRADE TO BACKEND
+  // ===================================================
+  await saveTradeToBackend({
+    walletAddress,
+    mint,
+    solAmount,
+    entryPrice: entry,
+    exitPrice,
+    buyTxid,
+    sellTxid,
+    sourceChannel,
+    reason,
+  });
+
+  // ===================================================
+  // 🧹 CLEANUP IN-MEMORY MONITOR
+  // ===================================================
+  state.users.delete(walletAddress);
+  state.entryPrices.delete(walletAddress);
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      reason,
+      creditSol,
+    },
+    "✅ Trade finalized & balance credited"
+  );
+} // ← closes finalizeTrade
+
+
+
+  
+
+   
   /**
    * ===================================================
    * 🛑 STOP LOSS — SELL ALL
@@ -1448,84 +1605,133 @@ LOG.info(
   }
 
   // ===================================================
-  // 🚀 STEP 2.4.4 — EXECUTE BUY (INTERNAL WALLET)
-  // ===================================================
-  let buyTxid;
-  try {
-    buyTxid = await safeExecuteSwap({
-      wallet: INTERNAL_TRADING_WALLET,
-      mint,
-      solAmount,
-      side: "buy",
-      feeWallet: FEE_WALLET,
-       slippageBps, // 🔥 THIS IS MISSING
-    });
-
-    LOG.info(
-      { wallet: user.walletAddress, mint, solAmount, buyTxid },
-      "✅ Buy executed"
-    );
-  } catch (err) {
-    LOG.error(
-      { err, wallet: user.walletAddress, mint },
-      "❌ Buy failed — reverting funds"
-    );
-
-    // 🔁 UNLOCK FUNDS ON FAILURE
-    await User.updateOne(
-      { walletAddress: user.walletAddress },
-      {
-        $inc: {
-          balanceSol: solAmount,
-          lockedBalanceSol: -solAmount,
-        },
-      }
-    );
-
-    return;
-  }
-
-  // ===================================================
-  // 📈 STEP 2.4.5 — REGISTER POSITION FOR MONITORING
-  // ===================================================
-  let entryPrice = null;
-  try {
-    entryPrice = await getCurrentPrice(mint);
-  } catch {}
-
-  const state = await ensureMonitor(mint);
-
-  state.users.set(String(user.walletAddress), {
-    walletAddress: user.walletAddress,
-    tpStage: 0,
-    profile: {
-      tp1Percent: user.tp1,
-      tp1SellPercent: user.tp1SellPercent,
-      tp2Percent: user.tp2,
-      tp2SellPercent: user.tp2SellPercent,
-      tp3Percent: user.tp3,
-      tp3SellPercent: user.tp3SellPercent,
-      stopLossPercent: user.stopLoss,
-      trailingPercent: user.trailingDistance,
-    },
-    buyTxid,
+// 🚀 STEP 2.4.4 — EXECUTE BUY (INTERNAL WALLET)
+// ===================================================
+let buyTxid;
+try {
+  buyTxid = await safeExecuteSwap({
+    wallet: INTERNAL_TRADING_WALLET,
+    mint,
     solAmount,
-    entryPrice,
-    sourceChannel,
+    side: "buy",
+    feeWallet: FEE_WALLET,
     slippageBps,
   });
 
-  if (entryPrice) {
-    state.entryPrices.set(user.walletAddress, entryPrice);
-    if (!state.highest) state.highest = entryPrice;
-  }
-
   LOG.info(
-    { wallet: user.walletAddress, mint },
-    "📈 Position registered for monitoring"
+    { wallet: user.walletAddress, mint, solAmount, buyTxid },
+    "✅ Buy executed"
+  );
+} catch (err) {
+  LOG.error(
+    { err, wallet: user.walletAddress, mint },
+    "❌ Buy failed — reverting funds"
+  );
+
+  // 🔁 UNLOCK FUNDS ON FAILURE
+  await User.updateOne(
+    { walletAddress: user.walletAddress },
+    {
+      $inc: {
+        balanceSol: solAmount,
+        lockedBalanceSol: -solAmount,
+      },
+    }
+  );
+
+  return;
+}
+
+// ===================================================
+// 📈 FETCH ENTRY PRICE (ON-CHAIN)
+// ===================================================
+let entryPrice = null;
+try {
+  entryPrice = await getCurrentPrice(mint);
+} catch (err) {
+  LOG.warn(
+    { err, wallet: user.walletAddress, mint },
+    "⚠️ Failed to fetch entry price"
   );
 }
 
+// ===================================================
+// 🔐 STEP 3.2.c.3 — WRITE POSITION TO REDIS (ON BUY)
+// ===================================================
+try {
+  const walletKey = walletPositionsKey(user.walletAddress);
+  const posKey = positionKey(user.walletAddress, mint);
+
+  // 1️⃣ Add mint to wallet's active positions set
+  await redis.sadd(walletKey, mint);
+
+  // 2️⃣ Store position details as HASH
+  await redis.hset(posKey, {
+    [POSITION_FIELDS.walletAddress]: user.walletAddress,
+    [POSITION_FIELDS.mint]: mint,
+    [POSITION_FIELDS.sourceChannel]: sourceChannel,
+
+    [POSITION_FIELDS.solAmount]: String(solAmount),
+    [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
+    [POSITION_FIELDS.buyTxid]: String(buyTxid),
+
+    [POSITION_FIELDS.tpStage]: "0",
+    [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
+
+    [POSITION_FIELDS.openedAt]: String(Date.now()),
+  });
+
+  LOG.info(
+    {
+      wallet: user.walletAddress,
+      mint,
+      redisKey: posKey,
+    },
+    "🧠 Position written to Redis"
+  );
+} catch (err) {
+  LOG.error(
+    { err, wallet: user.walletAddress, mint },
+    "❌ Failed to write position to Redis"
+  );
+  // ⚠️ Do NOT revert trade here
+}
+
+// ===================================================
+// 📈 STEP 2.4.5 — REGISTER POSITION FOR MONITORING
+// ===================================================
+const state = await ensureMonitor(mint);
+
+state.users.set(String(user.walletAddress), {
+  walletAddress: user.walletAddress,
+  tpStage: 0,
+  profile: {
+    tp1Percent: user.tp1,
+    tp1SellPercent: user.tp1SellPercent,
+    tp2Percent: user.tp2,
+    tp2SellPercent: user.tp2SellPercent,
+    tp3Percent: user.tp3,
+    tp3SellPercent: user.tp3SellPercent,
+    stopLossPercent: user.stopLoss,
+    trailingPercent: user.trailingDistance,
+  },
+  buyTxid,
+  solAmount,
+  entryPrice,
+  sourceChannel,
+  slippageBps,
+});
+
+if (entryPrice) {
+  state.entryPrices.set(user.walletAddress, entryPrice);
+  if (!state.highest) state.highest = entryPrice;
+}
+
+LOG.info(
+  { wallet: user.walletAddress, mint },
+  "📈 Position registered for monitoring"
+);
+}
 
  // ======= Step A: lightweight Express server for bot APIs =======
 // import expressModule from "express"; // avoid name clash

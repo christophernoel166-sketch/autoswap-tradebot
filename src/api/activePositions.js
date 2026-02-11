@@ -1,29 +1,62 @@
 import express from "express";
-import User from "../../models/User.js";
+import { redis } from "../utils/redis.js";
+import {
+  walletActiveSet,
+  positionKey,
+} from "../redis/positionKeys.js";
 
 const router = express.Router();
 
 /**
- * GET /api/active-positions/wallet/:wallet
- * DB-owned active positions (no bot proxy)
+ * ===================================================
+ * 📊 ACTIVE POSITIONS (READ-ONLY, REDIS-BACKED)
+ * GET /api/active-positions/:walletAddress
+ * ===================================================
  */
-router.get("/wallet/:wallet", async (req, res) => {
+router.get("/active-positions/:walletAddress", async (req, res) => {
   try {
-    const wallet = String(req.params.wallet);
+    const walletAddress = String(req.params.walletAddress);
 
-    const user = await User.findOne({ walletAddress: wallet }).lean();
+    if (!walletAddress) {
+      return res.status(400).json({ error: "wallet_required" });
+    }
 
-    if (!user) {
+    // 1️⃣ Get all active mints for this wallet
+    const walletKey = walletActiveSet(walletAddress);
+    const mints = await redis.smembers(walletKey);
+
+    if (!mints.length) {
       return res.json({ positions: [] });
     }
 
-    // If you store positions in DB (future-proof)
-    const positions = user.activePositions || [];
+    const positions = [];
+
+    // 2️⃣ Fetch each position hash
+    for (const mint of mints) {
+      const posKey = positionKey(walletAddress, mint);
+      const data = await redis.hgetall(posKey);
+
+      if (!data || Object.keys(data).length === 0) continue;
+
+      positions.push({
+        walletAddress: data.walletAddress,
+        mint: data.mint,
+        sourceChannel: data.sourceChannel,
+
+        solAmount: Number(data.solAmount || 0),
+        entryPrice: Number(data.entryPrice || 0),
+        buyTxid: data.buyTxid || null,
+
+        tpStage: Number(data.tpStage || 0),
+        highestPrice: Number(data.highestPrice || 0),
+
+        openedAt: Number(data.openedAt || 0),
+      });
+    }
 
     return res.json({ positions });
-
   } catch (err) {
-    console.error("active-positions API error:", err);
+    console.error("active-positions error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
 });
