@@ -8,36 +8,28 @@ const userSchema = new mongoose.Schema(
     walletAddress: {
       type: String,
       required: true,
-      index: true, // ❌ NOT unique (intentionally)
+      index: true,
     },
 
     // ===================================================
-    // 💰 AUTOSNIPE-STYLE CUSTODY (STEP 2.1)
+    // 🔐 PER-USER TRADING WALLET (NEW ARCHITECTURE)
     // ===================================================
-    balanceSol: {
-      type: Number,
-      default: 0,
-      min: 0,
+    tradingWalletPublicKey: {
+      type: String,
+      index: true,
     },
 
-    lockedBalanceSol: {
-      type: Number,
-      default: 0,
-      min: 0,
+    tradingWalletEncryptedPrivateKey: {
+      type: String,
+    },
+
+    tradingWalletIv: {
+      type: String,
     },
 
     tradingEnabled: {
       type: Boolean,
-      default: false, // 🔒 user must explicitly enable trading
-    },
-
-    // ===================================================
-    // 🔐 CUSTODY SAFETY
-    // Withdrawals ONLY go here
-    // ===================================================
-    depositWallet: {
-      type: String, // original Phantom wallet
-      index: true,
+      default: false,
     },
 
     // ===================================================
@@ -46,8 +38,8 @@ const userSchema = new mongoose.Schema(
     telegram: {
       userId: {
         type: String,
-        unique: true, // ✅ ENFORCES 1 TELEGRAM = 1 WALLET
-        sparse: true, // ✅ allows users without Telegram yet
+        unique: true,
+        sparse: true,
         index: true,
       },
 
@@ -63,7 +55,6 @@ const userSchema = new mongoose.Schema(
         type: Date,
       },
 
-      // One-time wallet ↔ telegram linking code
       linkCode: {
         type: String,
         index: true,
@@ -71,14 +62,14 @@ const userSchema = new mongoose.Schema(
     },
 
     // ===================================================
-    // CHANNEL SUBSCRIPTIONS (MANY CHANNELS PER USER)
+    // CHANNEL SUBSCRIPTIONS
     // ===================================================
     subscribedChannels: {
       type: [
         {
           channelId: {
             type: String,
-            required: true, // -100xxxx
+            required: true,
           },
 
           enabled: {
@@ -129,19 +120,18 @@ const userSchema = new mongoose.Schema(
     trailingDistance: { type: Number, default: 3 },
 
     // ===================================================
-    // 🔐 SLIPPAGE CONTROL (STEP 1 — NEW)
+    // 🔐 SLIPPAGE CONTROL
     // ===================================================
     maxSlippagePercent: {
       type: Number,
-      default: 2,   // ✅ SAFE DEFAULT (2%)
-      min: 0.1,     // ❌ avoid dust / broken trades
-      max: 10,      // ❌ prevent reckless slippage
+      default: 2,
+      min: 0.1,
+      max: 10,
     },
 
-    // (Future-ready: per-channel override)
     slippageByChannel: {
       type: Map,
-      of: Number,   // channelId -> slippage %
+      of: Number,
     },
 
     createdAt: {
@@ -150,7 +140,7 @@ const userSchema = new mongoose.Schema(
     },
   },
   {
-    strict: false, // 👈 preserves backward compatibility
+    strict: false,
   }
 );
 
@@ -158,11 +148,9 @@ const userSchema = new mongoose.Schema(
  * IMPORTANT GUARANTEES
  * ---------------------------------------------------
  * - walletAddress = login identity
- * - depositWallet = immutable withdrawal destination
- * - balanceSol / lockedBalanceSol = custodial funds
- * - tradingEnabled = manual user consent
- * - telegram.userId is UNIQUE (1 Telegram → 1 wallet)
- * - maxSlippagePercent is enforced later at execution
+ * - tradingWalletPublicKey = real trading wallet
+ * - NO custodial balance system anymore
+ * - Blockchain becomes source of truth
  */
 
 export default mongoose.model("User", userSchema);

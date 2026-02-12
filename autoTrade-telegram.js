@@ -14,12 +14,12 @@ import pino from "pino";
 // Ensure fetch exists in Node <18 (optional)
 import nodeFetch from "node-fetch";
 if (typeof global.fetch !== "function") global.fetch = nodeFetch;
+import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
-import { INTERNAL_TRADING_WALLET } from "./src/solana/internalWallet.js";
-import { pollDeposits } from "./src/solana/depositListener.js";
+import { restoreTradingWallet } from "./src/services/walletService.js";
 
 import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
@@ -31,7 +31,9 @@ import { redis } from "./src/utils/redis.js";
 import {
   positionKey,
   walletActiveSet,
+  POSITION_FIELDS,
 } from "./src/redis/positionKeys.js";
+
 
 
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
@@ -930,16 +932,6 @@ mongoose
   });
 
 
-// ================================
-// 💰 Deposit watcher (READ-ONLY)
-// ================================
-setInterval(() => {
-  pollDeposits().catch((err) =>
-    LOG.error({ err }, "Deposit watcher failed")
-  );
-}, 15_000); // every 15 seconds
-
-LOG.info("💰 Deposit watcher started (read-only)");
 
 
 // ========= Utils =========
@@ -1133,7 +1125,9 @@ redisSub.on("message", async (channel, message) => {
 
 if (!allowed) return;
 
-await safeSellAll(INTERNAL_TRADING_WALLET, mint);
+const wallet = restoreTradingWallet(user)
+sellAll(wallet, mint, slippageBps)
+
 
 
     LOG.info(
@@ -1214,9 +1208,9 @@ async function monitorUser(mint, price, walletAddress, info, state) {
   const change = ((price - entry) / entry) * 100;
   if (typeof info.tpStage === "undefined") info.tpStage = 0;
 
-  /**
+ /**
  * ===================================================
- * 🔁 INTERNAL HELPER — FINALIZE TRADE
+ * 🔁 INTERNAL HELPER — FINALIZE TRADE (PER-USER WALLET)
  * ===================================================
  */
 async function finalizeTrade({ reason, percent = 100 }) {
@@ -1226,7 +1220,7 @@ async function finalizeTrade({ reason, percent = 100 }) {
 
   try {
     // ===================================================
-    // 🔒 ONLY GUARD FULL CLOSE (100%)
+    // 🔒 GUARD FULL CLOSE ONLY (100%)
     // Prevent double-sell across bot instances
     // ===================================================
     if (percent === 100) {
@@ -1241,17 +1235,50 @@ async function finalizeTrade({ reason, percent = 100 }) {
     }
 
     // ===================================================
-    // 🚀 EXECUTE SELL (INTERNAL WALLET)
+    // 🔐 USE USER WALLET FROM MONITOR STATE
+    // (Stored during BUY registration)
+    // ===================================================
+    const wallet = info.wallet;
+
+    if (!wallet) {
+      LOG.error(
+        { walletAddress, mint },
+        "❌ Missing wallet in monitor state"
+      );
+
+      // Revert Redis status if needed
+      if (percent === 100) {
+        await redis.hset(
+          positionKey(walletAddress, mint),
+          "status",
+          "open"
+        );
+      }
+
+      return;
+    }
+
+    LOG.info(
+      {
+        wallet: wallet.publicKey.toBase58(),
+        mint,
+        percent,
+      },
+      "🔐 Using user wallet for SELL"
+    );
+
+    // ===================================================
+    // 🚀 EXECUTE SELL FROM USER WALLET
     // ===================================================
     if (percent === 100) {
       sellRes = await safeSellAll(
-        INTERNAL_TRADING_WALLET,
+        wallet,
         mint,
         slippageBps
       );
     } else {
       sellRes = await safeSellPartial(
-        INTERNAL_TRADING_WALLET,
+        wallet,
         mint,
         percent,
         slippageBps
@@ -1271,16 +1298,20 @@ async function finalizeTrade({ reason, percent = 100 }) {
       "❌ Sell execution failed"
     );
 
-    // 🔄 If full close failed → revert status back to open
+    // 🔄 Revert Redis status if full close failed
     if (percent === 100) {
-      await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      await redis.hset(
+        positionKey(walletAddress, mint),
+        "status",
+        "open"
+      );
     }
 
     return;
   }
 
   // ===================================================
-  // 🔒 MARK POSITION CLOSED (REDIS)
+  // 🔒 MARK POSITION CLOSED IN REDIS (FULL CLOSE ONLY)
   // ===================================================
   if (percent === 100) {
     const key = positionKey(walletAddress, mint);
@@ -1292,26 +1323,16 @@ async function finalizeTrade({ reason, percent = 100 }) {
   }
 
   // ===================================================
-  // 💰 CALCULATE PNL
+  // 📈 FETCH EXIT PRICE (BEST EFFORT)
   // ===================================================
-  const pnlSol = ((exitPrice - entry) / entry) * solAmount;
-  const creditSol = solAmount + pnlSol;
+  try {
+    exitPrice = await getCurrentPrice(mint);
+  } catch {
+    // Ignore failure
+  }
 
   // ===================================================
-  // 💰 UPDATE USER BALANCES (ATOMIC)
-  // ===================================================
-  await User.updateOne(
-    { walletAddress },
-    {
-      $inc: {
-        lockedBalanceSol: -solAmount,
-        balanceSol: creditSol,
-      },
-    }
-  );
-
-  // ===================================================
-  // 📦 SAVE TRADE TO BACKEND
+  // 📦 SAVE TRADE RECORD
   // ===================================================
   await saveTradeToBackend({
     walletAddress,
@@ -1326,99 +1347,98 @@ async function finalizeTrade({ reason, percent = 100 }) {
   });
 
   // ===================================================
-  // 🧹 CLEANUP IN-MEMORY MONITOR
+  // 🧹 CLEANUP IN-MEMORY MONITOR (FULL CLOSE ONLY)
   // ===================================================
-  state.users.delete(walletAddress);
-  state.entryPrices.delete(walletAddress);
+  if (percent === 100) {
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+  }
+
   LOG.info(
     {
       walletAddress,
       mint,
       reason,
-      creditSol,
+      percent,
     },
-    "✅ Trade finalized & balance credited"
+    "✅ Trade finalized (per-user wallet architecture)"
   );
-} // ← closes finalizeTrade
+}
 
+/**
+ * ===================================================
+ * 🛑 STOP LOSS — SELL ALL
+ * ===================================================
+ */
+if (change <= -profile.stopLossPercent) {
+  LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit");
+  await finalizeTrade({ reason: "stop_loss", percent: 100 });
+  return;
+}
 
+/**
+ * ===================================================
+ * 🎯 TP1 — PARTIAL SELL
+ * ===================================================
+ */
+if (info.tpStage < 1 && change >= profile.tp1Percent) {
+  LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached");
 
-  
+  await finalizeTrade({
+    reason: "tp1",
+    percent: profile.tp1SellPercent,
+  });
 
-   
-  /**
-   * ===================================================
-   * 🛑 STOP LOSS — SELL ALL
-   * ===================================================
-   */
-  if (change <= -profile.stopLossPercent) {
-    LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit");
-    await finalizeTrade({ reason: "stop_loss", percent: 100 });
+  profile.stopLossPercent = 0;
+  info.tpStage = 1;
+  return;
+}
+
+/**
+ * ===================================================
+ * 🎯 TP2 — PARTIAL SELL
+ * ===================================================
+ */
+if (info.tpStage < 2 && change >= profile.tp2Percent) {
+  LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached");
+
+  await finalizeTrade({
+    reason: "tp2",
+    percent: profile.tp2SellPercent,
+  });
+
+  profile.stopLossPercent = profile.tp2Percent;
+  info.tpStage = 2;
+  return;
+}
+
+/**
+ * ===================================================
+ * 🎯 TP3 — SELL ALL
+ * ===================================================
+ */
+if (info.tpStage < 3 && change >= profile.tp3Percent) {
+  LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached");
+  await finalizeTrade({ reason: "tp3", percent: 100 });
+  return;
+}
+
+/**
+ * ===================================================
+ * 📉 TRAILING STOP — SELL ALL
+ * ===================================================
+ */
+if (info.tpStage >= 1 && state.highest) {
+  const drop = ((state.highest - price) / state.highest) * 100;
+
+  if (drop >= profile.trailingPercent) {
+    LOG.info({ walletAddress, mint, drop }, "📉 Trailing stop hit");
+    await finalizeTrade({ reason: "trailing", percent: 100 });
     return;
-  }
-
-  /**
-   * ===================================================
-   * 🎯 TP1 — PARTIAL SELL
-   * ===================================================
-   */
-  if (info.tpStage < 1 && change >= profile.tp1Percent) {
-    LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached");
-
-    await finalizeTrade({
-      reason: "tp1",
-      percent: profile.tp1SellPercent,
-    });
-
-    profile.stopLossPercent = 0;
-    info.tpStage = 1;
-    return;
-  }
-
-  /**
-   * ===================================================
-   * 🎯 TP2 — PARTIAL SELL
-   * ===================================================
-   */
-  if (info.tpStage < 2 && change >= profile.tp2Percent) {
-    LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached");
-
-    await finalizeTrade({
-      reason: "tp2",
-      percent: profile.tp2SellPercent,
-    });
-
-    profile.stopLossPercent = profile.tp2Percent;
-    info.tpStage = 2;
-    return;
-  }
-
-  /**
-   * ===================================================
-   * 🎯 TP3 — SELL ALL
-   * ===================================================
-   */
-  if (info.tpStage < 3 && change >= profile.tp3Percent) {
-    LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached");
-    await finalizeTrade({ reason: "tp3", percent: 100 });
-    return;
-  }
-
-  /**
-   * ===================================================
-   * 📉 TRAILING STOP — SELL ALL
-   * ===================================================
-   */
-  if (info.tpStage >= 1 && state.highest) {
-    const drop = ((state.highest - price) / state.highest) * 100;
-
-    if (drop >= profile.trailingPercent) {
-      LOG.info({ walletAddress, mint, drop }, "📉 Trailing stop hit");
-      await finalizeTrade({ reason: "trailing", percent: 100 });
-      return;
-    }
   }
 }
+
+} // ✅ THIS closes monitorUser
 
 
 // ========= Safe wrappers =========
@@ -1497,241 +1517,209 @@ async function safeSellAll(walletAddress, mint, slippageBps, retries = 2) {
   }
 }
 
-// ========= Trade execution for multi-channel users (custodial) =========
+// ========= Trade execution for multi-channel users (PER-USER WALLET) =========
 async function executeUserTrade(user, mint, sourceChannel) {
-  if (!user || user.active === false) return;
+  if (!user) return;
 
-  // ===================================================
-  // 🔒 STEP 2.4.1 — REQUIRE USER TO ENABLE TRADING
-  // ===================================================
-  if (!user.tradingEnabled) {
+  try {
+    // ===================================================
+    // 🔒 Require trading enabled
+    // ===================================================
+    if (!user.tradingEnabled) {
+      LOG.info(
+        { wallet: user.walletAddress },
+        "⛔ Trade blocked: trading not enabled"
+      );
+      return;
+    }
+
+    // ===================================================
+    // 🔒 Channel approval enforcement
+    // ===================================================
+    const sub = user.subscribedChannels?.find(
+      (s) => String(s.channelId) === String(sourceChannel)
+    );
+
+    if (!sub || sub.enabled !== true || sub.status !== "approved") {
+      LOG.warn(
+        {
+          wallet: user.walletAddress,
+          channel: sourceChannel,
+        },
+        "⛔ Trade blocked: channel not approved"
+      );
+      return;
+    }
+
+    // ===================================================
+    // 🔐 Restore USER trading wallet
+    // ===================================================
+    const wallet = restoreTradingWallet(user);
+
     LOG.info(
-      { wallet: user.walletAddress },
-      "⛔ Trade blocked: trading not enabled by user"
+      {
+        user: user.walletAddress,
+        tradingWallet: wallet.publicKey.toBase58(),
+      },
+      "🔐 User trading wallet restored"
     );
-    return;
-  }
 
-  // ===================================================
-  // 🔒 STEP 3 — ENFORCE CHANNEL APPROVAL (BEFORE BUY)
-  // ===================================================
-  const sub = user.subscribedChannels?.find(
-    (s) => String(s.channelId) === String(sourceChannel)
-  );
+    // ===================================================
+    // 💰 Resolve SOL amount
+    // ===================================================
+    const solAmount = user.solPerTrade || 0.01;
+    if (solAmount <= 0) {
+      LOG.warn(
+        { wallet: user.walletAddress },
+        "Invalid solPerTrade"
+      );
+      return;
+    }
 
-  if (!sub || sub.enabled !== true || sub.status !== "approved") {
-    LOG.warn(
+    const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+
+    // ===================================================
+    // 🔐 Slippage (clamped)
+    // ===================================================
+    const userSlippagePercent =
+      typeof user.maxSlippagePercent === "number"
+        ? user.maxSlippagePercent
+        : 2;
+
+    const slippageBps = Math.min(
+      Math.max(Math.round(userSlippagePercent * 100), 50),  // 0.5% min
+      2000 // 20% max
+    );
+
+    LOG.info(
       {
         wallet: user.walletAddress,
-        channel: sourceChannel,
-        status: sub?.status,
+        slippageBps,
       },
-      "⛔ Trade blocked: channel not approved"
+      "🔐 Slippage resolved"
     );
-    return;
-  }
 
-
-// ===================================================
-// 🔐 STEP 2 — RESOLVE USER SLIPPAGE (PRE-MEV)
-// ===================================================
-const userSlippagePercent =
-  typeof user.maxSlippagePercent === "number"
-    ? user.maxSlippagePercent
-    : 2; // ✅ hard safety fallback
-
-// Convert percent → basis points + HARD SAFETY CLAMP
-const slippageBps = Math.min(
-  Math.max(Math.round(userSlippagePercent * 100), 50), // 🔒 min 0.5%
-  2000 // 🔒 max 20%
-);
-
-LOG.info(
-  {
-    wallet: user.walletAddress,
-    slippagePercent: userSlippagePercent,
-    slippageBps,
-  },
-  "🔐 Slippage resolved for user"
-);
-
-
-  // ---------------------------------------------------
-  // Resolve SOL amount
-  // ---------------------------------------------------
-  const solAmount = user.solPerTrade || 0.01;
-  if (solAmount <= 0) {
-    LOG.warn(`Invalid solPerTrade for user ${user.walletAddress}`);
-    return;
-  }
-
-  // ===================================================
-  // 💰 STEP 2.4.2 — CHECK USER BALANCE
-  // ===================================================
-  if (user.balanceSol < solAmount) {
-    LOG.warn(
-      {
-        wallet: user.walletAddress,
-        balance: user.balanceSol,
-        required: solAmount,
-      },
-      "⛔ Trade blocked: insufficient balance"
-    );
-    return;
-  }
-
-  // ===================================================
-  // 🔐 STEP 2.4.3 — LOCK FUNDS ATOMICALLY
-  // ===================================================
-  const lockRes = await User.updateOne(
-    {
-      walletAddress: user.walletAddress,
-      balanceSol: { $gte: solAmount },
-    },
-    {
-      $inc: {
-        balanceSol: -solAmount,
-        lockedBalanceSol: solAmount,
-      },
-    }
-  );
-
-  if (lockRes.modifiedCount !== 1) {
-    LOG.warn(
-      { wallet: user.walletAddress },
-      "⛔ Failed to lock funds (race condition)"
-    );
-    return;
-  }
-
-  // ===================================================
-// 🚀 STEP 2.4.4 — EXECUTE BUY (INTERNAL WALLET)
-// ===================================================
-let buyTxid;
-try {
-  buyTxid = await safeExecuteSwap({
-    wallet: INTERNAL_TRADING_WALLET,
-    mint,
-    solAmount,
-    side: "buy",
-    feeWallet: FEE_WALLET,
-    slippageBps,
-  });
-
-  LOG.info(
-    { wallet: user.walletAddress, mint, solAmount, buyTxid },
-    "✅ Buy executed"
-  );
-} catch (err) {
-  LOG.error(
-    { err, wallet: user.walletAddress, mint },
-    "❌ Buy failed — reverting funds"
-  );
-
-  // 🔁 UNLOCK FUNDS ON FAILURE
-  await User.updateOne(
-    { walletAddress: user.walletAddress },
-    {
-      $inc: {
-        balanceSol: solAmount,
-        lockedBalanceSol: -solAmount,
-      },
-    }
-  );
-
-  return;
-}
-
-// ===================================================
-// 📈 FETCH ENTRY PRICE (ON-CHAIN)
-// ===================================================
-let entryPrice = null;
-try {
-  entryPrice = await getCurrentPrice(mint);
-} catch (err) {
-  LOG.warn(
-    { err, wallet: user.walletAddress, mint },
-    "⚠️ Failed to fetch entry price"
-  );
-}
-
-// ===================================================
-// 🔐 STEP 3.2.c.3 — WRITE POSITION TO REDIS (ON BUY)
-// ===================================================
-try {
-  const walletKey = walletPositionsKey(user.walletAddress);
-  const posKey = positionKey(user.walletAddress, mint);
-
-  // 1️⃣ Add mint to wallet's active positions set
-  await redis.sadd(walletKey, mint);
-
-  // 2️⃣ Store position details as HASH
-  await redis.hset(posKey, {
-    [POSITION_FIELDS.walletAddress]: user.walletAddress,
-    [POSITION_FIELDS.mint]: mint,
-    [POSITION_FIELDS.sourceChannel]: sourceChannel,
-
-    [POSITION_FIELDS.solAmount]: String(solAmount),
-    [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
-    [POSITION_FIELDS.buyTxid]: String(buyTxid),
-
-    [POSITION_FIELDS.tpStage]: "0",
-    [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
-
-    [POSITION_FIELDS.openedAt]: String(Date.now()),
-  });
-
-  LOG.info(
-    {
-      wallet: user.walletAddress,
+    // ===================================================
+    // 📊 Get quote
+    // ===================================================
+    const quote = await getQuote(
+      "So11111111111111111111111111111111111111112", // SOL
       mint,
-      redisKey: posKey,
-    },
-    "🧠 Position written to Redis"
-  );
-} catch (err) {
-  LOG.error(
-    { err, wallet: user.walletAddress, mint },
-    "❌ Failed to write position to Redis"
-  );
-  // ⚠️ Do NOT revert trade here
+      lamports,
+      slippageBps
+    );
+
+    if (!quote) {
+      LOG.warn(
+        { wallet: user.walletAddress },
+        "Quote failed"
+      );
+      return;
+    }
+
+    // ===================================================
+    // 🚀 Execute BUY from USER wallet
+    // ===================================================
+    const buyTxid = await executeSwap(wallet, quote);
+
+    LOG.info(
+      { wallet: user.walletAddress, mint, buyTxid },
+      "✅ BUY executed (user wallet)"
+    );
+
+    // ===================================================
+    // 📈 Determine entry price
+    // ===================================================
+    let entryPrice = null;
+    try {
+      entryPrice = await getCurrentPrice(mint);
+    } catch {
+      LOG.warn(
+        { wallet: user.walletAddress, mint },
+        "⚠️ Failed to fetch entry price"
+      );
+    }
+
+    // ===================================================
+    // 🧠 Write position to Redis
+    // ===================================================
+    try {
+      const walletKey = walletPositionsKey(user.walletAddress);
+      const posKey = positionKey(user.walletAddress, mint);
+
+      await redis.sadd(walletKey, mint);
+
+      await redis.hset(posKey, {
+        [POSITION_FIELDS.walletAddress]: user.walletAddress,
+        [POSITION_FIELDS.mint]: mint,
+        [POSITION_FIELDS.sourceChannel]: sourceChannel,
+
+        [POSITION_FIELDS.solAmount]: String(solAmount),
+        [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
+        [POSITION_FIELDS.buyTxid]: String(buyTxid),
+
+        [POSITION_FIELDS.tpStage]: "0",
+        [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
+        status: "open",
+
+        [POSITION_FIELDS.openedAt]: String(Date.now()),
+      });
+
+      LOG.info(
+        { wallet: user.walletAddress, mint },
+        "🧠 Position written to Redis"
+      );
+    } catch (err) {
+      LOG.error(
+        { err, wallet: user.walletAddress, mint },
+        "❌ Failed to write position to Redis"
+      );
+    }
+
+    // ===================================================
+    // 📈 Register for monitoring
+    // ===================================================
+    const state = await ensureMonitor(mint);
+
+    state.users.set(String(user.walletAddress), {
+      walletAddress: user.walletAddress,
+      wallet,   // 🔥 CRITICAL — store wallet object
+      tpStage: 0,
+      profile: {
+        tp1Percent: user.tp1,
+        tp1SellPercent: user.tp1SellPercent,
+        tp2Percent: user.tp2,
+        tp2SellPercent: user.tp2SellPercent,
+        tp3Percent: user.tp3,
+        tp3SellPercent: user.tp3SellPercent,
+        stopLossPercent: user.stopLoss,
+        trailingPercent: user.trailingDistance,
+      },
+      buyTxid,
+      solAmount,
+      entryPrice,
+      sourceChannel,
+      slippageBps,
+    });
+
+    if (entryPrice) {
+      state.entryPrices.set(user.walletAddress, entryPrice);
+      if (!state.highest) state.highest = entryPrice;
+    }
+
+    LOG.info(
+      { wallet: user.walletAddress, mint },
+      "📈 Position registered for monitoring"
+    );
+
+  } catch (err) {
+    LOG.error(
+      { err, wallet: user?.walletAddress },
+      "❌ executeUserTrade error"
+    );
+  }
 }
 
-// ===================================================
-// 📈 STEP 2.4.5 — REGISTER POSITION FOR MONITORING
-// ===================================================
-const state = await ensureMonitor(mint);
-
-state.users.set(String(user.walletAddress), {
-  walletAddress: user.walletAddress,
-  tpStage: 0,
-  profile: {
-    tp1Percent: user.tp1,
-    tp1SellPercent: user.tp1SellPercent,
-    tp2Percent: user.tp2,
-    tp2SellPercent: user.tp2SellPercent,
-    tp3Percent: user.tp3,
-    tp3SellPercent: user.tp3SellPercent,
-    stopLossPercent: user.stopLoss,
-    trailingPercent: user.trailingDistance,
-  },
-  buyTxid,
-  solAmount,
-  entryPrice,
-  sourceChannel,
-  slippageBps,
-});
-
-if (entryPrice) {
-  state.entryPrices.set(user.walletAddress, entryPrice);
-  if (!state.highest) state.highest = entryPrice;
-}
-
-LOG.info(
-  { wallet: user.walletAddress, mint },
-  "📈 Position registered for monitoring"
-);
-}
 
  // ======= Step A: lightweight Express server for bot APIs =======
 // import expressModule from "express"; // avoid name clash
