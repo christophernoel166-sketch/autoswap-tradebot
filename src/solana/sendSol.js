@@ -4,7 +4,6 @@ import {
   Transaction,
   LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import { INTERNAL_TRADING_WALLET } from "./internalWallet.js";
 import { getConnection } from "../utils/solanaConnection.js";
 
 export async function sendSol({ to, amountSol }) {
