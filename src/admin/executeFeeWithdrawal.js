@@ -3,7 +3,7 @@ import {
   Connection,
 } from "@solana/web3.js";
 
-import { INTERNAL_TRADING_WALLET } from "../solana/internalWallet.js";
+
 
 import { prepareFeeWithdrawalTx } from "./prepareFeeWithdrawalTx.js";
 
