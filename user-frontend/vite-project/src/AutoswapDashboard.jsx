@@ -238,25 +238,32 @@ useEffect(() => {
 // 🔗 Fetch On-Chain SOL Balance (Per-User Wallet)
 // ===================================================
 useEffect(() => {
-  async function fetchOnchainBalance() {
+  async function fetchOnChainBalance() {
     try {
-      if (!user?.tradingWalletPublicKey) return;
+      if (!user?.tradingWalletPublicKey) {
+        setOnChainBalance(0);
+        return;
+      }
 
       const pubkey = new PublicKey(user.tradingWalletPublicKey);
       const lamports = await connection.getBalance(pubkey);
-      setOnchainBalance(lamports / LAMPORTS_PER_SOL);
+
+      // ✅ FIXED: correct setter name
+      setOnChainBalance(lamports / LAMPORTS_PER_SOL);
+
     } catch (err) {
       console.warn("Failed to fetch on-chain balance", err);
+      setOnChainBalance(0); // fallback
     }
   }
 
-  fetchOnchainBalance();
+  fetchOnChainBalance();
 
-  const interval = setInterval(fetchOnchainBalance, 10000);
+  const interval = setInterval(fetchOnChainBalance, 10000);
+
   return () => clearInterval(interval);
 
 }, [user?.tradingWalletPublicKey]);
-
 
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
