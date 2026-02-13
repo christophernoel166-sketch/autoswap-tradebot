@@ -31,6 +31,11 @@ const RPC_ENDPOINT =
 
 const connection = new Connection(RPC_ENDPOINT);
 
+if (typeof window !== "undefined") {
+  window.__rpc = connection;
+}
+
+
 
 
 export default function AutoswapDashboard() {
