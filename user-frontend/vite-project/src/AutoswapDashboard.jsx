@@ -17,6 +17,7 @@ import DepositModal from "./wallet/DepositModal";
 import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
 import WalletBalanceCard from "./WalletBalanceCard";
 import Toggle from "./ui/Toggle";
+import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
 
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
@@ -24,8 +25,12 @@ import WalletHistoryTable from "./wallet/WalletHistoryTable";
 
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
-const INTERNAL_DEPOSIT_ADDRESS =
-  import.meta.env.VITE_INTERNAL_DEPOSIT_ADDRESS;
+
+const RPC_ENDPOINT =
+  import.meta.env.VITE_RPC_URL || "https://api.mainnet-beta.solana.com";
+
+const connection = new Connection(RPC_ENDPOINT);
+
 
 
 export default function AutoswapDashboard() {
@@ -41,6 +46,7 @@ export default function AutoswapDashboard() {
 const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
 const [mevProtection, setMevProtection] = useState(true);
+const [onChainBalance, setOnChainBalance] = useState(0);
 
 const [withdrawLoading, setWithdrawLoading] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
@@ -65,9 +71,6 @@ const [mobileTab, setMobileTab] = useState("dashboard");
 
 
 const isTelegramLinked = !!user?.telegram?.userId;
-const availableBalance = Number(user?.balanceSol || 0);
-const lockedBalance = Number(user?.lockedBalanceSol || 0);
-
 
 
   const [loading, setLoading] = useState(false);
@@ -224,6 +227,32 @@ useEffect(() => {
 
   return () => clearInterval(interval);
 }, [walletAddress]);
+
+
+// ===================================================
+// 🔗 Fetch On-Chain SOL Balance (Per-User Wallet)
+// ===================================================
+useEffect(() => {
+  async function fetchOnchainBalance() {
+    try {
+      if (!user?.tradingWalletPublicKey) return;
+
+      const pubkey = new PublicKey(user.tradingWalletPublicKey);
+      const lamports = await connection.getBalance(pubkey);
+      setOnchainBalance(lamports / LAMPORTS_PER_SOL);
+    } catch (err) {
+      console.warn("Failed to fetch on-chain balance", err);
+    }
+  }
+
+  fetchOnchainBalance();
+
+  const interval = setInterval(fetchOnchainBalance, 10000);
+  return () => clearInterval(interval);
+
+}, [user?.tradingWalletPublicKey]);
+
+
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
 // ===================================================
@@ -973,21 +1002,22 @@ async function reRequestChannel(channelId) {
 )}
 
 
-
 <DepositModal
   open={showDepositModal}
   onClose={() => setShowDepositModal(false)}
-  depositAddress={INTERNAL_DEPOSIT_ADDRESS} // env or constant
+  depositAddress={user?.tradingWalletPublicKey}
 />
+
 
 
 <WalletWithdrawModal
   open={showWithdrawModal}
   onClose={() => setShowWithdrawModal(false)}
-  availableSol={Number(user?.balanceSol || 0)}
+  availableSol={onChainBalance}
   onSubmit={submitWithdraw}
   loading={withdrawLoading}
 />
+
 
 
 <div className="grid grid-cols-12 gap-6 w-full">
@@ -1061,14 +1091,14 @@ async function reRequestChannel(channelId) {
     getChannelStatusBadge={getChannelStatusBadge}
   />
 
-{/* 💰 WALLET BALANCE (AUTOSNIPE STYLE) */}
 <WalletBalanceCard
-  availableSol={Number(user?.balanceSol || 0)}
-  lockedSol={Number(user?.lockedBalanceSol || 0)}
+  availableSol={onChainBalance}
+  lockedSol={0}
   onDeposit={() => setShowDepositModal(true)}
   onWithdraw={() => setShowWithdrawModal(true)}
-  withdrawDisabled={Number(user?.balanceSol || 0) < 0.02}
+  withdrawDisabled={onchainBalance < 0.02}
 />
+
 
 {/* 📤 WITHDRAW STATUS */}
 <WithdrawStatusList
