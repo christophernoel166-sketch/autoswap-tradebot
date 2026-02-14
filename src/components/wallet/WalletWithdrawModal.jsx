@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 
-const MIN_WITHDRAW_SOL = 0.02;
+const MIN_WITHDRAW_SOL = 0.002;
 
 export default function WalletWithdrawModal({
   open,
