@@ -5,7 +5,7 @@ import Withdrawal from "../../models/Withdrawal.js";
 // ===================================================
 // ⚙️ WITHDRAW CONFIG
 // ===================================================
-export const MIN_WITHDRAW_SOL = 0.02;
+export const MIN_WITHDRAW_SOL = 0.002;
 export const WITHDRAW_FEE_SOL = 0.002;
 
 /**
