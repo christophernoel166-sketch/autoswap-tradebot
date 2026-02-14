@@ -1108,9 +1108,9 @@ async function reRequestChannel(channelId) {
   lockedSol={0}
   onDeposit={() => setShowDepositModal(true)}
   onWithdraw={() => setShowWithdrawModal(true)}
-  withdrawDisabled={onChainBalance < 0.02}
-
+  withdrawDisabled={onChainBalance < 0.001}
 />
+
 
 
 {/* 📤 WITHDRAW STATUS */}
