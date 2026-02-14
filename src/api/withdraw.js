@@ -5,7 +5,7 @@ import { processWithdrawal } from "../withdraw/processWithdrawal.js";
 
 const router = express.Router();
 
-const MIN_WITHDRAW_SOL = 0.001;
+const MIN_WITHDRAW_SOL = 0.002;
 const WITHDRAW_COOLDOWN_MS = 60 * 60 * 1000; // 1 hour
 
 // 💸 FEE CONFIG
