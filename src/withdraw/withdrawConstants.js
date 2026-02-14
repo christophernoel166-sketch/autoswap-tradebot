@@ -10,4 +10,4 @@ export const WITHDRAW_FEE_SOL = 0.002;
  * Minimum withdrawal request allowed
  * Must be greater than fee
  */
-export const MIN_WITHDRAW_SOL = 0.02;
+export const MIN_WITHDRAW_SOL = 0.002;
