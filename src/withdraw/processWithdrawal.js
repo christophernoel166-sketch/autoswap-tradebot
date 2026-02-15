@@ -24,7 +24,7 @@ const connection = new Connection(RPC_URL, "confirmed");
       
 
 // 🔐 Encryption secret (same one used in walletService)
-const ENCRYPTION_SECRET = process.env.WALLET_ENCRYPTION_SECRET;
+const ENCRYPTION_SECRET = process.env.WALLET_ENCRYPTION_KEY;
 if (!ENCRYPTION_SECRET) throw new Error("WALLET_ENCRYPTION_SECRET missing");
 
 /**
