@@ -20,7 +20,6 @@ import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
 import { restoreTradingWallet } from "./src/services/walletService.js";
-import { WITHDRAW_FEE_SOL } from "./src/config.fees.js";
 
 
 import ChannelSettings from "./models/ChannelSettings.js";
