@@ -1,28 +1,66 @@
 // src/withdraw/processWithdrawal.js
+
 import {
   Connection,
   SystemProgram,
   Transaction,
   LAMPORTS_PER_SOL,
   PublicKey,
+  Keypair,
 } from "@solana/web3.js";
 
+import crypto from "crypto";
 import User from "../../models/User.js";
 import Withdrawal from "../../models/Withdrawal.js";
 import FeeLedger from "../../models/FeeLedger.js";
-
+import { WITHDRAW_FEE_SOL } from "../config/fees.js";
 
 const RPC_URL = process.env.RPC_URL;
 if (!RPC_URL) throw new Error("RPC_URL missing");
 
 const connection = new Connection(RPC_URL, "confirmed");
 
-const WITHDRAW_FEE_SOL = 0.002;
+// 🔒 FIXED WITHDRAWAL FEE (Single Source of Truth)
+      
+
+// 🔐 Encryption secret (same one used in walletService)
+const ENCRYPTION_SECRET = process.env.WALLET_ENCRYPTION_SECRET;
+if (!ENCRYPTION_SECRET) throw new Error("WALLET_ENCRYPTION_SECRET missing");
 
 /**
- * Execute a pending withdrawal on-chain
+ * 🔓 Decrypt trading wallet private key
+ */
+function decryptPrivateKey(encryptedHex, ivHex) {
+  const decipher = crypto.createDecipheriv(
+    "aes-256-cbc",
+    Buffer.from(ENCRYPTION_SECRET, "hex"),
+    Buffer.from(ivHex, "hex")
+  );
+
+  let decrypted = decipher.update(encryptedHex, "hex", "hex");
+  decrypted += decipher.final("hex");
+  return decrypted;
+}
+
+/**
+ * 🔁 Restore Keypair from encrypted DB fields
+ */
+function restoreTradingWallet(user) {
+  const decrypted = decryptPrivateKey(
+    user.tradingWalletEncryptedPrivateKey,
+    user.tradingWalletIv
+  );
+
+  return Keypair.fromSecretKey(Buffer.from(decrypted, "hex"));
+}
+
+/**
+ * 🚀 Execute a pending withdrawal
  */
 export async function processWithdrawal(withdrawalId) {
+  // --------------------------------------------------
+  // 1️⃣ Load pending withdrawal
+  // --------------------------------------------------
   const withdrawal = await Withdrawal.findOne({
     _id: withdrawalId,
     status: "pending",
@@ -34,34 +72,87 @@ export async function processWithdrawal(withdrawalId) {
 
   const { walletAddress, amountSol } = withdrawal;
 
-  const toPubkey = new PublicKey(walletAddress);
-  const lamports = Math.floor(amountSol * LAMPORTS_PER_SOL);
+  // --------------------------------------------------
+  // 2️⃣ Load user
+  // --------------------------------------------------
+  const user = await User.findOne({ walletAddress });
+  if (!user) {
+    throw new Error("user_not_found");
+  }
+
+  if (
+    !user.tradingWalletEncryptedPrivateKey ||
+    !user.tradingWalletIv
+  ) {
+    throw new Error("trading_wallet_missing");
+  }
 
   // --------------------------------------------------
-  // 1️⃣ Build transaction (USER RECEIVES ONLY amountSol)
+  // 3️⃣ Validate withdrawal amount
+  // --------------------------------------------------
+  if (amountSol <= WITHDRAW_FEE_SOL) {
+    withdrawal.status = "failed";
+    withdrawal.error = "withdraw_amount_too_small_after_fee";
+    withdrawal.failedAt = new Date();
+    await withdrawal.save();
+    throw new Error("withdraw_amount_too_small_after_fee");
+  }
+
+  const netAmountSol = Number(
+    (amountSol - WITHDRAW_FEE_SOL).toFixed(6)
+  );
+
+  const lamportsToSend = Math.floor(
+    netAmountSol * LAMPORTS_PER_SOL
+  );
+
+  // --------------------------------------------------
+  // 4️⃣ Restore trading wallet
+  // --------------------------------------------------
+  const tradingWallet = restoreTradingWallet(user);
+
+  // --------------------------------------------------
+  // 5️⃣ Check on-chain balance
+  // --------------------------------------------------
+  const currentLamports = await connection.getBalance(
+    tradingWallet.publicKey
+  );
+
+  if (currentLamports < lamportsToSend) {
+    withdrawal.status = "failed";
+    withdrawal.error = "insufficient_onchain_balance";
+    withdrawal.failedAt = new Date();
+    await withdrawal.save();
+    throw new Error("insufficient_onchain_balance");
+  }
+
+  const toPubkey = new PublicKey(walletAddress);
+
+  // --------------------------------------------------
+  // 6️⃣ Build transaction
   // --------------------------------------------------
   const tx = new Transaction().add(
     SystemProgram.transfer({
-      fromPubkey: INTERNAL_TRADING_WALLET.publicKey,
+      fromPubkey: tradingWallet.publicKey,
       toPubkey,
-      lamports,
+      lamports: lamportsToSend,
     })
   );
 
   try {
     // --------------------------------------------------
-    // 2️⃣ Send transaction
+    // 7️⃣ Send transaction
     // --------------------------------------------------
     const signature = await connection.sendTransaction(
       tx,
-      [INTERNAL_TRADING_WALLET],
+      [tradingWallet],
       { skipPreflight: false }
     );
 
     await connection.confirmTransaction(signature, "confirmed");
 
     // --------------------------------------------------
-    // 3️⃣ Mark withdrawal as SENT
+    // 8️⃣ Mark withdrawal as sent
     // --------------------------------------------------
     withdrawal.status = "sent";
     withdrawal.txSignature = signature;
@@ -69,19 +160,7 @@ export async function processWithdrawal(withdrawalId) {
     await withdrawal.save();
 
     // --------------------------------------------------
-    // 4️⃣ Release locked funds (amount + fee)
-    // --------------------------------------------------
-    await User.updateOne(
-      { walletAddress },
-      {
-        $inc: {
-          lockedBalanceSol: -(amountSol + WITHDRAW_FEE_SOL),
-        },
-      }
-    );
-
-    // --------------------------------------------------
-    // 5️⃣ Record withdrawal fee (STEP 2.6.6.2 ✅)
+    // 9️⃣ Record fixed withdrawal fee
     // --------------------------------------------------
     await FeeLedger.create({
       type: "withdrawal_fee",
@@ -96,22 +175,11 @@ export async function processWithdrawal(withdrawalId) {
       ok: true,
       txSignature: signature,
       feeChargedSol: WITHDRAW_FEE_SOL,
+      sentAmountSol: netAmountSol,
     };
-  } catch (err) {
-    console.error("❌ Withdrawal send failed:", err);
 
-    // --------------------------------------------------
-    // 🔁 ROLLBACK FUNDS (amount + fee)
-    // --------------------------------------------------
-    await User.updateOne(
-      { walletAddress },
-      {
-        $inc: {
-          balanceSol: amountSol + WITHDRAW_FEE_SOL,
-          lockedBalanceSol: -(amountSol + WITHDRAW_FEE_SOL),
-        },
-      }
-    );
+  } catch (err) {
+    console.error("❌ Withdrawal failed:", err);
 
     withdrawal.status = "failed";
     withdrawal.error = err.message;
