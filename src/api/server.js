@@ -21,7 +21,8 @@ import updateSettingsRoute from "../../routes/updateSettingsRoute.js";
 import channelsRoutes from "../../routes/channels.js";
 import adminChannels from "../../routes/adminChannels.js";
 import withdrawRouter from "../../routes/withdraw.js";
-import channelsRouter from "./api/channels.js";
+import channelsRouter from "./channels.js";
+
 import withdrawApi from "./withdraw.js";
 import adminFees from "./adminFees.js";
 import userBalance from "./userBalance.js";
