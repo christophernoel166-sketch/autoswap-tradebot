@@ -108,8 +108,7 @@ export function createApiServer() {
   app.use("/api", manualSellApi);
   app.use("/api/channels", channelsRoutes);
   app.use("/api/admin", adminChannels);
-  app.use("/api", withdrawRouter);
-
+  
   app.use("/api", withdrawApi);
   app.use("/api/admin", adminFees);
   app.use("/api", userBalance);
