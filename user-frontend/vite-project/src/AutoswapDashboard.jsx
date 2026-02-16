@@ -593,8 +593,8 @@ async function fetchWithdrawals() {
 
   try {
     setWithdrawalsLoading(true);
-    const r = await fetch(
-      `${API_BASE}/api/withdrawals?walletAddress=${encodeURIComponent(walletAddress)}`
+    const r = await fetch(`${API_BASE}/api/user/withdrawals?walletAddress=${encodeURIComponent(walletAddress)}`)
+
     );
     if (!r.ok) return;
 
