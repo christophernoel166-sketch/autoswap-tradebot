@@ -10,7 +10,8 @@ const router = express.Router();
  * GET /api/user/withdrawals?walletAddress=...
  * ===================================================
  */
-router.get("/user/withdrawals", async (req, res) => {
+router.get("/", async (req, res) => {
+
   try {
     const { walletAddress } = req.query;
 
