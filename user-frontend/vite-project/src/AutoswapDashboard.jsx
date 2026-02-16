@@ -394,7 +394,7 @@ async function fetchUserChannels() {
   async function fetchPositions() {
     setLoading(true);
     try {
-      const r = await fetch(`${API_BASE}/api/active-positions/wallet/${encodeURIComponent(walletAddress)}`);
+      const r = await fetch(`${API_BASE}/api/active-positions/${encodeURIComponent(walletAddress)}`);
       const data = await r.json();
       setPositions(data.positions || []);
     } catch (err) {
