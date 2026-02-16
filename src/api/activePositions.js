@@ -13,7 +13,8 @@ const router = express.Router();
  * GET /api/active-positions/:walletAddress
  * ===================================================
  */
-router.get("/active-positions/:walletAddress", async (req, res) => {
+router.get("/:walletAddress", async (req, res) => {
+
   try {
     const walletAddress = String(req.params.walletAddress);
 

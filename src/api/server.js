@@ -103,7 +103,8 @@ export function createApiServer() {
   app.use("/api/analytics", analyticsApi);
   app.use("/api/notifications", notificationRoute);
   app.use("/auth", authWalletRouter);
-  app.use("/api", activePositionsApi);
+  app.use("/api/active-positions", activePositionsApi);
+
 
   app.use("/api", manualSellApi);
   app.use("/api/channels", channelsRoutes);
