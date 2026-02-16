@@ -719,8 +719,7 @@ async function reRequestChannel(channelId) {
   }
 
   try {
-    const r = await fetch(`${API_BASE}/api/channels/link`, {
-
+    const r = await fetch(`${API_BASE}/api/users/subscribe`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
