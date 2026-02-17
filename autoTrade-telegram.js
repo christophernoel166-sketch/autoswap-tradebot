@@ -335,17 +335,27 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
 
-    const testUser = users.find(
-      (u) => u.walletAddress === LIVE_TEST_WALLET
-    );
+   // LIVE TEST MODE: match by TRADING wallet first (Ayxg...), fallback to main wallet (Gex...)
+const testUser = users.find((u) => {
+  const main = String(u.walletAddress || "");
+  const trading = String(u.tradingWalletPublicKey || "");
+  return trading === LIVE_TEST_WALLET || main === LIVE_TEST_WALLET;
+});
 
-    if (!testUser) {
-      console.log("🧪 LIVE TEST WALLET NOT FOUND — SIGNAL IGNORED", {
-        liveTestWallet: LIVE_TEST_WALLET,
-        eligibleWallets: users.map((u) => u.walletAddress),
-      });
-      return;
-    }
+if (!testUser) {
+  console.log("🧪 LIVE TEST WALLET NOT FOUND — SIGNAL IGNORED", {
+    liveTestWallet: LIVE_TEST_WALLET,
+    eligibleMainWallets: users.map((u) => u.walletAddress),
+    eligibleTradingWallets: users.map((u) => u.tradingWalletPublicKey),
+  });
+  return;
+}
+
+console.log("🧪 LIVE TEST USER MATCHED", {
+  mainWallet: testUser.walletAddress,
+  tradingWallet: testUser.tradingWalletPublicKey,
+});
+
 
     console.log("🚀 LIVE TEST BUY INITIATED", {
       wallet: testUser.walletAddress,
