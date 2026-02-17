@@ -52,7 +52,7 @@ const SIGNAL_TEST_MODE = true; // 🔥 turn OFF after test
 // ===================================================
 // 🔐 HARD LIVE TEST MODE (STEP 1 — CONFIG ONLY)
 // ===================================================
-const LIVE_TEST_WALLET = "7NzMhjyvbr4W5pVTuQ1prJcBoAWsw9G7VoVC3K2eisae";
+const LIVE_TEST_WALLET = "AyxgDsHe8k8mNfFdVFhE8Ug1LvqEyoKGLo7vV7BUCo3m";
 const LIVE_TEST_SOL = 0.001;
 const LIVE_TEST_BUY_ONLY = true;
 
