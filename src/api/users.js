@@ -109,14 +109,21 @@ router.post("/", async (req, res) => {
 /**
  * ===================================================
  * ✅ POST /api/users/subscribe
- * FRONTEND-COMPATIBLE CHANNEL SUBSCRIPTION
+ * FRONTEND-COMPATIBLE (channelId OR channel)
  * ===================================================
  */
 router.post("/subscribe", async (req, res) => {
   try {
-    const { walletAddress, channelId, enabled = true } = req.body;
+    const {
+      walletAddress,
+      channelId,
+      channel,          // 👈 legacy frontend support
+      enabled = true,
+    } = req.body;
 
-    if (!walletAddress || !channelId) {
+    const finalChannelId = channelId || channel;
+
+    if (!walletAddress || !finalChannelId) {
       return res.status(400).json({
         error: "walletAddress_and_channelId_required",
       });
@@ -128,14 +135,14 @@ router.post("/subscribe", async (req, res) => {
     }
 
     const existing = user.subscribedChannels.find(
-      (c) => c.channelId === channelId
+      (c) => c.channelId === String(finalChannelId)
     );
 
     if (existing) {
       existing.enabled = enabled;
     } else {
       user.subscribedChannels.push({
-        channelId,
+        channelId: String(finalChannelId),
         enabled,
         requestedAt: new Date(),
       });
@@ -146,7 +153,7 @@ router.post("/subscribe", async (req, res) => {
     return res.json({
       ok: true,
       walletAddress,
-      channelId,
+      channelId: String(finalChannelId),
       enabled,
     });
   } catch (err) {
