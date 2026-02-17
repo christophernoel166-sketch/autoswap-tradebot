@@ -1,7 +1,6 @@
 import express from "express";
 import crypto from "crypto";
 import User from "../../models/User.js";
-import SignalChannel from "../../models/SignalChannel.js";
 import { generateTradingWallet } from "../services/walletService.js";
 
 console.log("🔥 LOADED users API ROUTER:", import.meta.url);
@@ -37,7 +36,7 @@ router.get("/", async (req, res) => {
 
     let user = await User.findOne({ walletAddress });
 
-    // 🔐 Auto-fix: existing user without trading wallet
+    // 🔐 Auto-fix missing trading wallet
     if (user && !user.tradingWalletPublicKey) {
       const { publicKey, encryptedPrivateKey, iv } =
         generateTradingWallet();
@@ -47,11 +46,6 @@ router.get("/", async (req, res) => {
       user.tradingWalletIv = iv;
 
       await user.save();
-
-      console.log(
-        "🔐 Auto-created trading wallet for existing user:",
-        walletAddress
-      );
     }
 
     return res.json({ user: sanitizeUser(user) });
@@ -70,11 +64,8 @@ router.get("/", async (req, res) => {
 router.post("/", async (req, res) => {
   try {
     const { walletAddress } = req.body;
-
     if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ error: "walletAddress_required" });
+      return res.status(400).json({ error: "walletAddress_required" });
     }
 
     let user = await User.findOne({ walletAddress });
@@ -92,7 +83,6 @@ router.post("/", async (req, res) => {
         subscribedChannels: [],
         tradingEnabled: false,
 
-        // Defaults
         solPerTrade: 0.01,
         stopLoss: 10,
         trailingTrigger: 5,
@@ -103,19 +93,64 @@ router.post("/", async (req, res) => {
         tp2SellPercent: 35,
         tp3: 30,
         tp3SellPercent: 40,
+
         maxSlippagePercent: 2,
         mevProtection: true,
       });
-
-      console.log("✅ Created new user:", walletAddress);
     }
+
+    return res.json({ ok: true, user: sanitizeUser(user) });
+  } catch (err) {
+    console.error("❌ ensure user error:", err);
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+/**
+ * ===================================================
+ * ✅ POST /api/users/subscribe
+ * FRONTEND-COMPATIBLE CHANNEL SUBSCRIPTION
+ * ===================================================
+ */
+router.post("/subscribe", async (req, res) => {
+  try {
+    const { walletAddress, channelId, enabled = true } = req.body;
+
+    if (!walletAddress || !channelId) {
+      return res.status(400).json({
+        error: "walletAddress_and_channelId_required",
+      });
+    }
+
+    const user = await User.findOne({ walletAddress });
+    if (!user) {
+      return res.status(404).json({ error: "user_not_found" });
+    }
+
+    const existing = user.subscribedChannels.find(
+      (c) => c.channelId === channelId
+    );
+
+    if (existing) {
+      existing.enabled = enabled;
+    } else {
+      user.subscribedChannels.push({
+        channelId,
+        enabled,
+        requestedAt: new Date(),
+      });
+    }
+
+    await user.save();
 
     return res.json({
       ok: true,
-      user: sanitizeUser(user),
+      walletAddress,
+      channelId,
+      enabled,
     });
   } catch (err) {
-    console.error("❌ ensure user error:", err);
+    console.error("❌ users/subscribe error:", err);
     return res.status(500).json({ error: "internal_error" });
   }
 });
@@ -143,10 +178,7 @@ router.post("/toggle-trading", async (req, res) => {
       return res.status(404).json({ error: "user_not_found" });
     }
 
-    return res.json({
-      ok: true,
-      tradingEnabled: user.tradingEnabled,
-    });
+    return res.json({ ok: true, tradingEnabled: user.tradingEnabled });
   } catch (err) {
     console.error("❌ toggle-trading error:", err);
     return res.status(500).json({ error: "internal_error" });
@@ -155,22 +187,19 @@ router.post("/toggle-trading", async (req, res) => {
 
 /**
  * ===================================================
- * 🧠 POST /api/users/update-settings
+ * POST /api/users/update-settings
  * ===================================================
  */
 router.post("/update-settings", async (req, res) => {
   try {
-    const { walletAddress, ...settings } = req.body;
-
+    const { walletAddress, ...rest } = req.body;
     if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ error: "walletAddress_required" });
+      return res.status(400).json({ error: "walletAddress_required" });
     }
 
     const result = await User.updateOne(
       { walletAddress },
-      { $set: settings }
+      { $set: rest }
     );
 
     if (result.matchedCount === 0) {
@@ -186,17 +215,14 @@ router.post("/update-settings", async (req, res) => {
 
 /**
  * ===================================================
- * 🔗 POST /api/users/link-code
+ * POST /api/users/link-code
  * ===================================================
  */
 router.post("/link-code", async (req, res) => {
   try {
     const { walletAddress } = req.body;
-
     if (!walletAddress) {
-      return res
-        .status(400)
-        .json({ error: "walletAddress_required" });
+      return res.status(400).json({ error: "walletAddress_required" });
     }
 
     const user = await User.findOne({ walletAddress });
@@ -205,9 +231,7 @@ router.post("/link-code", async (req, res) => {
     }
 
     if (user.telegram?.userId) {
-      return res
-        .status(400)
-        .json({ error: "already_linked" });
+      return res.status(400).json({ error: "already_linked" });
     }
 
     const code = crypto.randomBytes(4).toString("hex");
@@ -228,66 +252,6 @@ router.post("/link-code", async (req, res) => {
   } catch (err) {
     console.error("❌ link-code error:", err);
     return res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/**
- * ===================================================
- * ⭐ POST /api/users/subscribe
- * FRONTEND-COMPATIBLE CHANNEL SUBSCRIBE
- * ===================================================
- */
-router.post("/subscribe", async (req, res) => {
-  try {
-    const { walletAddress, channelId, enabled = true } = req.body;
-
-    if (!walletAddress || !channelId) {
-      return res.status(400).json({
-        error: "walletAddress & channelId required",
-      });
-    }
-
-    const channel = await SignalChannel.findOne({
-      channelId,
-      status: "active",
-    });
-
-    if (!channel) {
-      return res.status(404).json({ error: "channel_not_found" });
-    }
-
-    const updated = await User.findOneAndUpdate(
-      {
-        walletAddress,
-        "subscribedChannels.channelId": channelId,
-      },
-      {
-        $set: { "subscribedChannels.$.enabled": enabled },
-      },
-      { new: true }
-    );
-
-    if (!updated) {
-      await User.findOneAndUpdate(
-        { walletAddress },
-        {
-          $push: {
-            subscribedChannels: { channelId, enabled },
-          },
-        },
-        { upsert: true }
-      );
-    }
-
-    return res.json({
-      ok: true,
-      walletAddress,
-      channelId,
-      enabled,
-    });
-  } catch (err) {
-    console.error("❌ subscribe error:", err);
-    return res.status(500).json({ error: "subscribe_failed" });
   }
 });
 
