@@ -43,6 +43,45 @@ const jupiter = createJupiterApiClient({
 // Global fallback slippage (bps)
 const DEFAULT_SLIPPAGE_BPS = config.solana.slippageBps ?? 200;
 
+// small sleep helper (internal only)
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Wait for a token account + positive balance to exist for owner+mint.
+ * This fixes "sell too soon" right after a buy (ATA/balance not visible yet).
+ */
+async function waitForTokenBalance(
+  connection,
+  ownerPubkey,
+  mintPubkey,
+  { retries = 8, baseDelayMs = 800 } = {}
+) {
+  for (let i = 0; i < retries; i++) {
+    const accounts = await connection.getTokenAccountsByOwner(ownerPubkey, {
+      mint: mintPubkey,
+    });
+
+    if (accounts.value.length) {
+      const bal = await connection.getTokenAccountBalance(
+        accounts.value[0].pubkey
+      );
+
+      const amountRaw = Number(bal.value.amount || 0);
+      if (amountRaw > 0) {
+        return {
+          tokenAccount: accounts.value[0].pubkey,
+          amountRaw,
+        };
+      }
+    }
+
+    // exponential-ish backoff
+    await sleep(baseDelayMs * (i + 1));
+  }
+
+  return null;
+}
+
 /* =========================================================
    QUOTE (MEV-SAFE, SLIPPAGE-ENFORCED)
 ========================================================= */
@@ -165,23 +204,15 @@ export async function sellPartial(
   slippageBps = DEFAULT_SLIPPAGE_BPS
 ) {
   const connection = getConnection();
+  const mintPk = new PublicKey(mint);
 
-  const accounts = await connection.getTokenAccountsByOwner(
-    wallet.publicKey,
-    { mint: new PublicKey(mint) }
-  );
-
-  if (!accounts.value.length) {
+  // ✅ wait for ATA/balance to be visible (fixes "sell too soon")
+  const got = await waitForTokenBalance(connection, wallet.publicKey, mintPk);
+  if (!got) {
     throw new Error("No token account found");
   }
 
-  const bal = await connection.getTokenAccountBalance(
-    accounts.value[0].pubkey
-  );
-
-  const amountRaw = Math.floor(
-    (Number(bal.value.amount) * percent) / 100
-  );
+  const amountRaw = Math.floor((Number(got.amountRaw) * percent) / 100);
 
   if (amountRaw <= 0) {
     throw new Error("Nothing to sell");
@@ -200,8 +231,7 @@ export async function sellPartial(
 
   const txid = await executeSwap(wallet, quote);
 
-  const solReceived =
-    Number(quote.outAmount) / LAMPORTS_PER_SOL;
+  const solReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
   return {
     txid,
@@ -218,21 +248,15 @@ export async function sellAll(
   slippageBps = DEFAULT_SLIPPAGE_BPS
 ) {
   const connection = getConnection();
+  const mintPk = new PublicKey(mint);
 
-  const accounts = await connection.getTokenAccountsByOwner(
-    wallet.publicKey,
-    { mint: new PublicKey(mint) }
-  );
-
-  if (!accounts.value.length) {
+  // ✅ wait for ATA/balance to be visible (fixes "sell too soon")
+  const got = await waitForTokenBalance(connection, wallet.publicKey, mintPk);
+  if (!got) {
     throw new Error("No token account found");
   }
 
-  const bal = await connection.getTokenAccountBalance(
-    accounts.value[0].pubkey
-  );
-
-  const amountRaw = Number(bal.value.amount);
+  const amountRaw = Number(got.amountRaw);
   if (amountRaw <= 0) {
     throw new Error("No balance to sell");
   }
@@ -250,8 +274,7 @@ export async function sellAll(
 
   const txid = await executeSwap(wallet, quote);
 
-  const solReceived =
-    Number(quote.outAmount) / LAMPORTS_PER_SOL;
+  const solReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
   return {
     txid,
