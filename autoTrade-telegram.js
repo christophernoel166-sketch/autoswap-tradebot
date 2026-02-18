@@ -1492,19 +1492,19 @@ async function safeExecuteSwap(
   }
 }
 
-async function safeSellPartial(walletAddress, mint, percent, slippageBps, retries = 2) {
+async function safeSellPartial(wallet, mint, percent, slippageBps, retries = 2) {
   for (let i = 0; i < retries; i++) {
     try {
       // slippageBps is REQUIRED
       return await sellPartial({
-        wallet: walletAddress,
+        wallet,        // ✅ wallet object
         mint,
-        percent,
+        percent,       // keep as-is for now (25, 35, etc)
         slippageBps,
       });
     } catch (err) {
       LOG.error(
-        { err, walletAddress, mint, percent, attempt: i + 1 },
+        { err, mint, percent, slippageBps, attempt: i + 1 },
         "sellPartial failed"
       );
 
@@ -1514,19 +1514,26 @@ async function safeSellPartial(walletAddress, mint, percent, slippageBps, retrie
   }
 }
 
-
-async function safeSellAll(walletAddress, mint, slippageBps, retries = 2) {
+async function safeSellAll(wallet, mint, slippageBps, retries = 2) {
   for (let i = 0; i < retries; i++) {
     try {
-      return await sellAll({ wallet: walletAddress, mint, slippageBps, // ✅ MUST be passed down
- });
+      return await sellAll({
+        wallet,        // ✅ wallet object
+        mint,
+        slippageBps,   // ✅ MUST be passed down
+      });
     } catch (err) {
-      LOG.error({ err, walletAddress, mint, attempt: i + 1 }, "sellAll failed");
+      LOG.error(
+        { err, mint, slippageBps, attempt: i + 1 },
+        "sellAll failed"
+      );
+
       if (i === retries - 1) throw err;
       await sleep(1000 * (i + 1));
     }
   }
 }
+
 
 // ========= Trade execution for multi-channel users (PER-USER WALLET) =========
 async function executeUserTrade(user, mint, sourceChannel) {
