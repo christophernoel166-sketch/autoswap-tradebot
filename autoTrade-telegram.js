@@ -1674,40 +1674,55 @@ async function executeUserTrade(user, mint, sourceChannel) {
     }
 
     // ===================================================
-    // 🧠 Write position to Redis
-    // ===================================================
-    try {
-      const walletKey = walletPositionsKey(user.walletAddress);
-      const posKey = positionKey(user.walletAddress, mint);
+// 🧠 Write position to Redis
+// ===================================================
+try {
+  const walletKey = walletPositionsKey(user.walletAddress);
+  const posKey = positionKey(user.walletAddress, mint);
 
-      await redis.sadd(walletKey, mint);
+  await redis.sadd(walletKey, mint);
 
-      await redis.hset(posKey, {
-        [POSITION_FIELDS.walletAddress]: user.walletAddress,
-        [POSITION_FIELDS.mint]: mint,
-        [POSITION_FIELDS.sourceChannel]: sourceChannel,
+  await redis.hset(posKey, {
+    [POSITION_FIELDS.walletAddress]: user.walletAddress,
+    [POSITION_FIELDS.mint]: mint,
+    [POSITION_FIELDS.sourceChannel]: sourceChannel,
 
-        [POSITION_FIELDS.solAmount]: String(solAmount),
-        [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
-        [POSITION_FIELDS.buyTxid]: String(buyTxid),
+    [POSITION_FIELDS.solAmount]: String(solAmount),
+    [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
+    [POSITION_FIELDS.buyTxid]: String(buyTxid),
 
-        [POSITION_FIELDS.tpStage]: "0",
-        [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
-        status: "open",
+    [POSITION_FIELDS.tpStage]: "0",
+    [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
+    status: "open",
 
-        [POSITION_FIELDS.openedAt]: String(Date.now()),
-      });
+    [POSITION_FIELDS.openedAt]: String(Date.now()),
+  });
 
-      LOG.info(
-        { wallet: user.walletAddress, mint },
-        "🧠 Position written to Redis"
-      );
-    } catch (err) {
-      LOG.error(
-        { err, wallet: user.walletAddress, mint },
-        "❌ Failed to write position to Redis"
-      );
-    }
+  // ✅ verify the write landed (super important for debugging)
+  const status = await redis.hget(posKey, "status");
+  LOG.info({ walletKey, posKey, status }, "🧪 Redis verify write (status)");
+
+  LOG.info({ wallet: user.walletAddress, mint }, "🧠 Position written to Redis");
+} catch (err) {
+  const walletKey = walletPositionsKey(user.walletAddress);
+  const posKey = positionKey(user.walletAddress, mint);
+
+  LOG.error(
+    {
+      redisUrl: process.env.REDIS_URL ? "set" : "missing",
+      wallet: user.walletAddress,
+      mint,
+      walletKey,
+      posKey,
+      errName: err?.name,
+      errMessage: err?.message,
+      errCode: err?.code,
+      errStack: err?.stack,
+    },
+    "❌ Failed to write position to Redis"
+  );
+}
+
 
     // ===================================================
     // 📈 Register for monitoring
