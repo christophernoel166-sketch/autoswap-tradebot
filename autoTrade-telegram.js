@@ -1024,7 +1024,7 @@ async function saveTradeToBackend({
       buyTxid: buyTxid || null,
       sellTxid: sellTxid || null,
       status: "closed",
-      source: "telegram", // source is still channel-originated
+      source: "telegram",
       params: { sourceChannel, reason },
       state: {},
       createdAt: new Date().toISOString(),
@@ -1038,14 +1038,48 @@ async function saveTradeToBackend({
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-      LOG.error({ status: res.status, body: text, walletAddress, mint }, "saveTradeToBackend failed");
-    } else {
-      LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
+
+      LOG.error(
+        {
+          endpoint,
+          status: res.status,
+          statusText: res.statusText,
+          body: text,
+          walletAddress,
+          mint,
+          reason,
+          tradeType,
+        },
+        "saveTradeToBackend failed"
+      );
+      return;
     }
+
+    LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
   } catch (err) {
-    LOG.error({ err, walletAddress, mint }, "saveTradeToBackend error");
+    LOG.error(
+      {
+        endpoint: (() => {
+          try {
+            const base = BACKEND_BASE?.replace(/\/$/, "");
+            return `${base}/api/trades/record`;
+          } catch {
+            return undefined;
+          }
+        })(),
+        walletAddress,
+        mint,
+        reason,
+        tradeType,
+        errName: err?.name,
+        errMessage: err?.message,
+        errStack: err?.stack,
+      },
+      "saveTradeToBackend error"
+    );
   }
 }
+
 
 // ========= Centralized monitoring (wallet keyed) =========
 const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, highest, lastPrice, intervalId }>
