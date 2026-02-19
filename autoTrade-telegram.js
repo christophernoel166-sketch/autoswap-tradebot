@@ -1280,22 +1280,20 @@ async function finalizeTrade({ reason, percent = 100 }) {
     );
 
     // ===================================================
-    // 🚀 EXECUTE SELL FROM USER WALLET
-    // ===================================================
-    if (percent === 100) {
-      sellRes = await safeSellAll(
-        wallet,
-        mint,
-        slippageBps
-      );
-    } else {
-      sellRes = await safeSellPartial(
-        wallet,
-        mint,
-        percent,
-        slippageBps
-      );
-    }
+// 🚀 EXECUTE SELL FROM USER WALLET
+// ===================================================
+
+// ✅ traceId for one sell attempt
+const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
+
+LOG.info({ traceId, walletAddress, mint, reason, percent }, "🧪 SELL TRACE START");
+
+if (percent === 100) {
+  sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+} else {
+  sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 2, traceId);
+}
+
 
     sellTxid =
       sellRes?.txid ||
@@ -1493,11 +1491,19 @@ async function safeExecuteSwap(
   }
 }
 
-async function safeSellPartial(wallet, mint, percent, slippageBps, retries = 2) {
+async function safeSellPartial(
+  wallet,
+  mint,
+  percent,
+  slippageBps,
+  retries = 2,
+  traceId = null
+) {
   for (let i = 0; i < retries; i++) {
     try {
       LOG.info(
         {
+          traceId,
           mint,
           percent,
           slippageBps,
@@ -1512,22 +1518,38 @@ async function safeSellPartial(wallet, mint, percent, slippageBps, retries = 2) 
       try {
         return await sellPartial({ wallet, mint, percent, slippageBps });
       } catch (e1) {
+        LOG.warn(
+          { traceId, err: e1?.message || e1, mint, percent, slippageBps },
+          "🧪 sellPartial object-style failed, falling back to positional"
+        );
+
         // ✅ Fallback positional-style
         return await sellPartial(wallet, mint, percent, slippageBps);
       }
     } catch (err) {
-      LOG.error({ err, mint, percent, slippageBps, attempt: i + 1 }, "sellPartial failed");
+      LOG.error(
+        { traceId, err, mint, percent, slippageBps, attempt: i + 1 },
+        "sellPartial failed"
+      );
+
       if (i === retries - 1) throw err;
       await sleep(1000 * (i + 1));
     }
   }
 }
 
-async function safeSellAll(wallet, mint, slippageBps, retries = 2) {
+async function safeSellAll(
+  wallet,
+  mint,
+  slippageBps,
+  retries = 2,
+  traceId = null
+) {
   for (let i = 0; i < retries; i++) {
     try {
       LOG.info(
         {
+          traceId,
           mint,
           slippageBps,
           walletPubkey: wallet?.publicKey?.toBase58?.(),
@@ -1540,15 +1562,25 @@ async function safeSellAll(wallet, mint, slippageBps, retries = 2) {
       try {
         return await sellAll({ wallet, mint, slippageBps });
       } catch (e1) {
+        LOG.warn(
+          { traceId, err: e1?.message || e1, mint, slippageBps },
+          "🧪 sellAll object-style failed, falling back to positional"
+        );
+
         return await sellAll(wallet, mint, slippageBps);
       }
     } catch (err) {
-      LOG.error({ err, mint, slippageBps, attempt: i + 1 }, "sellAll failed");
+      LOG.error(
+        { traceId, err, mint, slippageBps, attempt: i + 1 },
+        "sellAll failed"
+      );
+
       if (i === retries - 1) throw err;
       await sleep(1000 * (i + 1));
     }
   }
 }
+
 
 
 

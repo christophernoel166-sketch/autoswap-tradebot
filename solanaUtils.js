@@ -43,43 +43,95 @@ const jupiter = createJupiterApiClient({
 // Global fallback slippage (bps)
 const DEFAULT_SLIPPAGE_BPS = config.solana.slippageBps ?? 200;
 
-// small sleep helper (internal only)
+// -------------------------
+// Step 2 Diagnostics helpers
+// -------------------------
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+function logWithTrace(level, ctx, msg, extra = {}) {
+  const traceId = ctx?.traceId;
+  const payload = traceId ? { traceId, ...extra } : extra;
+
+  // Keep simple console logging to avoid changing your pino wiring
+  if (level === "error") console.error(msg, payload);
+  else if (level === "warn") console.warn(msg, payload);
+  else console.log(msg, payload);
+}
+
 /**
- * Wait for a token account + positive balance to exist for owner+mint.
- * This fixes "sell too soon" right after a buy (ATA/balance not visible yet).
+ * Attempts to extract useful HTTP-ish data from errors thrown by the Jupiter client.
+ * Different versions/layers attach different shapes, so we safely probe.
  */
-async function waitForTokenBalance(
-  connection,
-  ownerPubkey,
-  mintPubkey,
-  { retries = 8, baseDelayMs = 800 } = {}
-) {
-  for (let i = 0; i < retries; i++) {
-    const accounts = await connection.getTokenAccountsByOwner(ownerPubkey, {
-      mint: mintPubkey,
-    });
+async function extractHttpDetails(err) {
+  const out = {
+    status: undefined,
+    retryAfter: undefined,
+    message: err?.message,
+    name: err?.name,
+  };
 
-    if (accounts.value.length) {
-      const bal = await connection.getTokenAccountBalance(
-        accounts.value[0].pubkey
-      );
+  // Common patterns: err.status / err.response.status / err.cause.status
+  out.status =
+    err?.status ??
+    err?.response?.status ??
+    err?.cause?.status ??
+    err?.cause?.response?.status;
 
-      const amountRaw = Number(bal.value.amount || 0);
-      if (amountRaw > 0) {
-        return {
-          tokenAccount: accounts.value[0].pubkey,
-          amountRaw,
-        };
-      }
+  // Retry-After header (if present)
+  out.retryAfter =
+    err?.response?.headers?.get?.("retry-after") ??
+    err?.cause?.response?.headers?.get?.("retry-after") ??
+    err?.headers?.get?.("retry-after");
+
+  // Attempt to read body text (if a Response exists)
+  // We have to be careful not to consume streams twice; best-effort only.
+  try {
+    const resp = err?.response ?? err?.cause?.response;
+    if (resp?.clone && resp?.text) {
+      const cloned = resp.clone();
+      out.bodyText = await cloned.text();
     }
-
-    // exponential-ish backoff
-    await sleep(baseDelayMs * (i + 1));
+  } catch {
+    // ignore
   }
 
-  return null;
+  // Some libs attach JSON directly
+  out.data = err?.data ?? err?.response?.data ?? err?.cause?.data;
+
+  return out;
+}
+
+/**
+ * Wrap Jupiter API calls so when we hit 429 we can see the exact details.
+ * NOTE: We are NOT "fixing" rate limits here — only diagnosing.
+ */
+async function jupiterCall(label, fn, ctx) {
+  const t0 = Date.now();
+  try {
+    const res = await fn();
+    logWithTrace("log", ctx, `🧪 Jupiter OK: ${label}`, {
+      ms: Date.now() - t0,
+    });
+    return res;
+  } catch (err) {
+    const http = await extractHttpDetails(err);
+
+    logWithTrace("error", ctx, `🧪 Jupiter FAIL: ${label}`, {
+      ms: Date.now() - t0,
+      status: http.status,
+      retryAfter: http.retryAfter,
+      name: http.name,
+      message: http.message,
+      // show a SMALL preview of body if present (avoid massive logs)
+      bodyPreview:
+        typeof http.bodyText === "string"
+          ? http.bodyText.slice(0, 300)
+          : undefined,
+      hasData: http.data ? true : false,
+    });
+
+    throw err;
+  }
 }
 
 /* =========================================================
@@ -89,19 +141,25 @@ export async function getQuote(
   inputMint,
   outputMint,
   amountLamports,
-  slippageBps = DEFAULT_SLIPPAGE_BPS
+  slippageBps = DEFAULT_SLIPPAGE_BPS,
+  ctx = undefined // optional diagnostics context
 ) {
   try {
-    return await jupiter.quoteGet({
-      inputMint,
-      outputMint,
-      amount: amountLamports,
-      slippageBps,
+    return await jupiterCall(
+      "quoteGet",
+      () =>
+        jupiter.quoteGet({
+          inputMint,
+          outputMint,
+          amount: amountLamports,
+          slippageBps,
 
-      // 🔐 MEV PROTECTION
-      restrictIntermediateTokens: true,
-      onlyDirectRoutes: true,
-    });
+          // 🔐 MEV PROTECTION
+          restrictIntermediateTokens: true,
+          onlyDirectRoutes: true,
+        }),
+      ctx
+    );
   } catch (err) {
     console.error("[getQuote] Error:", err?.message ?? err);
     return null;
@@ -116,6 +174,7 @@ export async function getBuyQuote({
   mint,
   solAmount,
   slippageBps = DEFAULT_SLIPPAGE_BPS,
+  ctx = undefined,
 }) {
   const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
 
@@ -123,7 +182,8 @@ export async function getBuyQuote({
     "So11111111111111111111111111111111111111112", // SOL
     mint,
     lamports,
-    slippageBps
+    slippageBps,
+    ctx
   );
 }
 
@@ -131,41 +191,64 @@ export async function getBuyQuote({
    EXECUTE SWAP (MEV-PROTECTED)
    ⚠️ Slippage is ALREADY baked into quote
 ========================================================= */
-export async function executeSwap(wallet, quote) {
+export async function executeSwap(wallet, quote, ctx = undefined) {
   try {
     const connection = getConnection();
 
-    const swapRes = await jupiter.swapPost({
-      swapRequest: {
-        quoteResponse: quote,
-        userPublicKey: wallet.publicKey.toBase58(),
-        wrapAndUnwrapSol: true,
-
-        // 🔐 MEV PROTECTION
-        dynamicComputeUnitLimit: true,
-        asLegacyTransaction: false,
-
-        prioritizationFeeLamports: {
-          priorityLevelWithMaxLamports: {
-            priorityLevel: "veryHigh",
-            maxLamports: 1_500_000, // ~0.0015 SOL
-          },
-        },
-      },
+    logWithTrace("log", ctx, "🧪 executeSwap: start", {
+      wallet: wallet?.publicKey?.toBase58?.(),
+      hasQuote: !!quote,
+      hasRoutePlan: !!quote?.routePlan,
+      outAmount: quote?.outAmount,
     });
+
+    const swapRes = await jupiterCall(
+      "swapPost",
+      () =>
+        jupiter.swapPost({
+          swapRequest: {
+            quoteResponse: quote,
+            userPublicKey: wallet.publicKey.toBase58(),
+            wrapAndUnwrapSol: true,
+
+            // 🔐 MEV PROTECTION
+            dynamicComputeUnitLimit: true,
+            asLegacyTransaction: false,
+
+            prioritizationFeeLamports: {
+              priorityLevelWithMaxLamports: {
+                priorityLevel: "veryHigh",
+                maxLamports: 1_500_000, // ~0.0015 SOL
+              },
+            },
+          },
+        }),
+      ctx
+    );
 
     if (!swapRes?.swapTransaction) {
       throw new Error("No swap transaction returned from Jupiter");
     }
+
+    logWithTrace("log", ctx, "🧪 executeSwap: swapTransaction received", {
+      swapTransactionBytes: swapRes.swapTransaction?.length ?? null,
+    });
 
     const txBuf = Buffer.from(swapRes.swapTransaction, "base64");
     const tx = VersionedTransaction.deserialize(txBuf);
 
     tx.sign([wallet]);
 
+    logWithTrace("log", ctx, "🧪 executeSwap: sending transaction", {
+      // NOTE: blockhash is inside tx.message; avoid deep logging
+      skipPreflight: true,
+    });
+
     const txid = await connection.sendTransaction(tx, {
       skipPreflight: true,
     });
+
+    logWithTrace("log", ctx, "🧪 executeSwap: tx sent", { txid });
 
     return txid;
   } catch (err) {
@@ -177,13 +260,18 @@ export async function executeSwap(wallet, quote) {
 /* =========================================================
    PRICE CHECK (READ-ONLY)
 ========================================================= */
-export async function getCurrentPrice(mintAddress) {
+export async function getCurrentPrice(mintAddress, ctx = undefined) {
   try {
-    const quote = await jupiter.quoteGet({
-      inputMint: "So11111111111111111111111111111111111111112",
-      outputMint: mintAddress,
-      amount: LAMPORTS_PER_SOL,
-    });
+    const quote = await jupiterCall(
+      "quoteGet(price)",
+      () =>
+        jupiter.quoteGet({
+          inputMint: "So11111111111111111111111111111111111111112",
+          outputMint: mintAddress,
+          amount: LAMPORTS_PER_SOL,
+        }),
+      ctx
+    );
 
     if (!quote?.outAmount) return null;
 
@@ -201,35 +289,70 @@ export async function sellPartial(
   wallet,
   mint,
   percent,
-  slippageBps = DEFAULT_SLIPPAGE_BPS
+  slippageBps = DEFAULT_SLIPPAGE_BPS,
+  ctx = undefined
 ) {
   const connection = getConnection();
-  const mintPk = new PublicKey(mint);
 
-  // ✅ wait for ATA/balance to be visible (fixes "sell too soon")
-  const got = await waitForTokenBalance(connection, wallet.publicKey, mintPk);
-  if (!got) {
+  logWithTrace("log", ctx, "🧪 sellPartial: start", {
+    wallet: wallet?.publicKey?.toBase58?.(),
+    mint,
+    percent,
+    slippageBps,
+  });
+
+  // 1) Token account discovery
+  const accounts = await connection.getTokenAccountsByOwner(wallet.publicKey, {
+    mint: new PublicKey(mint),
+  });
+
+  logWithTrace("log", ctx, "🧪 sellPartial: token accounts", {
+    count: accounts?.value?.length ?? 0,
+  });
+
+  if (!accounts.value.length) {
     throw new Error("No token account found");
   }
 
-  const amountRaw = Math.floor((Number(got.amountRaw) * percent) / 100);
+  // 2) Balance read
+  const bal = await connection.getTokenAccountBalance(accounts.value[0].pubkey);
+
+  logWithTrace("log", ctx, "🧪 sellPartial: balance read", {
+    amountRaw: bal?.value?.amount,
+    decimals: bal?.value?.decimals,
+    uiAmount: bal?.value?.uiAmount,
+  });
+
+  const amountRaw = Math.floor((Number(bal.value.amount) * percent) / 100);
 
   if (amountRaw <= 0) {
     throw new Error("Nothing to sell");
   }
 
+  logWithTrace("log", ctx, "🧪 sellPartial: computed sell amount", {
+    amountRaw,
+  });
+
+  // 3) Quote (token -> SOL)
   const quote = await getQuote(
     mint,
     "So11111111111111111111111111111111111111112",
     amountRaw,
-    slippageBps // 🔐 USER SLIPPAGE WIRED IN
+    slippageBps,
+    ctx
   );
 
   if (!quote?.outAmount) {
     throw new Error("Invalid quote for partial sell");
   }
 
-  const txid = await executeSwap(wallet, quote);
+  logWithTrace("log", ctx, "🧪 sellPartial: got quote", {
+    outAmount: quote.outAmount,
+    routePlanLen: quote?.routePlan?.length ?? null,
+  });
+
+  // 4) Execute swap
+  const txid = await executeSwap(wallet, quote, ctx);
 
   const solReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
@@ -245,34 +368,64 @@ export async function sellPartial(
 export async function sellAll(
   wallet,
   mint,
-  slippageBps = DEFAULT_SLIPPAGE_BPS
+  slippageBps = DEFAULT_SLIPPAGE_BPS,
+  ctx = undefined
 ) {
   const connection = getConnection();
-  const mintPk = new PublicKey(mint);
 
-  // ✅ wait for ATA/balance to be visible (fixes "sell too soon")
-  const got = await waitForTokenBalance(connection, wallet.publicKey, mintPk);
-  if (!got) {
+  logWithTrace("log", ctx, "🧪 sellAll: start", {
+    wallet: wallet?.publicKey?.toBase58?.(),
+    mint,
+    slippageBps,
+  });
+
+  // 1) Token account discovery
+  const accounts = await connection.getTokenAccountsByOwner(wallet.publicKey, {
+    mint: new PublicKey(mint),
+  });
+
+  logWithTrace("log", ctx, "🧪 sellAll: token accounts", {
+    count: accounts?.value?.length ?? 0,
+  });
+
+  if (!accounts.value.length) {
     throw new Error("No token account found");
   }
 
-  const amountRaw = Number(got.amountRaw);
+  // 2) Balance read
+  const bal = await connection.getTokenAccountBalance(accounts.value[0].pubkey);
+
+  logWithTrace("log", ctx, "🧪 sellAll: balance read", {
+    amountRaw: bal?.value?.amount,
+    decimals: bal?.value?.decimals,
+    uiAmount: bal?.value?.uiAmount,
+  });
+
+  const amountRaw = Number(bal.value.amount);
   if (amountRaw <= 0) {
     throw new Error("No balance to sell");
   }
 
+  // 3) Quote (token -> SOL)
   const quote = await getQuote(
     mint,
     "So11111111111111111111111111111111111111112",
     amountRaw,
-    slippageBps // 🔐 USER SLIPPAGE WIRED IN
+    slippageBps,
+    ctx
   );
 
   if (!quote?.outAmount) {
     throw new Error("Invalid quote for sell all");
   }
 
-  const txid = await executeSwap(wallet, quote);
+  logWithTrace("log", ctx, "🧪 sellAll: got quote", {
+    outAmount: quote.outAmount,
+    routePlanLen: quote?.routePlan?.length ?? null,
+  });
+
+  // 4) Execute swap
+  const txid = await executeSwap(wallet, quote, ctx);
 
   const solReceived = Number(quote.outAmount) / LAMPORTS_PER_SOL;
 
