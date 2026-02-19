@@ -271,6 +271,46 @@ export async function executeSwap(wallet, quote, ctx = undefined) {
     });
 
     logWithTrace("log", ctx, "🧪 SWAP SIG STATUS", st?.value?.[0]);
+// ===================================================
+// 🔎 DIAGNOSE SWAP FAILURE (if any)
+// ===================================================
+const sigStatus = st?.value?.[0];
+const confErr = conf?.value?.err ?? null;
+const statusErr = sigStatus?.err ?? null;
+
+if (confErr || statusErr) {
+  logWithTrace("error", ctx, "❌ SWAP FAILED (confirmed with error)", {
+    txid,
+    confErr,
+    statusErr,
+    confirmationStatus: sigStatus?.confirmationStatus,
+    slot: sigStatus?.slot,
+  });
+
+  try {
+    const txInfo = await connection.getTransaction(txid, {
+      maxSupportedTransactionVersion: 1,
+      commitment: "confirmed",
+    });
+
+    logWithTrace("error", ctx, "❌ SWAP TX META ERR", {
+      err: txInfo?.meta?.err ?? null,
+    });
+
+    const logs = txInfo?.meta?.logMessages ?? [];
+    logWithTrace("error", ctx, "❌ SWAP TX LOGS (last 60)", {
+      logsTail: logs.slice(-60),
+    });
+  } catch (e) {
+    logWithTrace("error", ctx, "❌ Failed to fetch swap transaction details", {
+      message: e?.message,
+    });
+  }
+
+  // IMPORTANT: stop treating this as success
+  throw new Error("Swap transaction confirmed with error (see logs)");
+}
+
 
     return txid;
   } catch (err) {
