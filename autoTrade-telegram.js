@@ -1643,6 +1643,25 @@ async function executeUserTrade(user, mint, sourceChannel) {
     }
 
     const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+    // ✅ Balance guard: trade amount + fees/rent buffer
+const balance = await connection.getBalance(wallet.publicKey, "confirmed");
+
+// Buffer to cover: ATA rent (can be ~0.002 SOL+) + tx fees + priority fee
+const BUFFER_LAMPORTS = 3_000_000; // 0.003 SOL buffer (diagnostic-safe)
+
+if (balance < lamports + BUFFER_LAMPORTS) {
+  LOG.warn(
+    {
+      tradingWallet: wallet.publicKey.toBase58(),
+      balanceLamports: balance,
+      tradeLamports: lamports,
+      bufferLamports: BUFFER_LAMPORTS,
+    },
+    "⛔ Skipping BUY: insufficient SOL for rent/fees"
+  );
+  return;
+}
+
 
     // ===================================================
     // 🔐 Slippage (clamped)
