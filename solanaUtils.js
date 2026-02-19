@@ -130,6 +130,7 @@ async function jupiterCall(label, fn, ctx) {
       hasData: http.data ? true : false,
     });
 
+    // Keep the existing behavior: throw so callers can decide what to do
     throw err;
   }
 }
@@ -240,7 +241,6 @@ export async function executeSwap(wallet, quote, ctx = undefined) {
     tx.sign([wallet]);
 
     logWithTrace("log", ctx, "🧪 executeSwap: sending transaction", {
-      // NOTE: blockhash is inside tx.message; avoid deep logging
       skipPreflight: true,
     });
 
@@ -249,6 +249,28 @@ export async function executeSwap(wallet, quote, ctx = undefined) {
     });
 
     logWithTrace("log", ctx, "🧪 executeSwap: tx sent", { txid });
+
+    // ===================================================
+    // ✅ CONFIRM TRANSACTION LANDED (DIAGNOSTICS)
+    // ===================================================
+    const latest = await connection.getLatestBlockhash("confirmed");
+
+    const conf = await connection.confirmTransaction(
+      {
+        signature: txid,
+        blockhash: latest.blockhash,
+        lastValidBlockHeight: latest.lastValidBlockHeight,
+      },
+      "confirmed"
+    );
+
+    logWithTrace("log", ctx, "🧪 SWAP CONFIRM RESULT", conf);
+
+    const st = await connection.getSignatureStatuses([txid], {
+      searchTransactionHistory: true,
+    });
+
+    logWithTrace("log", ctx, "🧪 SWAP SIG STATUS", st?.value?.[0]);
 
     return txid;
   } catch (err) {
