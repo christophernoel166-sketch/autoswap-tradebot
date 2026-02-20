@@ -995,9 +995,10 @@ function deleteProfileForChannel(channelProfiles, channel) {
 // ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
 const BACKEND_BASE =
   process.env.BACKEND_BASE ||
-  process.env.BOT_API_BASE ||      // ✅ add this
+  process.env.API_BASE ||          // ✅ this matches Railway
+  process.env.BOT_API_BASE ||
   process.env.VITE_API_BASE ||
-  `http://127.0.0.1:${process.env.PORT || 8080}`; // ✅ safer fallback
+  `http://127.0.0.1:${process.env.PORT || 8080}`;
 
 
 async function saveTradeToBackend({
