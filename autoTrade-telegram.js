@@ -1033,7 +1033,7 @@ async function saveTradeToBackend({
       createdAt: new Date().toISOString(),
     };
 
-    LOG.info({ BACKEND_BASE, endpoint }, "🧪 saveTradeToBackend endpoint check");
+    LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
 
     const res = await fetch(endpoint, {
       method: "POST",
