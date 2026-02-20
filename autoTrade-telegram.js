@@ -1547,25 +1547,27 @@ async function safeSellPartial(
           walletPubkey: wallet?.publicKey?.toBase58?.(),
           hasPublicKey: !!wallet?.publicKey,
           attempt: i + 1,
+          retries,
         },
         "🧪 safeSellPartial input"
       );
 
-      // ✅ Try object-style first (most common)
-      try {
-        return await sellPartial({ wallet, mint, percent, slippageBps });
-      } catch (e1) {
-        LOG.warn(
-          { traceId, err: e1?.message || e1, mint, percent, slippageBps },
-          "🧪 sellPartial object-style failed, falling back to positional"
-        );
-
-        // ✅ Fallback positional-style
-        return await sellPartial(wallet, mint, percent, slippageBps);
-      }
+      // ✅ solanaUtils signature is positional:
+      // sellPartial(wallet, mint, percent, slippageBps)
+      return await sellPartial(wallet, mint, percent, slippageBps);
     } catch (err) {
       LOG.error(
-        { traceId, err, mint, percent, slippageBps, attempt: i + 1 },
+        {
+          traceId,
+          errName: err?.name,
+          errMessage: err?.message,
+          errStack: err?.stack,
+          mint,
+          percent,
+          slippageBps,
+          attempt: i + 1,
+          retries,
+        },
         "sellPartial failed"
       );
 
@@ -1592,23 +1594,26 @@ async function safeSellAll(
           walletPubkey: wallet?.publicKey?.toBase58?.(),
           hasPublicKey: !!wallet?.publicKey,
           attempt: i + 1,
+          retries,
         },
         "🧪 safeSellAll input"
       );
 
-      try {
-        return await sellAll({ wallet, mint, slippageBps });
-      } catch (e1) {
-        LOG.warn(
-          { traceId, err: e1?.message || e1, mint, slippageBps },
-          "🧪 sellAll object-style failed, falling back to positional"
-        );
-
-        return await sellAll(wallet, mint, slippageBps);
-      }
+      // ✅ solanaUtils signature is positional:
+      // sellAll(wallet, mint, slippageBps)
+      return await sellAll(wallet, mint, slippageBps);
     } catch (err) {
       LOG.error(
-        { traceId, err, mint, slippageBps, attempt: i + 1 },
+        {
+          traceId,
+          errName: err?.name,
+          errMessage: err?.message,
+          errStack: err?.stack,
+          mint,
+          slippageBps,
+          attempt: i + 1,
+          retries,
+        },
         "sellAll failed"
       );
 
@@ -1617,7 +1622,6 @@ async function safeSellAll(
     }
   }
 }
-
 
 
 
