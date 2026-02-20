@@ -1009,10 +1009,10 @@ async function saveTradeToBackend({
   reason,
   tradeType = "auto",
 }) {
-  try {
-    const base = BACKEND_BASE.replace(/\/$/, "");
-    const endpoint = `${base}/api/trades/record`;
+  const base = BACKEND_BASE.replace(/\/$/, "");
+  const endpoint = `${base}/api/trades/record`;
 
+  try {
     const payload = {
       walletAddress: String(walletAddress),
       tradeType,
@@ -1030,7 +1030,7 @@ async function saveTradeToBackend({
       createdAt: new Date().toISOString(),
     };
 
-       LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
+    LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
 
     const res = await fetch(endpoint, {
       method: "POST",
@@ -1040,7 +1040,6 @@ async function saveTradeToBackend({
 
     if (!res.ok) {
       const text = await res.text().catch(() => "");
-
       LOG.error(
         {
           endpoint,
@@ -1059,19 +1058,16 @@ async function saveTradeToBackend({
 
     LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
   } catch (err) {
-    // 🔥 force the real error to show (network codes like ECONNREFUSED/ENOTFOUND/etc)
     console.error("❌ saveTradeToBackend error (raw)", err);
 
     LOG.error(
       {
         endpoint,
         base: BACKEND_BASE,
-
         walletAddress,
         mint,
         reason,
         tradeType,
-
         errName: err?.name,
         errMessage: err?.message,
         errCode: err?.code,
@@ -1081,7 +1077,7 @@ async function saveTradeToBackend({
       "saveTradeToBackend error"
     );
   }
-
+}
 
 
 // ========= Centralized monitoring (wallet keyed) =========
