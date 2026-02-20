@@ -992,10 +992,13 @@ function deleteProfileForChannel(channelProfiles, channel) {
 }
 
 // ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
+// ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
 const BACKEND_BASE =
   process.env.BACKEND_BASE ||
+  process.env.BOT_API_BASE ||      // ✅ add this
   process.env.VITE_API_BASE ||
-  "http://localhost:4000";
+  `http://127.0.0.1:${process.env.PORT || 8080}`; // ✅ safer fallback
+
 
 async function saveTradeToBackend({
   walletAddress,
@@ -1030,7 +1033,7 @@ async function saveTradeToBackend({
       createdAt: new Date().toISOString(),
     };
 
-    LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
+    LOG.info({ BACKEND_BASE, endpoint }, "🧪 saveTradeToBackend endpoint check");
 
     const res = await fetch(endpoint, {
       method: "POST",
