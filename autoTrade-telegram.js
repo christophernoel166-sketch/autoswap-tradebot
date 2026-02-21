@@ -1034,31 +1034,38 @@ async function saveTradeToBackend({
       createdAt: new Date().toISOString(),
     };
 
-    LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
+   LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
 
-    const res = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
+const res = await fetch(endpoint, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify(payload),
+});
 
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      LOG.error(
-        {
-          endpoint,
-          status: res.status,
-          statusText: res.statusText,
-          body: text,
-          walletAddress,
-          mint,
-          reason,
-          tradeType,
-        },
-        "saveTradeToBackend failed"
-      );
-      return;
-    }
+// ✅ ADD THIS (right here)
+const text = await res.text().catch(() => "");
+LOG.info(
+  { endpoint, status: res.status, statusText: res.statusText, body: text },
+  "🧪 saveTradeToBackend response"
+);
+
+if (!res.ok) {
+  LOG.error(
+    {
+      endpoint,
+      status: res.status,
+      statusText: res.statusText,
+      body: text, // ✅ reuse the same text
+      walletAddress,
+      mint,
+      reason,
+      tradeType,
+    },
+    "saveTradeToBackend failed"
+  );
+  return;
+}
+
 
     LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
   } catch (err) {
