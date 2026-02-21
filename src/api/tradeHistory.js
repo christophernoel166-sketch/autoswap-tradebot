@@ -1,5 +1,5 @@
 import express from "express";
-import Trade from "../../models/Trade.js";   // SAME model used in tradeRecordRoute.js
+import Trade from "../../models/Trade.js"; // SAME model used in tradeRecordRoute.js
 
 const router = express.Router();
 
@@ -7,21 +7,18 @@ const router = express.Router();
  * GET /api/trades/history/:walletAddress
  * Returns trade history for the dashboard.
  *
- * IMPORTANT:
- * Your trade records store tgId, NOT walletAddress.
- * Now that you use wallet-only mode,
- * we treat walletAddress AS tgId (identity = wallet).
+ * Wallet-only mode:
+ * Trades are stored by walletAddress, so query that field.
  */
 router.get("/history/:walletAddress", async (req, res) => {
   try {
-    const walletAddress = String(req.params.walletAddress);
+    const walletAddress = String(req.params.walletAddress || "").trim();
 
     if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress required" });
     }
 
-    // Fetch all trades where tgId === walletAddress
-    const trades = await Trade.find({ tgId: walletAddress })
+    const trades = await Trade.find({ walletAddress })
       .sort({ createdAt: -1 })
       .lean();
 

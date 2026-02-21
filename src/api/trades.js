@@ -9,10 +9,17 @@ const router = express.Router();
  * --------------------------------------------------------- */
 router.post("/record", async (req, res) => {
   try {
-    const d = req.body;
+      const d = req.body;
+    // Wallet-only identity (support both old + new payloads)
+    const walletAddress = String(d.walletAddress || d.tgId || "").trim();
 
     const trade = await Trade.create({
-      tgId: d.tgId || "unknown",          // walletAddress in wallet mode
+      // Keep tgId for backward compatibility, but make it the wallet in wallet-mode
+      tgId: walletAddress || "unknown",
+
+      // ✅ ALSO store walletAddress explicitly (for history queries)
+      walletAddress: walletAddress || "unknown",
+
       tradeType: d.tradeType || "auto",
       tokenMint: d.tokenMint,
       buyTxid: d.buyTxid || null,

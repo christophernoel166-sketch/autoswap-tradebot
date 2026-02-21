@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 
 // Prevent model overwrite on dev reload
 const TradeSchema = new mongoose.Schema({
-  tgId: { type: String, index: true },         // Telegram user ID
+  tgId: { type: String, index: true }, // Telegram user ID (wallet in wallet-mode)
+  walletAddress: { type: String, index: true }, // wallet-mode identity
+
   tradeId: { type: Number },                   // optional internal ID
   tradeType: { type: String, enum: ["auto", "manual"], default: "manual" },
   tokenMint: { type: String, required: true }, // token mint address
