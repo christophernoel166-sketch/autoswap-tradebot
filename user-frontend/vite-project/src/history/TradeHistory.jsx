@@ -1,7 +1,17 @@
+// user-frontend/vite-project/src/history.TradeHistory.jsx
+
 export default function TradeHistory({ filteredHistory }) {
+  const solscanTxUrl = (sig) =>
+    sig ? `https://solscan.io/tx/${sig}` : null;
+
+  const formatPct = (value) => {
+    if (!Number.isFinite(value)) return "0.00%";
+    const sign = value > 0 ? "+" : "";
+    return `${sign}${value.toFixed(2)}%`;
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-sm mt-6">
-
       {/* HEADER */}
       <div className="flex justify-between mb-4">
         <h3 className="font-medium text-gray-900 dark:text-gray-100">
@@ -20,7 +30,6 @@ export default function TradeHistory({ filteredHistory }) {
       ) : (
         <div className="overflow-x-auto -mx-4 px-4">
           <table className="min-w-[900px] w-full text-sm">
-
             {/* TABLE HEAD */}
             <thead>
               <tr className="border-b dark:border-gray-700">
@@ -39,11 +48,8 @@ export default function TradeHistory({ filteredHistory }) {
                 <th className="text-left py-2 text-gray-600 dark:text-gray-400">
                   PnL
                 </th>
-                <th className="hidden lg:table-cell text-left py-2 text-gray-600 dark:text-gray-400">
-                  Buy Tx
-                </th>
-                <th className="hidden lg:table-cell text-left py-2 text-gray-600 dark:text-gray-400">
-                  Sell Tx
+                <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                  Tx
                 </th>
               </tr>
             </thead>
@@ -51,9 +57,18 @@ export default function TradeHistory({ filteredHistory }) {
             {/* TABLE BODY */}
             <tbody>
               {filteredHistory.map((h, i) => {
-                const pnl =
-                  (Number(h.exitPrice || 0) - Number(h.entryPrice || 0)) *
-                  Number(h.amountSol || h.solAmount || 0);
+                const entry = Number(h.entryPrice || 0);
+                const exit = Number(h.exitPrice || 0);
+
+                // ✅ Percent PnL based on price change
+                const pct =
+                  entry > 0 ? ((exit - entry) / entry) * 100 : 0;
+
+                const buySig = h.buyTxid || null;
+                const sellSig = h.sellTxid || null;
+
+                const buyUrl = solscanTxUrl(buySig);
+                const sellUrl = solscanTxUrl(sellSig);
 
                 return (
                   <tr
@@ -71,29 +86,62 @@ export default function TradeHistory({ filteredHistory }) {
                     </td>
 
                     <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {Number(h.entryPrice || 0).toFixed(6)}
+                      {entry.toFixed(6)}
                     </td>
 
                     <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {Number(h.exitPrice || 0).toFixed(6)}
+                      {exit.toFixed(6)}
                     </td>
 
                     <td
                       className={`py-2 font-medium ${
-                        pnl >= 0
+                        pct >= 0
                           ? "text-green-600 dark:text-green-400"
                           : "text-red-600 dark:text-red-400"
                       }`}
                     >
-                      {pnl.toFixed(6)}
+                      {formatPct(pct)}
                     </td>
 
-                    <td className="hidden lg:table-cell py-2 break-all max-w-[220px] text-gray-500 dark:text-gray-400">
-                      {h.buyTxid || "-"}
-                    </td>
+                    {/* ✅ Clean Tx column: [B] [S] */}
+                    <td className="py-2">
+                      <div className="flex items-center gap-2">
+                        <a
+                          href={buyUrl || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={buySig ? "View BUY on Solscan" : "No BUY tx"}
+                          className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold border
+                            ${
+                              buyUrl
+                                ? "text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                : "text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60"
+                            }`}
+                          onClick={(e) => {
+                            if (!buyUrl) e.preventDefault();
+                          }}
+                        >
+                          B
+                        </a>
 
-                    <td className="hidden lg:table-cell py-2 break-all max-w-[220px] text-gray-500 dark:text-gray-400">
-                      {h.sellTxid || "-"}
+                        <a
+                          href={sellUrl || undefined}
+                          target="_blank"
+                          rel="noreferrer"
+                          title={sellSig ? "View SELL on Solscan" : "No SELL tx"}
+                          className={`inline-flex items-center justify-center w-6 h-6 rounded text-xs font-bold border
+                            ${
+                              sellUrl
+                                ? "text-gray-900 dark:text-gray-100 border-gray-300 dark:border-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                : "text-gray-400 border-gray-200 dark:border-gray-700 cursor-not-allowed opacity-60"
+                            }`}
+                          onClick={(e) => {
+                            if (!sellUrl) e.preventDefault();
+                          }}
+                        >
+                          S
+                        </a>
+                      </div>
                     </td>
                   </tr>
                 );
