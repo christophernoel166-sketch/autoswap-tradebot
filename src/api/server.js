@@ -23,8 +23,8 @@ import adminChannels from "../../routes/adminChannels.js";
 import withdrawRouter from "../../routes/withdraw.js";
 import channelsRouter from "./channels.js";
 
-import withdrawApi from "./withdraw.js";
-import adminFees from "./adminFees.js";
+
+
 import userBalance from "./userBalance.js";
 import userDeposits from "./userDeposits.js";
 import userWithdrawals from "./userWithdrawals.js";
@@ -111,8 +111,8 @@ export function createApiServer() {
   app.use("/api/channels", channelsRoutes);
   app.use("/api/admin", adminChannels);
   
-  app.use("/api", withdrawApi);
-  app.use("/api/admin", adminFees);
+  app.use("/api", withdrawRouter);
+  
   app.use("/api", userBalance);
   app.use("/api", userDeposits);
   app.use("/api/withdrawals", userWithdrawals);

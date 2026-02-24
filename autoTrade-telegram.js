@@ -8,13 +8,18 @@
 import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Telegraf } from "telegraf";
-import { Connection } from "@solana/web3.js";
-import pino from "pino";
 
+import pino from "pino";
+import {
+  Connection,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
 // Ensure fetch exists in Node <18 (optional)
 import nodeFetch from "node-fetch";
 if (typeof global.fetch !== "function") global.fetch = nodeFetch;
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
 
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
@@ -421,9 +426,94 @@ const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "15000", 10);
 if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
 if (!MONGO_URI) throw new Error("MONGO_URI is required");
 if (!RPC_URL) throw new Error("RPC_URL is required");
+if (!FEE_WALLET) throw new Error("FEE_WALLET is required");
 
+// ============================
+// 💰 PLATFORM FEES
+// ============================
+const FEE_BUY_SOL = 0.0025;
+const FEE_BUY_LAMPORTS = Math.floor(FEE_BUY_SOL * LAMPORTS_PER_SOL);
+
+// ============================
+const FEE_SELL_SOL = 0.0025;
+const FEE_SELL_LAMPORTS = Math.floor(FEE_SELL_SOL * LAMPORTS_PER_SOL);
 
 const connection = new Connection(RPC_URL, "confirmed");
+
+// ===================================================
+// 💸 BUY FEE HELPER
+// ===================================================
+async function chargeBuyFee(wallet, buyTxid, mint) {
+  try {
+    const feePubkey = new PublicKey(FEE_WALLET);
+
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: feePubkey,
+        lamports: FEE_BUY_LAMPORTS,
+      })
+    );
+
+    const sig = await connection.sendTransaction(tx, [wallet], {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    await connection.confirmTransaction(sig, "confirmed");
+
+    LOG.info(
+      { feeSig: sig, buyTxid, mint, feeLamports: FEE_BUY_LAMPORTS },
+      "💸 BUY fee paid"
+    );
+
+    return sig;
+  } catch (err) {
+    LOG.error(
+      { errName: err?.name, errMessage: err?.message, mint, buyTxid },
+      "❌ BUY fee payment failed"
+    );
+    return null;
+  }
+}
+
+// ===================================================
+// 💸 SELL FEE HELPER
+// ===================================================
+async function chargeSellFee(wallet, sellTxid, mint, reason = "sell_fee") {
+  try {
+    const feePubkey = new PublicKey(FEE_WALLET);
+
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: feePubkey,
+        lamports: FEE_SELL_LAMPORTS,
+      })
+    );
+
+    const sig = await connection.sendTransaction(tx, [wallet], {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    await connection.confirmTransaction(sig, "confirmed");
+
+    LOG.info(
+      { feeSig: sig, sellTxid, mint, reason, feeLamports: FEE_SELL_LAMPORTS },
+      "💸 SELL fee paid"
+    );
+
+    return sig;
+  } catch (err) {
+    // Fee failure should NOT crash selling
+    LOG.error(
+      { errName: err?.name, errMessage: err?.message, mint, sellTxid, reason },
+      "❌ SELL fee payment failed"
+    );
+    return null;
+  }
+}
 
 // ===================================================
 // ✅ AUTO CHANNEL DISCOVERY (my_chat_member)
@@ -1146,6 +1236,11 @@ async function tryMarkPositionClosing(walletAddress, mint) {
 // (after monitored map is initialized)
 // ===================================================
 
+// ===================================================
+// 🔔 REDIS → BOT: MANUAL SELL COMMAND LISTENER
+// (after monitored map is initialized)
+// ===================================================
+
 const redisSub = redis.duplicate();
 
 redisSub.subscribe(manualSellCommandKey()).then(() => {
@@ -1155,47 +1250,144 @@ redisSub.subscribe(manualSellCommandKey()).then(() => {
 redisSub.on("message", async (channel, message) => {
   if (channel !== manualSellCommandKey()) return;
 
+  let walletAddress, mint;
+
   try {
     const cmd = JSON.parse(message);
-    const { walletAddress, mint } = cmd;
+    walletAddress = String(cmd.walletAddress || "").trim();
+    mint = String(cmd.mint || "").trim();
 
-    LOG.info(
-      { walletAddress, mint },
-      "🔥 Manual sell command received"
-    );
-
-    // 🔒 Verify position still exists in memory
-    const state = monitored.get(mint);
-    const info = state?.users?.get(String(walletAddress));
-
-    if (!info) {
-      LOG.warn(
-        { walletAddress, mint },
-        "Manual sell ignored — position not found"
-      );
+    if (!walletAddress || !mint) {
+      LOG.warn({ message }, "Manual sell ignored — missing walletAddress or mint");
       return;
     }
 
-    // 🔥 Execute FULL sell via internal wallet
-  const allowed = await tryMarkPositionClosing(walletAddress, mint);
+    LOG.info({ walletAddress, mint }, "🔥 Manual sell command received");
 
-if (!allowed) return;
+    // 🔒 Verify position still exists in memory
+    const state = monitored.get(mint);
+    const info = state?.users?.get(walletAddress);
 
-const wallet = restoreTradingWallet(user)
-sellAll(wallet, mint, slippageBps)
+    if (!state || !info) {
+      LOG.warn({ walletAddress, mint }, "Manual sell ignored — position not found");
+      return;
+    }
 
+    // 🔒 Prevent double-sell across bot instances
+    const allowed = await tryMarkPositionClosing(walletAddress, mint);
+    if (!allowed) return;
 
+    // ✅ Resolve wallet (prefer stored wallet from monitor state)
+    let wallet = info.wallet;
 
-    LOG.info(
-      { walletAddress, mint },
-      "✅ Manual sell executed"
-    );
+    // ✅ Resolve slippageBps (prefer stored slippageBps from monitor state)
+    let slippageBps =
+      typeof info.slippageBps === "number" ? info.slippageBps : null;
+
+    // Fallback: load user from DB if wallet/slippage missing
+    if (!wallet || !slippageBps) {
+      const user = await User.findOne({ walletAddress }).lean();
+      if (!user) {
+        LOG.warn({ walletAddress, mint }, "Manual sell failed — user not found");
+
+        // revert redis status so it can be retried safely
+        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+        return;
+      }
+
+      if (!wallet) {
+        wallet = restoreTradingWallet(user);
+      }
+
+      if (!slippageBps) {
+        const userSlippagePercent =
+          typeof user.maxSlippagePercent === "number" ? user.maxSlippagePercent : 2;
+
+        slippageBps = Math.min(
+          Math.max(Math.round(userSlippagePercent * 100), 50), // min 0.5%
+          2000 // max 20%
+        );
+      }
+    }
+
+    if (!wallet?.publicKey) {
+      LOG.error({ walletAddress, mint }, "Manual sell failed — wallet missing/invalid");
+      await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      return;
+    }
+
+    // ---------------------------------------------------
+    // Execute FULL sell with retries
+    // ---------------------------------------------------
+    const traceId = `${walletAddress}:${mint}:manual_sell:${Date.now()}`;
+    LOG.info({ traceId, walletAddress, mint, slippageBps }, "🧪 MANUAL SELL TRACE START");
+
+    const sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+
+    const sellTxid =
+      sellRes?.txid ||
+      sellRes?.signature ||
+      sellRes?.sig ||
+      sellRes ||
+      null;
+
+    // 💸 Charge platform SELL fee (every sell action)
+    await chargeSellFee(wallet, sellTxid, mint, "manual_sell");
+
+    // ---------------------------------------------------
+    // Mark position closed in Redis + cleanup
+    // ---------------------------------------------------
+    const posKey = positionKey(walletAddress, mint);
+
+    await redis.hset(posKey, "status", "closed");
+    await redis.srem(walletPositionsKey(walletAddress), mint);
+
+    // Fetch exit price (best effort)
+    let exitPrice = 0;
+    try {
+      exitPrice = await getCurrentPrice(mint);
+    } catch {}
+
+    // Entry price (prefer monitor state entryPrices map)
+    const entryPrice =
+      state.entryPrices.get(walletAddress) ??
+      info.entryPrice ??
+      0;
+
+    // Save trade to backend (best effort)
+    try {
+      await saveTradeToBackend({
+        walletAddress,
+        mint,
+        solAmount: info.solAmount || 0,
+        entryPrice: entryPrice || 0,
+        exitPrice: exitPrice || 0,
+        buyTxid: info.buyTxid || null,
+        sellTxid,
+        sourceChannel: info.sourceChannel || "manual_redis",
+        reason: "manual_sell",
+        tradeType: "manual",
+      });
+    } catch (err) {
+      LOG.error({ err, walletAddress, mint }, "Manual sell: saveTradeToBackend failed");
+    }
+
+    // Remove from monitoring
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+
+    LOG.info({ walletAddress, mint, sellTxid }, "✅ Manual sell executed");
   } catch (err) {
-    LOG.error({ err }, "❌ Manual sell command failed");
+    LOG.error({ err, walletAddress, mint }, "❌ Manual sell command failed");
+
+    // If we already marked closing, revert to open so it can retry
+    if (walletAddress && mint) {
+      try {
+        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      } catch {}
+    }
   }
 });
-
-
 
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
@@ -1340,11 +1532,14 @@ if (percent === 100) {
 
 
     sellTxid =
-      sellRes?.txid ||
-      sellRes?.signature ||
-      sellRes?.sig ||
-      sellRes ||
-      null;
+  sellRes?.txid ||
+  sellRes?.signature ||
+  sellRes?.sig ||
+  sellRes ||
+  null;
+
+// 💸 Charge platform SELL fee (every sell action)
+await chargeSellFee(wallet, sellTxid, mint, reason);
 
   } catch (err) {
     LOG.error(
@@ -1694,22 +1889,26 @@ async function executeUserTrade(user, mint, sourceChannel) {
     // ✅ Balance guard: trade amount + fees/rent buffer
 const balance = await connection.getBalance(wallet.publicKey, "confirmed");
 
-// Buffer to cover: ATA rent (can be ~0.002 SOL+) + tx fees + priority fee
-const BUFFER_LAMPORTS = 3_000_000; // 0.003 SOL buffer (diagnostic-safe)
+// Buffer to cover: ATA rent + tx fees
+const BUFFER_LAMPORTS = 3_000_000;
 
-if (balance < lamports + BUFFER_LAMPORTS) {
+// ✅ Include BUY fee
+const REQUIRED_LAMPORTS = lamports + BUFFER_LAMPORTS + FEE_BUY_LAMPORTS;
+
+if (balance < REQUIRED_LAMPORTS) {
   LOG.warn(
     {
       tradingWallet: wallet.publicKey.toBase58(),
       balanceLamports: balance,
+      requiredLamports: REQUIRED_LAMPORTS,
       tradeLamports: lamports,
+      feeLamports: FEE_BUY_LAMPORTS,
       bufferLamports: BUFFER_LAMPORTS,
     },
-    "⛔ Skipping BUY: insufficient SOL for rent/fees"
+    "⛔ Skipping BUY: insufficient SOL for trade+fee+buffer"
   );
   return;
 }
-
 
     // ===================================================
     // 🔐 Slippage (clamped)
@@ -1751,15 +1950,17 @@ if (balance < lamports + BUFFER_LAMPORTS) {
     }
 
     // ===================================================
-    // 🚀 Execute BUY from USER wallet
-    // ===================================================
-    const buyTxid = await executeSwap(wallet, quote);
+// 🚀 Execute BUY from USER wallet
+// ===================================================
+const buyTxid = await executeSwap(wallet, quote);
 
-    LOG.info(
-      { wallet: user.walletAddress, mint, buyTxid },
-      "✅ BUY executed (user wallet)"
-    );
+LOG.info(
+  { wallet: user.walletAddress, mint, buyTxid },
+  "✅ BUY executed (user wallet)"
+);
 
+// 💸 Charge platform BUY fee (INSERT THIS HERE)
+await chargeBuyFee(wallet, buyTxid, mint);
     // ===================================================
     // 📈 Determine entry price
     // ===================================================

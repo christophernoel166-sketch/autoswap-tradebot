@@ -11,19 +11,14 @@ const router = express.Router();
  * ===================================================
  */
 router.get("/", async (req, res) => {
-
   try {
-    const { walletAddress } = req.query;
+    const walletAddress = String(req.query.walletAddress || "").trim();
 
     if (!walletAddress) {
-      return res.status(400).json({
-        error: "wallet_missing",
-      });
+      return res.status(400).json({ error: "wallet_missing" });
     }
 
-    const withdrawals = await Withdrawal.find({
-      walletAddress,
-    })
+    const withdrawals = await Withdrawal.find({ walletAddress })
       .sort({ createdAt: -1 })
       .limit(100)
       .lean();
@@ -31,27 +26,35 @@ router.get("/", async (req, res) => {
     return res.json({
       walletAddress,
       count: withdrawals.length,
-      withdrawals: withdrawals.map((w) => ({
-        withdrawalId: w._id,
-        amountSol: w.amountSol,
-        feeSol: w.feeSol || 0,
-        netAmountSol:
-          w.amountSol && w.feeSol
-            ? Number(w.amountSol - w.feeSol)
-            : w.amountSol,
-        status: w.status,
-        txSignature: w.txSignature || null,
-        error: w.error || null,
-        createdAt: w.createdAt,
-        sentAt: w.sentAt || null,
-        failedAt: w.failedAt || null,
-      })),
+      withdrawals: withdrawals.map((w) => {
+        const amountSol = Number(w.amountSol || 0);
+        const feeSol = Number(w.feeSol || 0);
+
+        // ✅ Prefer stored netAmountSol if present (most accurate)
+        const netAmountSol =
+          Number.isFinite(Number(w.netAmountSol)) && Number(w.netAmountSol) > 0
+            ? Number(w.netAmountSol)
+            : Math.max(0, Number((amountSol - feeSol).toFixed(6)));
+
+        return {
+          withdrawalId: String(w._id),
+          amountSol,
+          feeSol,
+          netAmountSol,
+          status: w.status,
+          txSignature: w.txSignature || null,
+
+          // These require schema support (recommended)
+          error: w.error || null,
+          createdAt: w.createdAt || null,
+          sentAt: w.sentAt || null,
+          failedAt: w.failedAt || null,
+        };
+      }),
     });
   } catch (err) {
     console.error("❌ withdrawal history error:", err);
-    return res.status(500).json({
-      error: "internal_error",
-    });
+    return res.status(500).json({ error: "internal_error" });
   }
 });
 

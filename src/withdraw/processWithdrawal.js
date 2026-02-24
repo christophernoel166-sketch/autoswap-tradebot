@@ -18,14 +18,16 @@ import { WITHDRAW_FEE_SOL } from "../config/fees.js";
 const RPC_URL = process.env.RPC_URL;
 if (!RPC_URL) throw new Error("RPC_URL missing");
 
-const connection = new Connection(RPC_URL, "confirmed");
+const FEE_WALLET = process.env.FEE_WALLET;
+if (!FEE_WALLET) throw new Error("FEE_WALLET missing");
 
-// 🔒 FIXED WITHDRAWAL FEE (Single Source of Truth)
-      
+const connection = new Connection(RPC_URL, "confirmed");
 
 // 🔐 Encryption secret (same one used in walletService)
 const ENCRYPTION_SECRET = process.env.WALLET_ENCRYPTION_KEY;
-if (!ENCRYPTION_SECRET) throw new Error("WALLET_ENCRYPTION_SECRET missing");
+if (!ENCRYPTION_SECRET) throw new Error("WALLET_ENCRYPTION_KEY missing");
+
+const round6 = (n) => Number(Number(n).toFixed(6));
 
 /**
  * 🔓 Decrypt trading wallet private key
@@ -70,41 +72,63 @@ export async function processWithdrawal(withdrawalId) {
     throw new Error("withdrawal_not_pending");
   }
 
-  const { walletAddress, amountSol } = withdrawal;
+  const walletAddress = String(withdrawal.walletAddress || "").trim();
+  const amountSol = Number(withdrawal.amountSol);
+
+  if (!walletAddress || !Number.isFinite(amountSol) || amountSol <= 0) {
+    withdrawal.status = "failed";
+    withdrawal.error = "invalid_withdrawal_record";
+    withdrawal.failedAt = new Date();
+    await withdrawal.save();
+    throw new Error("invalid_withdrawal_record");
+  }
 
   // --------------------------------------------------
   // 2️⃣ Load user
   // --------------------------------------------------
   const user = await User.findOne({ walletAddress });
   if (!user) {
+    withdrawal.status = "failed";
+    withdrawal.error = "user_not_found";
+    withdrawal.failedAt = new Date();
+    await withdrawal.save();
     throw new Error("user_not_found");
   }
 
-  if (
-    !user.tradingWalletEncryptedPrivateKey ||
-    !user.tradingWalletIv
-  ) {
+  if (!user.tradingWalletEncryptedPrivateKey || !user.tradingWalletIv) {
+    withdrawal.status = "failed";
+    withdrawal.error = "trading_wallet_missing";
+    withdrawal.failedAt = new Date();
+    await withdrawal.save();
     throw new Error("trading_wallet_missing");
   }
 
   // --------------------------------------------------
-  // 3️⃣ Validate withdrawal amount
+  // 3️⃣ Resolve fee + net (prefer stored fields if present)
   // --------------------------------------------------
-  if (amountSol <= WITHDRAW_FEE_SOL) {
+  const feeSol =
+    Number.isFinite(Number(withdrawal.feeSol)) && Number(withdrawal.feeSol) > 0
+      ? Number(withdrawal.feeSol)
+      : WITHDRAW_FEE_SOL;
+
+  const netAmountSol =
+    Number.isFinite(Number(withdrawal.netAmountSol)) &&
+    Number(withdrawal.netAmountSol) > 0
+      ? Number(withdrawal.netAmountSol)
+      : round6(amountSol - feeSol);
+
+  if (netAmountSol <= 0 || amountSol <= feeSol) {
     withdrawal.status = "failed";
     withdrawal.error = "withdraw_amount_too_small_after_fee";
     withdrawal.failedAt = new Date();
+    withdrawal.feeSol = round6(feeSol);
+    withdrawal.netAmountSol = round6(Math.max(0, netAmountSol));
     await withdrawal.save();
     throw new Error("withdraw_amount_too_small_after_fee");
   }
 
-  const netAmountSol = Number(
-    (amountSol - WITHDRAW_FEE_SOL).toFixed(6)
-  );
-
-  const lamportsToSend = Math.floor(
-    netAmountSol * LAMPORTS_PER_SOL
-  );
+  const lamportsToUser = Math.floor(netAmountSol * LAMPORTS_PER_SOL);
+  const lamportsFee = Math.floor(feeSol * LAMPORTS_PER_SOL);
 
   // --------------------------------------------------
   // 4️⃣ Restore trading wallet
@@ -112,30 +136,40 @@ export async function processWithdrawal(withdrawalId) {
   const tradingWallet = restoreTradingWallet(user);
 
   // --------------------------------------------------
-  // 5️⃣ Check on-chain balance
+  // 5️⃣ Check on-chain balance (must cover net + fee + tx fees buffer)
   // --------------------------------------------------
-  const currentLamports = await connection.getBalance(
-    tradingWallet.publicKey
-  );
+  const currentLamports = await connection.getBalance(tradingWallet.publicKey);
 
-  if (currentLamports < lamportsToSend) {
+  // small buffer for tx fee
+  const TX_FEE_BUFFER = 10_000; // ~0.00001 SOL safety
+  const requiredLamports = lamportsToUser + lamportsFee + TX_FEE_BUFFER;
+
+  if (currentLamports < requiredLamports) {
     withdrawal.status = "failed";
     withdrawal.error = "insufficient_onchain_balance";
     withdrawal.failedAt = new Date();
+    withdrawal.feeSol = round6(feeSol);
+    withdrawal.netAmountSol = round6(netAmountSol);
     await withdrawal.save();
     throw new Error("insufficient_onchain_balance");
   }
 
   const toPubkey = new PublicKey(walletAddress);
+  const feePubkey = new PublicKey(FEE_WALLET);
 
   // --------------------------------------------------
-  // 6️⃣ Build transaction
+  // 6️⃣ Build transaction (net to user + fee to fee wallet)
   // --------------------------------------------------
   const tx = new Transaction().add(
     SystemProgram.transfer({
       fromPubkey: tradingWallet.publicKey,
       toPubkey,
-      lamports: lamportsToSend,
+      lamports: lamportsToUser,
+    }),
+    SystemProgram.transfer({
+      fromPubkey: tradingWallet.publicKey,
+      toPubkey: feePubkey,
+      lamports: lamportsFee,
     })
   );
 
@@ -143,11 +177,9 @@ export async function processWithdrawal(withdrawalId) {
     // --------------------------------------------------
     // 7️⃣ Send transaction
     // --------------------------------------------------
-    const signature = await connection.sendTransaction(
-      tx,
-      [tradingWallet],
-      { skipPreflight: false }
-    );
+    const signature = await connection.sendTransaction(tx, [tradingWallet], {
+      skipPreflight: false,
+    });
 
     await connection.confirmTransaction(signature, "confirmed");
 
@@ -157,33 +189,37 @@ export async function processWithdrawal(withdrawalId) {
     withdrawal.status = "sent";
     withdrawal.txSignature = signature;
     withdrawal.sentAt = new Date();
+    withdrawal.feeSol = round6(feeSol);
+    withdrawal.netAmountSol = round6(netAmountSol);
     await withdrawal.save();
 
     // --------------------------------------------------
-    // 9️⃣ Record fixed withdrawal fee
+    // 9️⃣ Record withdrawal fee ledger (now matches on-chain fee)
     // --------------------------------------------------
     await FeeLedger.create({
       type: "withdrawal_fee",
-      amountSol: WITHDRAW_FEE_SOL,
+      amountSol: round6(feeSol),
       walletAddress,
       withdrawalId: withdrawal._id,
       status: "recorded",
       createdAt: new Date(),
+      txSignature: signature,
     });
 
     return {
       ok: true,
       txSignature: signature,
-      feeChargedSol: WITHDRAW_FEE_SOL,
-      sentAmountSol: netAmountSol,
+      feeChargedSol: round6(feeSol),
+      sentAmountSol: round6(netAmountSol),
     };
-
   } catch (err) {
     console.error("❌ Withdrawal failed:", err);
 
     withdrawal.status = "failed";
-    withdrawal.error = err.message;
+    withdrawal.error = err?.message || "withdraw_failed";
     withdrawal.failedAt = new Date();
+    withdrawal.feeSol = round6(feeSol);
+    withdrawal.netAmountSol = round6(netAmountSol);
     await withdrawal.save();
 
     throw err;

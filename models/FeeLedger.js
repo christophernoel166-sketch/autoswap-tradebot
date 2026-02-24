@@ -24,20 +24,31 @@ const feeLedgerSchema = new mongoose.Schema(
     // ============================================
     walletAddress: {
       type: String,
-      index: true,
       required: true,
+      index: true,
     },
 
     withdrawalId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Withdrawal",
       default: null,
+      index: true,
     },
 
     tradeId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Trade",
       default: null,
+      index: true,
+    },
+
+    // ============================================
+    // On-chain audit
+    // ============================================
+    txSignature: {
+      type: String,
+      default: null,
+      index: true,
     },
 
     // ============================================
@@ -49,18 +60,36 @@ const feeLedgerSchema = new mongoose.Schema(
       default: "recorded",
       index: true,
     },
-
-    // ============================================
-    // Audit
-    // ============================================
-    createdAt: {
-      type: Date,
-      default: Date.now,
-      index: true,
-    },
   },
   {
+    timestamps: true, // adds createdAt + updatedAt
     strict: true,
+  }
+);
+
+// ===================================================
+// 🔒 Prevent duplicate withdrawal fees
+// ===================================================
+feeLedgerSchema.index(
+  { type: 1, withdrawalId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      withdrawalId: { $type: "objectId" },
+    },
+  }
+);
+
+// ===================================================
+// 🔒 Prevent duplicate trade fees (buy/sell)
+// ===================================================
+feeLedgerSchema.index(
+  { type: 1, tradeId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      tradeId: { $type: "objectId" },
+    },
   }
 );
 
