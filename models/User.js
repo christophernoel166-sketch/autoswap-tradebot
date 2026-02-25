@@ -6,11 +6,11 @@ const userSchema = new mongoose.Schema(
     // 🆔 WALLET (PRIMARY LOGIN ID)
     // ===================================================
     walletAddress: {
-  type: String,
-  required: true,
-  unique: true,
-  index: true,
-}
+      type: String,
+      required: true,
+       unique: true,
+      index: true,
+    },
 
     // ===================================================
     // 🔐 PER-USER TRADING WALLET (NEW ARCHITECTURE)
