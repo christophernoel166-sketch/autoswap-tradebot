@@ -1410,13 +1410,21 @@ async function ensureMonitor(mint) {
         LOG.warn({ mint, price }, "invalid price from getCurrentPrice");
         return;
       }
-      state.lastPrice = price;
-     
-     // ✅ Update highestPrice PER WALLET (not global)
+      
+    state.lastPrice = price;
+
+// ✅ Update highestPrice PER WALLET (not global)
 for (const [walletAddress] of state.users.entries()) {
   const prevHigh = state.highestPrices.get(walletAddress);
+
   if (prevHigh == null || price > prevHigh) {
     state.highestPrices.set(walletAddress, price);
+
+    // 🧪 DEBUG — confirm highest update
+    LOG.info(
+      { walletAddress, mint, prevHigh, newHigh: price },
+      "📈 updated per-wallet highestPrice"
+    );
   }
 }
      
@@ -1683,19 +1691,50 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
   return;
 }
 
+
+// ===================================================
+// 🧪 DEBUG — TRAILING STATUS (rate-limited)
+// ===================================================
+const trailingTriggerPct = Number(profile.trailingPercent || 0);
+const walletHigh = state.highestPrices?.get(walletAddress);
+
+info._lastTrailLogAt = info._lastTrailLogAt || 0;
+if (Date.now() - info._lastTrailLogAt > 15_000) { // every 15s per position
+  info._lastTrailLogAt = Date.now();
+
+  const dropDebug =
+    walletHigh != null && walletHigh > 0
+      ? ((walletHigh - price) / walletHigh) * 100
+      : null;
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      tpStage: info.tpStage,
+      trailingTriggerPct,
+      walletHigh,
+      price,
+      drop: dropDebug,
+      trailingActive: walletHigh != null && trailingTriggerPct > 0,
+    },
+    "🧪 trailing status"
+  );
+}
+
 /**
  * ===================================================
  * 📉 TRAILING STOP — SELL ALL (PER WALLET, ACTIVE IMMEDIATELY)
  * ===================================================
  */
-const walletHigh = state.highestPrices?.get(walletAddress);
 
-if (walletHigh != null) {
+// ✅ Trailing disabled if <= 0
+if (walletHigh != null && trailingTriggerPct > 0) {
   const drop = ((walletHigh - price) / walletHigh) * 100;
 
-  if (drop >= profile.trailingPercent) {
+  if (drop >= trailingTriggerPct) {
     LOG.info(
-      { walletAddress, mint, drop, walletHigh, price },
+      { walletAddress, mint, drop, walletHigh, price, trailingTriggerPct },
       "📉 Trailing stop hit (per-wallet)"
     );
     await finalizeTrade({ reason: "trailing", percent: 100 });
