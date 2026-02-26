@@ -1,3 +1,4 @@
+// src/api/users.js
 import express from "express";
 import crypto from "crypto";
 import User from "../../models/User.js";
@@ -7,19 +8,24 @@ console.log("🔥 LOADED users API ROUTER:", import.meta.url);
 
 const router = express.Router();
 
-/**
- * ===================================================
- * 🔐 SANITIZE USER (NEVER EXPOSE PRIVATE DATA)
- * ===================================================
- */
+function cleanStr(x) {
+  return String(x || "").trim();
+}
+
+function looksLikeSolWallet(s) {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(String(s || "").trim());
+}
+
+function looksLikeChannelId(s) {
+  // Telegram numeric IDs: "-100..." for channels
+  return /^-?\d+$/.test(String(s || "").trim());
+}
+
 function sanitizeUser(user) {
   if (!user) return null;
-
   const u = user.toObject ? user.toObject() : user;
-
   delete u.tradingWalletEncryptedPrivateKey;
   delete u.tradingWalletIv;
-
   return u;
 }
 
@@ -31,23 +37,12 @@ function sanitizeUser(user) {
  */
 router.get("/", async (req, res) => {
   try {
-    const { walletAddress } = req.query;
-    if (!walletAddress) return res.json({ user: null });
-
-    let user = await User.findOne({ walletAddress });
-
-    // 🔐 Auto-fix missing trading wallet
-    if (user && !user.tradingWalletPublicKey) {
-      const { publicKey, encryptedPrivateKey, iv } =
-        generateTradingWallet();
-
-      user.tradingWalletPublicKey = publicKey;
-      user.tradingWalletEncryptedPrivateKey = encryptedPrivateKey;
-      user.tradingWalletIv = iv;
-
-      await user.save();
+    const walletAddress = cleanStr(req.query.walletAddress);
+    if (!walletAddress || !looksLikeSolWallet(walletAddress)) {
+      return res.json({ user: null });
     }
 
+    const user = await User.findOne({ walletAddress });
     return res.json({ user: sanitizeUser(user) });
   } catch (err) {
     console.error("❌ get user error:", err);
@@ -58,44 +53,29 @@ router.get("/", async (req, res) => {
 /**
  * ===================================================
  * POST /api/users
- * Ensure user exists (idempotent)
+ * Create user (STRICT)
  * ===================================================
  */
 router.post("/", async (req, res) => {
   try {
-    const { walletAddress } = req.body;
-    if (!walletAddress) {
-      return res.status(400).json({ error: "walletAddress_required" });
+    const walletAddress = cleanStr(req.body.walletAddress);
+
+    if (!walletAddress || !looksLikeSolWallet(walletAddress)) {
+      return res.status(400).json({ error: "invalid_wallet" });
     }
 
     let user = await User.findOne({ walletAddress });
 
     if (!user) {
-      const { publicKey, encryptedPrivateKey, iv } =
-        generateTradingWallet();
+      const { publicKey, encryptedPrivateKey, iv } = generateTradingWallet();
 
       user = await User.create({
         walletAddress,
         tradingWalletPublicKey: publicKey,
         tradingWalletEncryptedPrivateKey: encryptedPrivateKey,
         tradingWalletIv: iv,
-        createdAt: new Date(),
-        subscribedChannels: [],
         tradingEnabled: false,
-
-        solPerTrade: 0.01,
-        stopLoss: 10,
-        trailingTrigger: 5,
-        trailingDistance: 3,
-        tp1: 10,
-        tp1SellPercent: 25,
-        tp2: 20,
-        tp2SellPercent: 35,
-        tp3: 30,
-        tp3SellPercent: 40,
-
-        maxSlippagePercent: 2,
-        mevProtection: true,
+        subscribedChannels: [],
       });
     }
 
@@ -109,24 +89,22 @@ router.post("/", async (req, res) => {
 /**
  * ===================================================
  * ✅ POST /api/users/subscribe
- * FRONTEND-COMPATIBLE (channelId OR channel)
+ * STRICT: accepts ONLY numeric channelId
  * ===================================================
  */
 router.post("/subscribe", async (req, res) => {
   try {
-    const {
-      walletAddress,
-      channelId,
-      channel,          // 👈 legacy frontend support
-      enabled = true,
-    } = req.body;
+    const walletAddress = cleanStr(req.body.walletAddress);
+    const channelId = cleanStr(req.body.channelId);
+    const enabled =
+      typeof req.body.enabled === "boolean" ? req.body.enabled : true;
 
-    const finalChannelId = channelId || channel;
+    if (!walletAddress || !looksLikeSolWallet(walletAddress)) {
+      return res.status(400).json({ error: "invalid_wallet" });
+    }
 
-    if (!walletAddress || !finalChannelId) {
-      return res.status(400).json({
-        error: "walletAddress_and_channelId_required",
-      });
+    if (!channelId || !looksLikeChannelId(channelId)) {
+      return res.status(400).json({ error: "invalid_channelId" });
     }
 
     const user = await User.findOne({ walletAddress });
@@ -134,27 +112,47 @@ router.post("/subscribe", async (req, res) => {
       return res.status(404).json({ error: "user_not_found" });
     }
 
-    const existing = user.subscribedChannels.find(
-      (c) => c.channelId === String(finalChannelId)
+    const finalChannelId = String(channelId);
+
+    const existing = (user.subscribedChannels || []).find(
+      (c) => String(c.channelId) === finalChannelId
     );
 
     if (existing) {
       existing.enabled = enabled;
+
+      if (!existing.status) existing.status = "pending";
+      if (!existing.requestedAt) existing.requestedAt = new Date();
+
+      // If rejected/expired and re-requesting, flip back to pending
+      if (existing.status === "rejected" || existing.status === "expired") {
+        existing.status = "pending";
+        existing.requestedAt = new Date();
+        existing.approvedAt = null;
+        existing.expiredAt = null;
+      }
     } else {
+      user.subscribedChannels = user.subscribedChannels || [];
       user.subscribedChannels.push({
-        channelId: String(finalChannelId),
+        channelId: finalChannelId,
         enabled,
+        status: "pending",
         requestedAt: new Date(),
       });
     }
 
     await user.save();
 
+    const saved = (user.subscribedChannels || []).find(
+      (c) => String(c.channelId) === finalChannelId
+    );
+
     return res.json({
       ok: true,
       walletAddress,
-      channelId: String(finalChannelId),
-      enabled,
+      channelId: finalChannelId,
+      enabled: Boolean(saved?.enabled),
+      status: saved?.status || "pending",
     });
   } catch (err) {
     console.error("❌ users/subscribe error:", err);
@@ -164,12 +162,13 @@ router.post("/subscribe", async (req, res) => {
 
 /**
  * ===================================================
- * 🔒 POST /api/users/toggle-trading
+ * POST /api/users/toggle-trading
  * ===================================================
  */
 router.post("/toggle-trading", async (req, res) => {
   try {
-    const { walletAddress, enabled } = req.body;
+    const walletAddress = cleanStr(req.body.walletAddress);
+    const enabled = req.body.enabled;
 
     if (!walletAddress || typeof enabled !== "boolean") {
       return res.status(400).json({ error: "invalid_request" });
@@ -194,42 +193,16 @@ router.post("/toggle-trading", async (req, res) => {
 
 /**
  * ===================================================
- * POST /api/users/update-settings
- * ===================================================
- */
-router.post("/update-settings", async (req, res) => {
-  try {
-    const { walletAddress, ...rest } = req.body;
-    if (!walletAddress) {
-      return res.status(400).json({ error: "walletAddress_required" });
-    }
-
-    const result = await User.updateOne(
-      { walletAddress },
-      { $set: rest }
-    );
-
-    if (result.matchedCount === 0) {
-      return res.status(404).json({ error: "user_not_found" });
-    }
-
-    return res.json({ ok: true });
-  } catch (err) {
-    console.error("❌ update-settings error:", err);
-    return res.status(500).json({ error: "internal_error" });
-  }
-});
-
-/**
- * ===================================================
  * POST /api/users/link-code
+ * (kept because your dashboard uses it)
  * ===================================================
  */
 router.post("/link-code", async (req, res) => {
   try {
-    const { walletAddress } = req.body;
-    if (!walletAddress) {
-      return res.status(400).json({ error: "walletAddress_required" });
+    const walletAddress = cleanStr(req.body.walletAddress);
+
+    if (!walletAddress || !looksLikeSolWallet(walletAddress)) {
+      return res.status(400).json({ error: "invalid_wallet" });
     }
 
     const user = await User.findOne({ walletAddress });
@@ -244,7 +217,7 @@ router.post("/link-code", async (req, res) => {
     const code = crypto.randomBytes(4).toString("hex");
 
     user.telegram = {
-      ...user.telegram,
+      ...(user.telegram || {}),
       linkCode: code,
       linkedAt: null,
     };

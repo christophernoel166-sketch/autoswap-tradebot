@@ -689,7 +689,7 @@ async function subscribeChannel(ch) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         walletAddress,
-        channel: ch,
+        channelId: ch,
       }),
     });
 
@@ -726,7 +726,7 @@ async function reRequestChannel(channelId) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         walletAddress,
-        channel: channelId,
+        channelId,
       }),
     });
 

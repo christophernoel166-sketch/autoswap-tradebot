@@ -141,7 +141,7 @@ const userSchema = new mongoose.Schema(
     },
   },
   {
-    strict: false,
+    strict: true,
   }
 );
 
