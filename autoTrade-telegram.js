@@ -1182,7 +1182,7 @@ if (!res.ok) {
 
 
 // ========= Centralized monitoring (wallet keyed) =========
-const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, highest, lastPrice, intervalId }>
+const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, lastPrice, intervalId }>
 
 // ===================================================
 // 🔒 REDIS POSITION CLOSE GUARD (ATOMIC)
@@ -1392,13 +1392,16 @@ redisSub.on("message", async (channel, message) => {
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
   const state = {
-    mint,
-    users: new Map(),
-    entryPrices: new Map(),
-    highest: null,
-    lastPrice: null,
-    intervalId: null,
-  };
+  mint,
+  users: new Map(),
+  entryPrices: new Map(),
+
+  // ✅ NEW: per-wallet highest
+  highestPrices: new Map(), // Map<walletAddress, highestPrice>
+
+  lastPrice: null,
+  intervalId: null,
+};
 
   const loop = async () => {
     try {
@@ -1408,8 +1411,15 @@ async function ensureMonitor(mint) {
         return;
       }
       state.lastPrice = price;
-      if (state.highest === null || price > state.highest) state.highest = price;
-
+     
+     // ✅ Update highestPrice PER WALLET (not global)
+for (const [walletAddress] of state.users.entries()) {
+  const prevHigh = state.highestPrices.get(walletAddress);
+  if (prevHigh == null || price > prevHigh) {
+    state.highestPrices.set(walletAddress, price);
+  }
+}
+     
       for (const [walletAddress, info] of Array.from(state.users.entries())) {
         try {
           await monitorUser(mint, price, walletAddress, info, state);
@@ -1601,6 +1611,7 @@ await chargeSellFee(wallet, sellTxid, mint, reason);
   if (percent === 100) {
     state.users.delete(walletAddress);
     state.entryPrices.delete(walletAddress);
+    state.highestPrices.delete(walletAddress);
   }
 
   LOG.info(
@@ -1674,14 +1685,19 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
 
 /**
  * ===================================================
- * 📉 TRAILING STOP — SELL ALL
+ * 📉 TRAILING STOP — SELL ALL (PER WALLET, ACTIVE IMMEDIATELY)
  * ===================================================
  */
-if (info.tpStage >= 1 && state.highest) {
-  const drop = ((state.highest - price) / state.highest) * 100;
+const walletHigh = state.highestPrices?.get(walletAddress);
+
+if (walletHigh != null) {
+  const drop = ((walletHigh - price) / walletHigh) * 100;
 
   if (drop >= profile.trailingPercent) {
-    LOG.info({ walletAddress, mint, drop }, "📉 Trailing stop hit");
+    LOG.info(
+      { walletAddress, mint, drop, walletHigh, price },
+      "📉 Trailing stop hit (per-wallet)"
+    );
     await finalizeTrade({ reason: "trailing", percent: 100 });
     return;
   }
@@ -2050,11 +2066,19 @@ try {
       sourceChannel,
       slippageBps,
     });
+    
+    // ✅ Step 3A: initialize per-wallet highest immediately
+if (entryPrice) {
+  const wa = String(user.walletAddress);
+  const prev = state.highestPrices.get(wa);
+  if (prev == null || entryPrice > prev) {
+    state.highestPrices.set(wa, entryPrice);
+  }
+}
 
     if (entryPrice) {
-      state.entryPrices.set(user.walletAddress, entryPrice);
-      if (!state.highest) state.highest = entryPrice;
-    }
+  state.entryPrices.set(user.walletAddress, entryPrice);
+}
 
     LOG.info(
       { wallet: user.walletAddress, mint },
