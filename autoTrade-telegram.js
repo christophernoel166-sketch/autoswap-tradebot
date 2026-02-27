@@ -769,34 +769,74 @@ function escapeTelegram(text) {
 
 async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
   const user = await User.findOne({ walletAddress });
+  if (!user) throw new Error("User not found");
 
-  if (!user) {
-    throw new Error("User not found");
+  // --------------------------------------------------
+  // 🔧 Normalize incoming identifier
+  // - accepts "-100..." OR "@username" OR "username"
+  // --------------------------------------------------
+  const raw = String(channelId || "").trim();
+  if (!raw) throw new Error("channelId missing");
+
+  const normalized = raw.replace(/^@/, ""); // remove @ if present
+  const isNumericId = /^-?\d+$/.test(normalized); // Telegram channel IDs are negative numbers
+
+  // --------------------------------------------------
+  // ✅ Find active channel
+  // - If numeric: match by channelId ONLY
+  // - If username: match by username
+  // --------------------------------------------------
+  let channel = await SignalChannel.findOne(
+    isNumericId
+      ? { channelId: normalized, status: "active" }
+      : { username: normalized, status: "active" }
+  );
+
+  // --------------------------------------------------
+  // 🧠 If missing but numeric ID, auto-upsert from Telegram
+  // (fixes "Channel not found" when DB is missing/old)
+  // --------------------------------------------------
+  if (!channel && isNumericId) {
+    try {
+      // Telegraf getChat accepts number or string; we’ll pass string
+      const chat = await bot.telegram.getChat(normalized);
+
+      // Upsert SignalChannel as active
+      await SignalChannel.findOneAndUpdate(
+        { channelId: String(chat.id) },
+        {
+          channelId: String(chat.id),
+          title: chat.title || "Unnamed Channel",
+          username: chat.username || null,
+          status: "active",
+          connectedAt: new Date(),
+        },
+        { upsert: true, new: true }
+      );
+
+      // Re-fetch
+      channel = await SignalChannel.findOne({
+        channelId: String(chat.id),
+        status: "active",
+      });
+    } catch (e) {
+      // If bot isn't in the channel / no permission, Telegram will throw
+      throw new Error(
+        `Channel not found in DB and cannot fetch from Telegram. ` +
+          `Make sure the bot is added (preferably admin). channelId=${normalized}`
+      );
+    }
   }
 
   // --------------------------------------------------
-  // 🔧 Normalize channel identifier
-  // - supports "@xitech101" (dashboard-friendly)
-  // - supports numeric channelId fallback
+  // Final guard
   // --------------------------------------------------
-  const normalized = String(channelId).replace(/^@/, "");
-
-  const channel = await SignalChannel.findOne({
-    $or: [
-      { username: normalized },          // match @xitech101
-      { channelId: String(channelId) },  // fallback numeric ID
-    ],
-    status: "active",
-  });
-
   if (!channel) {
-    throw new Error(
-      `Channel not found or inactive for channelId=${channelId}`
-    );
+    throw new Error(`Channel not found or inactive for channelId=${raw}`);
   }
 
   // --------------------------------------------------
-  // 🧠 Telegram may not be linked yet — DO NOT BLOCK
+  // Compose message
   // --------------------------------------------------
   const username = user.telegram?.username
     ? `@${user.telegram.username}`
@@ -820,13 +860,16 @@ async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
     "Reject:\n" +
     "/reject_wallet " + walletAddress;
 
-  LOG.info(
-    { walletAddress, channelId: channel.channelId, username: channel.username },
-    "📩 Dispatching approval message"
-  );
-
+  // ✅ Always send to the numeric channelId from DB
   await bot.telegram.sendMessage(channel.channelId, message);
+
+  LOG.info(
+    { walletAddress, sentTo: channel.channelId, username: channel.username },
+    "📩 Approval request sent"
+  );
 }
+
+  
 
 // ===================================================
 // 📣 STEP 4 — APPROVAL NOTIFICATIONS + DASHBOARD SYNC
