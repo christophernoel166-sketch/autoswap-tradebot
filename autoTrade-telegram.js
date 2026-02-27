@@ -676,8 +676,7 @@ async function pollPendingSubscriptions() {
         if (sub.status !== "pending") continue;
         if (sub.notifiedAt) continue;
 
-        const rawChannelId = String(sub.channelId);   // "@xitech101"
-        const normalized = rawChannelId.replace(/^@/, "");
+        const rawChannelId = String(sub.channelId);   // "-100..." OR "@xitech101"
 
         const result = await User.updateOne(
           {
