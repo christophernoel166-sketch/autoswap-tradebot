@@ -714,14 +714,23 @@ async function pollPendingSubscriptions() {
             "📩 Sending approval request to channel"
           );
 
+          // ✅ IMPORTANT:
+          // - If channelId is numeric "-100...", send it as-is
+          // - If legacy "@username", also send it as-is
+          // sendApprovalRequestToChannel will resolve username OR channelId safely
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
-            channelId: normalized,
+            channelId: rawChannelId, // ✅ NOT normalized
           });
 
         } catch (err) {
           LOG.error(
-            { err, wallet: user.walletAddress, channelId: rawChannelId },
+            {
+              errName: err?.name,
+              errMessage: err?.message,
+              wallet: user.walletAddress,
+              channelId: rawChannelId,
+            },
             "❌ Failed to send approval request"
           );
 
