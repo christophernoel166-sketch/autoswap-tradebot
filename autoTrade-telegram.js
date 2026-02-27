@@ -715,36 +715,35 @@ async function pollPendingSubscriptions() {
           );
 
           await sendApprovalRequestToChannel({
-            walletAddress: user.walletAddress,
-            channelId: normalized,
-          });
+  walletAddress: user.walletAddress,
+  channelId: normalized,
+});
 
-        } catch (err) {
-          LOG.error(
-            { err, wallet: user.walletAddress, channelId: rawChannelId },
-            "❌ Failed to send approval request"
-          );
+} catch (err) {
+  LOG.error(
+    {
+      wallet: user.walletAddress,
+      rawChannelId,
+      normalized,
+      errMessage: err?.message,
+      tgErrorCode: err?.response?.error_code,
+      tgDescription: err?.response?.description,
+    },
+    "❌ Failed to send approval request"
+  );
 
-          // 🔁 Roll back so it retries later
-          await User.updateOne(
-            {
-              walletAddress: user.walletAddress,
-              "subscribedChannels.channelId": rawChannelId,
-            },
-            {
-              $unset: {
-                "subscribedChannels.$.notifiedAt": "",
-              },
-            }
-          );
-        }
-      }
+  // 🔁 Roll back so it retries later
+  await User.updateOne(
+    {
+      walletAddress: user.walletAddress,
+      "subscribedChannels.channelId": rawChannelId,
+    },
+    {
+      $unset: {
+        "subscribedChannels.$.notifiedAt": "",
+      },
     }
-  } catch (err) {
-    LOG.error({ err }, "❌ pollPendingSubscriptions error");
-  } finally {
-    subscriptionPollRunning = false;
-  }
+  );
 }
 
 
