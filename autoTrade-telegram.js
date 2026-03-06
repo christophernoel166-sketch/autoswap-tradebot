@@ -38,26 +38,11 @@ import {
   POSITION_FIELDS,
 } from "./src/redis/positionKeys.js";
 
-
-
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
 
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
-
-
-
-
-const SIGNAL_TEST_MODE = true; // 🔥 turn OFF after test
-
-
-// ===================================================
-// 🔐 HARD LIVE TEST MODE (STEP 1 — CONFIG ONLY)
-// ===================================================
-const LIVE_TEST_WALLET = "AyxgDsHe8k8mNfFdVFhE8Ug1LvqEyoKGLo7vV7BUCo3m";
-const LIVE_TEST_SOL = 0.001;
-const LIVE_TEST_BUY_ONLY = true;
 
 
 // 🔥 MUST BE HERE
@@ -337,46 +322,25 @@ bot.on("channel_post", async (ctx) => {
       });
       return;
     }
-
-   // LIVE TEST MODE: match by TRADING wallet first (Ayxg...), fallback to main wallet (Gex...)
-const testUser = users.find((u) => {
-  const main = String(u.walletAddress || "");
-  const trading = String(u.tradingWalletPublicKey || "");
-  return trading === LIVE_TEST_WALLET || main === LIVE_TEST_WALLET;
+    // LIVE TRADE FOR EVERY USER
+   console.log("🚀 SIGNAL RECEIVED — EXECUTING FOR APPROVED USERS", {
+  channelId,
+  mint,
+  users: users.length,
 });
 
-if (!testUser) {
-  console.log("🧪 LIVE TEST WALLET NOT FOUND — SIGNAL IGNORED", {
-    liveTestWallet: LIVE_TEST_WALLET,
-    eligibleMainWallets: users.map((u) => u.walletAddress),
-    eligibleTradingWallets: users.map((u) => u.tradingWalletPublicKey),
-  });
-  return;
+for (const user of users) {
+  try {
+    await executeUserTrade(user, mint, channelId);
+  } catch (err) {
+    LOG.error(
+      { err, wallet: user.walletAddress, mint, channelId },
+      "❌ executeUserTrade failed for user"
+    );
+  }
 }
 
-console.log("🧪 LIVE TEST USER MATCHED", {
-  mainWallet: testUser.walletAddress,
-  tradingWallet: testUser.tradingWalletPublicKey,
-});
-
-
-    console.log("🚀 LIVE TEST BUY INITIATED", {
-      wallet: testUser.walletAddress,
-      mint,
-      sol: LIVE_TEST_SOL,
-      channelId,
-    });
-
-    testUser.solPerTrade = LIVE_TEST_SOL;
-
-    try {
-      await executeUserTrade(testUser, mint, channelId);
-      console.log("✅ LIVE TEST BUY EXECUTED");
-    } catch (err) {
-      console.error("❌ LIVE TEST BUY FAILED", err);
-    }
-
-    return;
+return;
   } catch (err) {
     console.error("❌ channel_post unified handler crashed", err);
   }
