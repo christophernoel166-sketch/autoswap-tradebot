@@ -5,14 +5,14 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
-    "start": "node index.js",
+    "start": "node autoTrade-telegram.js",
     "start:api": "node index.js",
     "start:bot": "node autoTrade-telegram.js",
     "railway-api": "node index.js",
     "railway-bot": "node autoTrade-telegram.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.18.0"
   },
   "keywords": [
     "solana",
