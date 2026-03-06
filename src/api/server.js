@@ -115,7 +115,7 @@ export function createApiServer() {
   
   app.use("/api", userBalance);
   app.use("/api", userDeposits);
-  app.use("/api/user/withdrawals", userWithdrawals);
+  app.use("/api/withdrawals", userWithdrawals);
   app.use("/api/wallet", walletHistory);
 
   // ============================
