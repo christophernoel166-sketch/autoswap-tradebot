@@ -1,4 +1,4 @@
-// src/withdraw/processWithdrawal.js
+ // src/withdraw/processWithdrawal.js
 
 import {
   Connection,
@@ -23,26 +23,19 @@ if (!FEE_WALLET) throw new Error("FEE_WALLET missing");
 
 const connection = new Connection(RPC_URL, "confirmed");
 
-// 🔐 Encryption secret (must match walletService.js exactly)
+// 🔐 Encryption secret (same one used in walletService)
 const ENCRYPTION_SECRET = process.env.WALLET_ENCRYPTION_KEY;
-if (!ENCRYPTION_SECRET || ENCRYPTION_SECRET.length !== 32) {
-  throw new Error(
-    "WALLET_ENCRYPTION_KEY must be set and exactly 32 characters long"
-  );
-}
+if (!ENCRYPTION_SECRET) throw new Error("WALLET_ENCRYPTION_KEY missing");
 
 const round6 = (n) => Number(Number(n).toFixed(6));
 
 /**
  * 🔓 Decrypt trading wallet private key
- * NOTE:
- * walletService.js uses a raw 32-char string key, not hex-decoded bytes.
- * So we must use utf8 here to match exactly.
  */
 function decryptPrivateKey(encryptedHex, ivHex) {
   const decipher = crypto.createDecipheriv(
     "aes-256-cbc",
-    Buffer.from(ENCRYPTION_SECRET, "utf8"),
+    Buffer.from(ENCRYPTION_SECRET, "hex"),
     Buffer.from(ivHex, "hex")
   );
 
@@ -111,7 +104,7 @@ export async function processWithdrawal(withdrawalId) {
   }
 
   // --------------------------------------------------
-  // 3️⃣ Resolve fee + net
+  // 3️⃣ Resolve fee + net (prefer stored fields if present)
   // --------------------------------------------------
   const feeSol =
     Number.isFinite(Number(withdrawal.feeSol)) && Number(withdrawal.feeSol) > 0
@@ -143,11 +136,12 @@ export async function processWithdrawal(withdrawalId) {
   const tradingWallet = restoreTradingWallet(user);
 
   // --------------------------------------------------
-  // 5️⃣ Check on-chain balance
+  // 5️⃣ Check on-chain balance (must cover net + fee + tx fees buffer)
   // --------------------------------------------------
   const currentLamports = await connection.getBalance(tradingWallet.publicKey);
 
-  const TX_FEE_BUFFER = 10_000; // ~0.00001 SOL
+  // small buffer for tx fee
+  const TX_FEE_BUFFER = 10_000; // ~0.00001 SOL safety
   const requiredLamports = lamportsToUser + lamportsFee + TX_FEE_BUFFER;
 
   if (currentLamports < requiredLamports) {
@@ -164,7 +158,7 @@ export async function processWithdrawal(withdrawalId) {
   const feePubkey = new PublicKey(FEE_WALLET);
 
   // --------------------------------------------------
-  // 6️⃣ Build transaction
+  // 6️⃣ Build transaction (net to user + fee to fee wallet)
   // --------------------------------------------------
   const tx = new Transaction().add(
     SystemProgram.transfer({
@@ -200,7 +194,7 @@ export async function processWithdrawal(withdrawalId) {
     await withdrawal.save();
 
     // --------------------------------------------------
-    // 9️⃣ Record withdrawal fee ledger
+    // 9️⃣ Record withdrawal fee ledger (now matches on-chain fee)
     // --------------------------------------------------
     await FeeLedger.create({
       type: "withdrawal_fee",
