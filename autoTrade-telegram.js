@@ -676,7 +676,7 @@ async function pollPendingSubscriptions() {
         if (sub.status !== "pending") continue;
         if (sub.notifiedAt) continue;
 
-        const rawChannelId = String(sub.channelId);   // "-100..." OR "@xitech101"
+        const rawChannelId = String(sub.channelId); // "-100..." OR "@xitech101"
 
         const result = await User.updateOne(
           {
@@ -713,13 +713,9 @@ async function pollPendingSubscriptions() {
             "📩 Sending approval request to channel"
           );
 
-          // ✅ IMPORTANT:
-          // - If channelId is numeric "-100...", send it as-is
-          // - If legacy "@username", also send it as-is
-          // sendApprovalRequestToChannel will resolve username OR channelId safely
           await sendApprovalRequestToChannel({
             walletAddress: user.walletAddress,
-            channelId: rawChannelId, // ✅ NOT normalized
+            channelId: rawChannelId,
           });
 
         } catch (err) {
@@ -732,30 +728,16 @@ async function pollPendingSubscriptions() {
             },
             "❌ Failed to send approval request"
           );
-
-          // 🔁 Roll back so it retries later
-          await User.updateOne(
-            {
-              walletAddress: user.walletAddress,
-              "subscribedChannels.channelId": rawChannelId,
-            },
-            {
-              $unset: {
-                "subscribedChannels.$.notifiedAt": "",
-              },
-            }
-          );
         }
       }
     }
+
   } catch (err) {
     LOG.error({ err }, "❌ pollPendingSubscriptions error");
   } finally {
     subscriptionPollRunning = false;
   }
 }
-
-
 
 // ========= Approval Request Helper (FINAL — SAFE + IDENTITY-CONSISTENT) =========
 function escapeTelegram(text) {
