@@ -361,10 +361,6 @@ function isUserApprovedForChannel(user, channelId) {
   );
 }
 
-
-
-
-
 function isChannelEnabledForUser(user, channelId) {
   if (!Array.isArray(user.subscribedChannels)) return false;
   return user.subscribedChannels.some(
@@ -1707,28 +1703,28 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
 // ===================================================
 // 🧪 DEBUG — TRAILING STATUS (rate-limited)
 // ===================================================
-const trailingTriggerPct = Number(profile.trailingPercent || 0);
+const trailingDistancePct = Number(profile.trailingDistancePercent || 0);
 const walletHigh = state.highestPrices?.get(walletAddress);
 
 info._lastTrailLogAt = info._lastTrailLogAt || 0;
 if (Date.now() - info._lastTrailLogAt > 15_000) { // every 15s per position
   info._lastTrailLogAt = Date.now();
 
-  const dropDebug =
-    walletHigh != null && walletHigh > 0
-      ? ((walletHigh - price) / walletHigh) * 100
-      : null;
+  const dropFromPeakPct =
+  walletHigh != null && walletHigh > 0
+    ? ((walletHigh - price) / walletHigh) * 100
+    : null;
 
   LOG.info(
     {
       walletAddress,
       mint,
       tpStage: info.tpStage,
-      trailingTriggerPct,
+      trailingDistancePct,
       walletHigh,
       price,
-      drop: dropDebug,
-      trailingActive: walletHigh != null && trailingTriggerPct > 0,
+      dropFromPeakPct,
+      trailingActive: walletHigh != null && trailingDistancePct > 0,
     },
     "🧪 trailing status"
   );
@@ -1740,15 +1736,32 @@ if (Date.now() - info._lastTrailLogAt > 15_000) { // every 15s per position
  * ===================================================
  */
 
-// ✅ Trailing disabled if <= 0
-if (walletHigh != null && trailingTriggerPct > 0) {
-  const drop = ((walletHigh - price) / walletHigh) * 100;
+// ===================================================
+// 📉 TRAILING STOP (drawdown from peak)
+// ===================================================
+if (
+  trailingDistancePct > 0 &&
+  walletHigh != null &&
+  walletHigh > 0
+) {
+  const dropFromPeakPct = ((walletHigh - price) / walletHigh) * 100;
+  const trailingExitPrice = walletHigh * (1 - trailingDistancePct / 100);
 
-  if (drop >= trailingTriggerPct) {
+  if (dropFromPeakPct >= trailingDistancePct) {
     LOG.info(
-      { walletAddress, mint, drop, walletHigh, price, trailingTriggerPct },
-      "📉 Trailing stop hit (per-wallet)"
+      {
+        walletAddress,
+        mint,
+        entry,
+        walletHigh,
+        currentPrice: price,
+        trailingDistancePct,
+        dropFromPeakPct,
+        trailingExitPrice,
+      },
+      "📉 Trailing stop hit (drawdown from peak)"
     );
+
     await finalizeTrade({ reason: "trailing", percent: 100 });
     return;
   }
@@ -2102,15 +2115,17 @@ try {
       wallet,   // 🔥 CRITICAL — store wallet object
       tpStage: 0,
       profile: {
-        tp1Percent: user.tp1,
-        tp1SellPercent: user.tp1SellPercent,
-        tp2Percent: user.tp2,
-        tp2SellPercent: user.tp2SellPercent,
-        tp3Percent: user.tp3,
-        tp3SellPercent: user.tp3SellPercent,
-        stopLossPercent: user.stopLoss,
-        trailingPercent: user.trailingDistance,
-      },
+  tp1Percent: user.tp1,
+  tp1SellPercent: user.tp1SellPercent,
+  tp2Percent: user.tp2,
+  tp2SellPercent: user.tp2SellPercent,
+  tp3Percent: user.tp3,
+  tp3SellPercent: user.tp3SellPercent,
+  stopLossPercent: user.stopLoss,
+
+  // trailing is active immediately after buy
+  trailingDistancePercent: Number(user.trailingDistance || 0),
+},
       buyTxid,
       solAmount,
       entryPrice,
