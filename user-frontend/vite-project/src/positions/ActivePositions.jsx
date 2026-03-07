@@ -7,7 +7,6 @@ export default function ActivePositions({
 }) {
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-sm mt-6 mb-10">
-
       {/* HEADER */}
       <div className="flex justify-between mb-3 items-center">
         <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
@@ -65,7 +64,7 @@ export default function ActivePositions({
                         : "text-red-600 dark:text-red-400"
                     }`}
                   >
-                    {p.changePercent}%
+                    {Number(p.changePercent || 0).toFixed(2)}%
                   </span>
                 </div>
 
@@ -123,16 +122,29 @@ export default function ActivePositions({
           {/* ================= DESKTOP VIEW (TABLE) ================= */}
           <div className="hidden lg:block overflow-x-auto">
             <table className="min-w-[700px] w-full text-sm">
-
               <thead>
                 <tr className="border-b dark:border-gray-700">
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">#</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">Token</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">Entry</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">Current</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">%</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">PnL</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">TP</th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    #
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    Token
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    Entry
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    Current
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    %
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    PnL
+                  </th>
+                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                    TP
+                  </th>
                   <th></th>
                 </tr>
               </thead>
@@ -168,11 +180,17 @@ export default function ActivePositions({
                           : "text-red-600 dark:text-red-400"
                       }
                     >
-                      {p.changePercent}
+                      {Number(p.changePercent || 0).toFixed(2)}%
                     </td>
 
-                    <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {Number(p.pnlSol || 0).toFixed(6)}
+                    <td
+                      className={
+                        Number(p.pnlSol || 0) >= 0
+                          ? "py-2 text-green-600 dark:text-green-400"
+                          : "py-2 text-red-600 dark:text-red-400"
+                      }
+                    >
+                      {Number(p.pnlSol || 0).toFixed(6)} SOL
                     </td>
 
                     <td className="py-2 text-gray-900 dark:text-gray-100">

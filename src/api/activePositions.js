@@ -4,6 +4,7 @@ import {
   walletActiveSet,
   positionKey,
 } from "../redis/positionKeys.js";
+import { getCurrentPrice } from "../../solanaUtils.js";
 
 const router = express.Router();
 
@@ -14,9 +15,8 @@ const router = express.Router();
  * ===================================================
  */
 router.get("/:walletAddress", async (req, res) => {
-
   try {
-    const walletAddress = String(req.params.walletAddress);
+    const walletAddress = String(req.params.walletAddress || "").trim();
 
     if (!walletAddress) {
       return res.status(400).json({ error: "wallet_required" });
@@ -38,20 +38,48 @@ router.get("/:walletAddress", async (req, res) => {
       const data = await redis.hgetall(posKey);
 
       if (!data || Object.keys(data).length === 0) continue;
+      if (data.status && data.status !== "open") continue;
+
+      const solAmount = Number(data.solAmount || 0);
+      const entryPrice = Number(data.entryPrice || 0);
+      const tpStage = Number(data.tpStage || 0);
+      const highestPrice = Number(data.highestPrice || 0);
+      const openedAt = Number(data.openedAt || 0);
+
+      let currentPrice = 0;
+      let changePercent = 0;
+      let pnlSol = 0;
+
+      try {
+        currentPrice = Number(await getCurrentPrice(mint)) || 0;
+      } catch (err) {
+        console.warn("active-positions current price fetch failed:", {
+          walletAddress,
+          mint,
+          err: err?.message,
+        });
+      }
+
+      if (entryPrice > 0 && currentPrice > 0) {
+        changePercent = ((currentPrice - entryPrice) / entryPrice) * 100;
+        pnlSol = ((currentPrice - entryPrice) / entryPrice) * solAmount;
+      }
 
       positions.push({
-        walletAddress: data.walletAddress,
-        mint: data.mint,
-        sourceChannel: data.sourceChannel,
+        walletAddress: data.walletAddress || walletAddress,
+        mint: data.mint || mint,
+        sourceChannel: data.sourceChannel || null,
 
-        solAmount: Number(data.solAmount || 0),
-        entryPrice: Number(data.entryPrice || 0),
+        solAmount,
+        entryPrice,
+        currentPrice,
+        changePercent,
+        pnlSol,
+
         buyTxid: data.buyTxid || null,
-
-        tpStage: Number(data.tpStage || 0),
-        highestPrice: Number(data.highestPrice || 0),
-
-        openedAt: Number(data.openedAt || 0),
+        tpStage,
+        highestPrice,
+        openedAt,
       });
     }
 
