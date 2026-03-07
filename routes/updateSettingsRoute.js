@@ -6,7 +6,7 @@ const router = express.Router();
 /**
  * POST /api/users/update-settings
  */
-router.post("/", async (req, res) => {
+router.post("/update-settings", async (req, res) => {
   try {
     const {
       walletAddress,
@@ -22,12 +22,14 @@ router.post("/", async (req, res) => {
       trailingDistance,
     } = req.body;
 
-    if (!walletAddress)
+    if (!walletAddress) {
       return res.status(400).json({ error: "walletAddress required" });
+    }
 
-    let user = await User.findOne({ walletAddress });
-    if (!user)
+    const user = await User.findOne({ walletAddress });
+    if (!user) {
       return res.status(404).json({ error: "user_not_found" });
+    }
 
     const updates = {};
 
