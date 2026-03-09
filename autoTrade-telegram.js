@@ -22,8 +22,6 @@ import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
 import { restoreTradingWallet } from "./src/services/walletService.js";
-
-
 import ChannelSettings from "./models/ChannelSettings.js";
 import SignalChannel from "./models/SignalChannel.js";
 import ProcessedSignal from "./models/ProcessedSignal.js";
@@ -37,7 +35,12 @@ import {
   walletPositionsKey, // ✅ add this
   POSITION_FIELDS,
 } from "./src/redis/positionKeys.js";
-
+import { enqueueBuyJob } from "./src/queue/tradeQueue.js";
+import {
+  startBuyWorker,
+  registerBuyExecutor,
+} from "./src/workers/buyWorker.js";
+import { startSellWorker, registerSellExecutor } from "./src/workers/sellWorker.js";
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
 
 redis.ping().then((res) => {
@@ -323,7 +326,7 @@ bot.on("channel_post", async (ctx) => {
       return;
     }
     // LIVE TRADE FOR EVERY USER
-   console.log("🚀 SIGNAL RECEIVED — EXECUTING FOR APPROVED USERS", {
+console.log("🚀 SIGNAL RECEIVED — ENQUEUEING FOR APPROVED USERS", {
   channelId,
   mint,
   users: users.length,
@@ -331,11 +334,34 @@ bot.on("channel_post", async (ctx) => {
 
 for (const user of users) {
   try {
-    await executeUserTrade(user, mint, channelId);
+    const walletAddress = String(user.walletAddress || "").trim();
+    if (!walletAddress) continue;
+
+    // 🔒 prevent duplicate buy jobs for same wallet+mint
+    const locked = await acquireBuyLock(walletAddress, mint);
+    if (!locked) {
+      LOG.info(
+        { walletAddress, mint, channelId },
+        "⏭️ Buy skipped — duplicate buy lock already exists"
+      );
+      continue;
+    }
+
+    await enqueueBuyJob({
+      walletAddress,
+      mint,
+      channelId,
+      createdAt: Date.now(),
+    });
+
+    LOG.info(
+      { walletAddress, mint, channelId },
+      "🧾 Buy job enqueued"
+    );
   } catch (err) {
     LOG.error(
       { err, wallet: user.walletAddress, mint, channelId },
-      "❌ executeUserTrade failed for user"
+      "❌ Failed to enqueue buy job for user"
     );
   }
 }
@@ -975,8 +1001,14 @@ mongoose
   .then(async () => {
     LOG.info("Connected to MongoDB");
 
-    await loadChannels();
-    LOG.info("Initial channel list loaded");
+  await loadChannels();
+LOG.info("Initial channel list loaded");
+
+registerBuyExecutor(executeUserTrade);
+registerSellExecutor(executeQueuedSell);
+
+startBuyWorker();
+startSellWorker();
 
     // ========= STEP 3B — Start subscription watcher =========
     const SUBSCRIPTION_POLL_MS = parseInt(
@@ -1482,6 +1514,7 @@ async function monitorUser(mint, price, walletAddress, info, state) {
   const change = ((price - entry) / entry) * 100;
   if (typeof info.tpStage === "undefined") info.tpStage = 0;
 
+
  /**
  * ===================================================
  * 🔁 INTERNAL HELPER — FINALIZE TRADE (PER-USER WALLET)
@@ -1647,8 +1680,25 @@ await chargeSellFee(wallet, sellTxid, mint, reason);
  * ===================================================
  */
 if (change <= -profile.stopLossPercent) {
-  LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit");
-  await finalizeTrade({ reason: "stop_loss", percent: 100 });
+  LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit (queued sell)");
+
+  const locked = await acquireSellLock(walletAddress, mint);
+  if (!locked) {
+    LOG.info(
+      { walletAddress, mint },
+      "⏭️ Sell skipped — duplicate sell lock"
+    );
+    return;
+  }
+
+  await enqueueSellJob({
+    walletAddress,
+    mint,
+    reason: "stop_loss",
+    percent: 100,
+    createdAt: Date.now(),
+  });
+
   return;
 }
 
@@ -1658,11 +1708,23 @@ if (change <= -profile.stopLossPercent) {
  * ===================================================
  */
 if (info.tpStage < 1 && change >= profile.tp1Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached");
+  LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached (queued sell)");
 
-  await finalizeTrade({
+  const locked = await acquireSellLock(walletAddress, mint);
+  if (!locked) {
+    LOG.info(
+      { walletAddress, mint },
+      "⏭️ Sell skipped — duplicate sell lock"
+    );
+    return;
+  }
+
+  await enqueueSellJob({
+    walletAddress,
+    mint,
     reason: "tp1",
     percent: profile.tp1SellPercent,
+    createdAt: Date.now(),
   });
 
   profile.stopLossPercent = 0;
@@ -1676,11 +1738,23 @@ if (info.tpStage < 1 && change >= profile.tp1Percent) {
  * ===================================================
  */
 if (info.tpStage < 2 && change >= profile.tp2Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached");
+  LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached (queued sell)");
 
-  await finalizeTrade({
+  const locked = await acquireSellLock(walletAddress, mint);
+  if (!locked) {
+    LOG.info(
+      { walletAddress, mint },
+      "⏭️ Sell skipped — duplicate sell lock"
+    );
+    return;
+  }
+
+  await enqueueSellJob({
+    walletAddress,
+    mint,
     reason: "tp2",
     percent: profile.tp2SellPercent,
+    createdAt: Date.now(),
   });
 
   profile.stopLossPercent = profile.tp2Percent;
@@ -1694,8 +1768,26 @@ if (info.tpStage < 2 && change >= profile.tp2Percent) {
  * ===================================================
  */
 if (info.tpStage < 3 && change >= profile.tp3Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached");
-  await finalizeTrade({ reason: "tp3", percent: 100 });
+  LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached (queued sell)");
+
+  const locked = await acquireSellLock(walletAddress, mint);
+  if (!locked) {
+    LOG.info(
+      { walletAddress, mint },
+      "⏭️ Sell skipped — duplicate sell lock"
+    );
+    return;
+  }
+
+  await enqueueSellJob({
+    walletAddress,
+    mint,
+    reason: "tp3",
+    percent: 100,
+    createdAt: Date.now(),
+  });
+
+  info.tpStage = 3;
   return;
 }
 
@@ -1748,26 +1840,187 @@ if (
   const trailingExitPrice = walletHigh * (1 - trailingDistancePct / 100);
 
   if (dropFromPeakPct >= trailingDistancePct) {
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      entry,
+      walletHigh,
+      currentPrice: price,
+      trailingDistancePct,
+      dropFromPeakPct,
+      trailingExitPrice,
+    },
+    "📉 Trailing stop hit (queued sell)"
+  );
+
+  const locked = await acquireSellLock(walletAddress, mint);
+  if (!locked) {
+    LOG.info(
+      { walletAddress, mint },
+      "⏭️ Sell skipped — duplicate sell lock"
+    );
+    return;
+  }
+
+  await enqueueSellJob({
+    walletAddress,
+    mint,
+    reason: "trailing",
+    percent: 100,
+    createdAt: Date.now(),
+  });
+
+  return;
+}
+
+} // ✅ THIS closes monitorUser
+
+// EXECUTE QUEUE SELL
+async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, user }) {
+  const state = monitored.get(mint);
+  const info = state?.users?.get(walletAddress);
+
+  if (!state || !info) {
+    LOG.warn({ walletAddress, mint, reason }, "⏭️ Queued sell skipped — position not found in monitor state");
+    return;
+  }
+
+  const price = state.lastPrice || info.entryPrice || 0;
+
+  const {
+    profile,
+    buyTxid,
+    solAmount,
+    entryPrice: storedEntryPrice,
+    sourceChannel,
+    slippageBps,
+  } = info;
+
+  const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
+  if (!entry) {
+    LOG.warn({ walletAddress, mint, reason }, "⏭️ Queued sell skipped — missing entry price");
+    return;
+  }
+
+  async function finalizeTrade({ reason, percent = 100 }) {
+    let sellRes;
+    let exitPrice = price;
+    let sellTxid = null;
+
+    try {
+      if (percent === 100) {
+        const allowed = await tryMarkPositionClosing(walletAddress, mint);
+        if (!allowed) {
+          LOG.warn(
+            { walletAddress, mint },
+            "Finalize aborted — already closing/closed"
+          );
+          return;
+        }
+      }
+
+      const wallet = info.wallet;
+
+      if (!wallet) {
+        LOG.error(
+          { walletAddress, mint },
+          "❌ Missing wallet in monitor state"
+        );
+
+        if (percent === 100) {
+          await redis.hset(positionKey(walletAddress, mint), "status", "open");
+        }
+
+        return;
+      }
+
+      LOG.info(
+        {
+          wallet: wallet.publicKey.toBase58(),
+          mint,
+          percent,
+          reason,
+        },
+        "🔐 Using user wallet for queued SELL"
+      );
+
+      const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
+
+      LOG.info(
+        { traceId, walletAddress, mint, reason, percent },
+        "🧪 QUEUED SELL TRACE START"
+      );
+
+      if (percent === 100) {
+        sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+      } else {
+        sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 2, traceId);
+      }
+
+      sellTxid =
+        sellRes?.txid ||
+        sellRes?.signature ||
+        sellRes?.sig ||
+        sellRes ||
+        null;
+
+      await chargeSellFee(wallet, sellTxid, mint, reason);
+    } catch (err) {
+      LOG.error(
+        { err, walletAddress, mint, reason },
+        "❌ Queued sell execution failed"
+      );
+
+      if (percent === 100) {
+        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      }
+
+      return;
+    }
+
+    if (percent === 100) {
+      const key = positionKey(walletAddress, mint);
+
+      await redis.hset(key, "status", "closed");
+      await redis.srem(walletPositionsKey(walletAddress), mint);
+    }
+
+    try {
+      exitPrice = await getCurrentPrice(mint);
+    } catch {}
+
+    await saveTradeToBackend({
+      walletAddress,
+      mint,
+      solAmount,
+      entryPrice: entry,
+      exitPrice,
+      buyTxid,
+      sellTxid,
+      sourceChannel,
+      reason,
+    });
+
+    if (percent === 100) {
+      state.users.delete(walletAddress);
+      state.entryPrices.delete(walletAddress);
+      state.highestPrices.delete(walletAddress);
+    }
+
     LOG.info(
       {
         walletAddress,
         mint,
-        entry,
-        walletHigh,
-        currentPrice: price,
-        trailingDistancePct,
-        dropFromPeakPct,
-        trailingExitPrice,
+        reason,
+        percent,
       },
-      "📉 Trailing stop hit (drawdown from peak)"
+      "✅ Queued trade finalized"
     );
-
-    await finalizeTrade({ reason: "trailing", percent: 100 });
-    return;
   }
-}
 
-} // ✅ THIS closes monitorUser
+  await finalizeTrade({ reason, percent });
+}
 
 
 // ========= Safe wrappers =========
@@ -2158,6 +2411,7 @@ if (entryPrice) {
     );
   }
 }
+
 
 
  // ======= Step A: lightweight Express server for bot APIs =======
