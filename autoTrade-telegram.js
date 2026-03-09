@@ -1874,6 +1874,7 @@ if (
   return;
 }
 
+} // close trailing stop IF
 } // ✅ THIS closes monitorUser
 
 // EXECUTE QUEUE SELL
