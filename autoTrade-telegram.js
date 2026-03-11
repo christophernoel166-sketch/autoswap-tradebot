@@ -40,7 +40,6 @@ import {
   walletPositionsKey, // ✅ add this
   POSITION_FIELDS,
 } from "./src/redis/positionKeys.js";
-import { enqueueBuyJob } from "./src/queue/tradeQueue.js";
 import {
   startBuyWorker,
   registerBuyExecutor,
