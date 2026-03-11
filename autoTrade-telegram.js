@@ -17,7 +17,12 @@ import {
 // Ensure fetch exists in Node <18 (optional)
 import nodeFetch from "node-fetch";
 if (typeof global.fetch !== "function") global.fetch = nodeFetch;
-
+import {
+  enqueueBuyJob,
+  acquireBuyLock,
+  enqueueSellJob,
+  acquireSellLock
+} from "./src/queue/tradeQueue.js";
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
 import bot from "./src/telegram/bot.js";
