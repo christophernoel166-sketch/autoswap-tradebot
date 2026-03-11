@@ -16,17 +16,28 @@ const SELL_LOCK_TTL = 120;
  */
 
 export async function enqueueBuyJob(job) {
-  const payload = JSON.stringify(job);
-  await redis.rpush(buyQueueKey(), payload);
+  try {
+    const payload = JSON.stringify(job);
+    await redis.rpush(buyQueueKey(), payload);
+  } catch (err) {
+    console.error("❌ enqueueBuyJob failed:", err?.message || err);
+    throw err;
+  }
 }
 
 export async function popBuyJob() {
-  const res = await redis.lpop(buyQueueKey());
-  if (!res) return null;
-
   try {
-    return JSON.parse(res);
-  } catch {
+    const res = await redis.lpop(buyQueueKey());
+    if (!res) return null;
+
+    try {
+      return JSON.parse(res);
+    } catch (err) {
+      console.warn("⚠️ Failed to parse buy job JSON:", res);
+      return null;
+    }
+  } catch (err) {
+    console.error("❌ popBuyJob failed:", err?.message || err);
     return null;
   }
 }
@@ -38,17 +49,28 @@ export async function popBuyJob() {
  */
 
 export async function enqueueSellJob(job) {
-  const payload = JSON.stringify(job);
-  await redis.rpush(sellQueueKey(), payload);
+  try {
+    const payload = JSON.stringify(job);
+    await redis.rpush(sellQueueKey(), payload);
+  } catch (err) {
+    console.error("❌ enqueueSellJob failed:", err?.message || err);
+    throw err;
+  }
 }
 
 export async function popSellJob() {
-  const res = await redis.lpop(sellQueueKey());
-  if (!res) return null;
-
   try {
-    return JSON.parse(res);
-  } catch {
+    const res = await redis.lpop(sellQueueKey());
+    if (!res) return null;
+
+    try {
+      return JSON.parse(res);
+    } catch (err) {
+      console.warn("⚠️ Failed to parse sell job JSON:", res);
+      return null;
+    }
+  } catch (err) {
+    console.error("❌ popSellJob failed:", err?.message || err);
     return null;
   }
 }
@@ -61,14 +83,22 @@ export async function popSellJob() {
  */
 
 export async function acquireBuyLock(walletAddress, mint) {
-  const key = buyLockKey(walletAddress, mint);
+  try {
+    const key = buyLockKey(walletAddress, mint);
 
-  const ok = await redis.set(key, "1", {
-    NX: true,
-    EX: BUY_LOCK_TTL,
-  });
+    const ok = await redis.set(
+      key,
+      "1",
+      "EX",
+      BUY_LOCK_TTL,
+      "NX"
+    );
 
-  return ok === "OK";
+    return ok === "OK";
+  } catch (err) {
+    console.error("❌ acquireBuyLock failed:", err?.message || err);
+    return false;
+  }
 }
 
 /**
@@ -79,12 +109,20 @@ export async function acquireBuyLock(walletAddress, mint) {
  */
 
 export async function acquireSellLock(walletAddress, mint) {
-  const key = sellLockKey(walletAddress, mint);
+  try {
+    const key = sellLockKey(walletAddress, mint);
 
-  const ok = await redis.set(key, "1", {
-    NX: true,
-    EX: SELL_LOCK_TTL,
-  });
+    const ok = await redis.set(
+      key,
+      "1",
+      "EX",
+      SELL_LOCK_TTL,
+      "NX"
+    );
 
-  return ok === "OK";
+    return ok === "OK";
+  } catch (err) {
+    console.error("❌ acquireSellLock failed:", err?.message || err);
+    return false;
+  }
 }
