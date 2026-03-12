@@ -1273,13 +1273,6 @@ async function tryMarkPositionClosing(walletAddress, mint) {
   }
 }
 
-
-
-// ===================================================
-// 🔔 REDIS → BOT: MANUAL SELL COMMAND LISTENER
-// (after monitored map is initialized)
-// ===================================================
-
 // ===================================================
 // 🔔 REDIS → BOT: MANUAL SELL COMMAND LISTENER
 // (after monitored map is initialized)
@@ -1345,7 +1338,7 @@ redisSub.on("message", async (channel, message) => {
 
       if (!slippageBps) {
         const userSlippagePercent =
-          typeof user.maxSlippagePercent === "number" ? user.maxSlippagePercent : 2;
+          typeof user.maxSlippagePercent === "number" ? user.maxSlippagePercent : 5;
 
         slippageBps = Math.min(
           Math.max(Math.round(userSlippagePercent * 100), 50), // min 0.5%
@@ -1366,7 +1359,7 @@ redisSub.on("message", async (channel, message) => {
     const traceId = `${walletAddress}:${mint}:manual_sell:${Date.now()}`;
     LOG.info({ traceId, walletAddress, mint, slippageBps }, "🧪 MANUAL SELL TRACE START");
 
-    const sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+    const sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
 
     const sellTxid =
       sellRes?.txid ||
@@ -1588,9 +1581,9 @@ const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
 LOG.info({ traceId, walletAddress, mint, reason, percent }, "🧪 SELL TRACE START");
 
 if (percent === 100) {
-  sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+  sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
 } else {
-  sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 2, traceId);
+  sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 4, traceId);
 }
 
 
@@ -1958,9 +1951,9 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
       );
 
       if (percent === 100) {
-        sellRes = await safeSellAll(wallet, mint, slippageBps, 2, traceId);
+        sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
       } else {
-        sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 2, traceId);
+        sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 4, traceId);
       }
 
       sellTxid =
@@ -2037,7 +2030,7 @@ async function safeExecuteSwap(
     feeWallet,
     slippageBps, // 🔐 STEP 3.5 — USER SLIPPAGE WIRED IN
   },
-  retries = 3
+  retries = 4
 ) {
   for (let i = 0; i < retries; i++) {
     try {
@@ -2073,7 +2066,7 @@ async function safeSellPartial(
   mint,
   percent,
   slippageBps,
-  retries = 2,
+  retries = 4,
   traceId = null
 ) {
   for (let i = 0; i < retries; i++) {
@@ -2121,7 +2114,7 @@ async function safeSellAll(
   wallet,
   mint,
   slippageBps,
-  retries = 2,
+  retries = 4,
   traceId = null
 ) {
   for (let i = 0; i < retries; i++) {
@@ -2254,7 +2247,7 @@ if (balance < REQUIRED_LAMPORTS) {
     const userSlippagePercent =
       typeof user.maxSlippagePercent === "number"
         ? user.maxSlippagePercent
-        : 2;
+        : 5;
 
     const slippageBps = Math.min(
       Math.max(Math.round(userSlippagePercent * 100), 50),  // 0.5% min
