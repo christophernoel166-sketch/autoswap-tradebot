@@ -1,5 +1,5 @@
 import User from "../../models/User.js";
-import { popSellJob } from "../queue/tradeQueue.js";
+import { popSellJob, releaseSellLock } from "../queue/tradeQueue.js";
 
 const SELL_CONCURRENCY = Number(process.env.SELL_CONCURRENCY || 10);
 
@@ -26,24 +26,33 @@ async function processOneSellJob(job) {
     return;
   }
 
-  const user = await User.findOne({ walletAddress }).lean();
-  if (!user) {
-    console.warn("⚠️ Sell job skipped — user not found:", walletAddress);
-    return;
-  }
+  try {
+    const user = await User.findOne({ walletAddress }).lean();
+    if (!user) {
+      console.warn("⚠️ Sell job skipped — user not found:", walletAddress);
+      return;
+    }
 
-  if (typeof executeUserSellHandler !== "function") {
-    console.warn("⚠️ Sell executor not registered");
-    return;
-  }
+    if (typeof executeUserSellHandler !== "function") {
+      console.warn("⚠️ Sell executor not registered");
+      return;
+    }
 
-  await executeUserSellHandler({
-    walletAddress,
-    mint,
-    reason: reason || "sell",
-    percent: Number(percent || 100),
-    user,
-  });
+    await executeUserSellHandler({
+      walletAddress,
+      mint,
+      reason: reason || "sell",
+      percent: Number(percent || 100),
+      user,
+    });
+
+  } catch (err) {
+    console.error("❌ Sell job execution failed:", err?.message || err);
+
+  } finally {
+    // 🔓 Always release the sell lock
+    await releaseSellLock(walletAddress, mint);
+  }
 }
 
 async function runSellWorkerLoop() {

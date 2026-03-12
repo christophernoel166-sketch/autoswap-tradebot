@@ -151,3 +151,25 @@ export async function acquireSellLock(walletAddress, mint) {
     return false;
   }
 }
+
+export async function releaseBuyLock(walletAddress, mint) {
+  try {
+    const key = buyLockKey(walletAddress, mint);
+    await redis.del(key);
+    return true;
+  } catch (err) {
+    console.error("❌ releaseBuyLock failed:", err?.message || err);
+    return false;
+  }
+}
+
+export async function releaseSellLock(walletAddress, mint) {
+  try {
+    const key = sellLockKey(walletAddress, mint);
+    await redis.del(key);
+    return true;
+  } catch (err) {
+    console.error("❌ releaseSellLock failed:", err?.message || err);
+    return false;
+  }
+}

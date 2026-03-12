@@ -1,5 +1,5 @@
 import User from "../../models/User.js";
-import { popBuyJob } from "../queue/tradeQueue.js";
+import { popBuyJob, releaseBuyLock } from "../queue/tradeQueue.js";
 
 const BUY_CONCURRENCY = Number(process.env.BUY_CONCURRENCY || 5);
 
@@ -27,18 +27,27 @@ async function processOneBuyJob(job) {
     return;
   }
 
-  const user = await User.findOne({ walletAddress }).lean();
-  if (!user) {
-    console.warn("⚠️ Buy job skipped — user not found:", walletAddress);
-    return;
-  }
+  try {
+    const user = await User.findOne({ walletAddress }).lean();
+    if (!user) {
+      console.warn("⚠️ Buy job skipped — user not found:", walletAddress);
+      return;
+    }
 
-  if (typeof executeUserTradeHandler !== "function") {
-    console.warn("⚠️ Buy executor not registered");
-    return;
-  }
+    if (typeof executeUserTradeHandler !== "function") {
+      console.warn("⚠️ Buy executor not registered");
+      return;
+    }
 
-  await executeUserTradeHandler(user, mint, channelId);
+    await executeUserTradeHandler(user, mint, channelId);
+
+  } catch (err) {
+    console.error("❌ Buy job execution failed:", err?.message || err);
+
+  } finally {
+    // 🔓 Always release the buy lock
+    await releaseBuyLock(walletAddress, mint);
+  }
 }
 
 async function runBuyWorkerLoop() {
