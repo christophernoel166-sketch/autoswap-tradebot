@@ -11,6 +11,21 @@ const SELL_LOCK_TTL = 120;
 
 /**
  * ========================================
+ * INTERNAL HELPERS
+ * ========================================
+ */
+
+function parseQueuePayload(payload, type = "job") {
+  try {
+    return JSON.parse(payload);
+  } catch (err) {
+    console.warn(`⚠️ Failed to parse ${type} JSON:`, payload);
+    return null;
+  }
+}
+
+/**
+ * ========================================
  * BUY QUEUE
  * ========================================
  */
@@ -25,17 +40,22 @@ export async function enqueueBuyJob(job) {
   }
 }
 
+/**
+ * Blocking pop:
+ * waits until a buy job exists instead of polling Redis repeatedly.
+ *
+ * BRPOP response is usually:
+ *   [queueName, payload]
+ */
 export async function popBuyJob() {
   try {
-    const res = await redis.lpop(buyQueueKey());
+    const res = await redis.brpop(buyQueueKey(), 0);
     if (!res) return null;
 
-    try {
-      return JSON.parse(res);
-    } catch (err) {
-      console.warn("⚠️ Failed to parse buy job JSON:", res);
-      return null;
-    }
+    const payload = Array.isArray(res) ? res[1] : res;
+    if (!payload) return null;
+
+    return parseQueuePayload(payload, "buy job");
   } catch (err) {
     console.error("❌ popBuyJob failed:", err?.message || err);
     return null;
@@ -58,17 +78,22 @@ export async function enqueueSellJob(job) {
   }
 }
 
+/**
+ * Blocking pop:
+ * waits until a sell job exists instead of polling Redis repeatedly.
+ *
+ * BRPOP response is usually:
+ *   [queueName, payload]
+ */
 export async function popSellJob() {
   try {
-    const res = await redis.lpop(sellQueueKey());
+    const res = await redis.brpop(sellQueueKey(), 0);
     if (!res) return null;
 
-    try {
-      return JSON.parse(res);
-    } catch (err) {
-      console.warn("⚠️ Failed to parse sell job JSON:", res);
-      return null;
-    }
+    const payload = Array.isArray(res) ? res[1] : res;
+    if (!payload) return null;
+
+    return parseQueuePayload(payload, "sell job");
   } catch (err) {
     console.error("❌ popSellJob failed:", err?.message || err);
     return null;

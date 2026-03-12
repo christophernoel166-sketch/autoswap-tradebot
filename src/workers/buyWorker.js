@@ -2,7 +2,6 @@ import User from "../../models/User.js";
 import { popBuyJob } from "../queue/tradeQueue.js";
 
 const BUY_CONCURRENCY = Number(process.env.BUY_CONCURRENCY || 5);
-const BUY_POLL_MS = Number(process.env.BUY_POLL_MS || 1000);
 
 let activeBuys = 0;
 
@@ -14,6 +13,10 @@ let executeUserTradeHandler = null;
 
 export function registerBuyExecutor(fn) {
   executeUserTradeHandler = fn;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function processOneBuyJob(job) {
@@ -38,32 +41,45 @@ async function processOneBuyJob(job) {
   await executeUserTradeHandler(user, mint, channelId);
 }
 
-async function tickBuyWorker() {
-  while (activeBuys < BUY_CONCURRENCY) {
-    const job = await popBuyJob();
-    if (!job) break;
+async function runBuyWorkerLoop() {
+  while (true) {
+    try {
+      // Respect concurrency cap
+      if (activeBuys >= BUY_CONCURRENCY) {
+        await sleep(100);
+        continue;
+      }
 
-    activeBuys++;
+      // Blocking pop: waits until a job exists
+      const job = await popBuyJob();
+      if (!job) {
+        // If Redis returned null for some reason, avoid tight loop
+        await sleep(100);
+        continue;
+      }
 
-    processOneBuyJob(job)
-      .catch((err) => {
-        console.error("❌ Buy worker job failed:", {
-          err: err?.message || err,
-          job,
+      activeBuys++;
+
+      processOneBuyJob(job)
+        .catch((err) => {
+          console.error("❌ Buy worker job failed:", {
+            err: err?.message || err,
+            job,
+          });
+        })
+        .finally(() => {
+          activeBuys--;
         });
-      })
-      .finally(() => {
-        activeBuys--;
-      });
+    } catch (err) {
+      console.error("❌ Buy worker loop failed:", err?.message || err);
+      await sleep(500);
+    }
   }
 }
 
 export function startBuyWorker() {
   console.log(`🚀 Buy worker started (concurrency=${BUY_CONCURRENCY})`);
-
-  setInterval(() => {
-    tickBuyWorker().catch((err) => {
-      console.error("❌ Buy worker tick failed:", err?.message || err);
-    });
-  }, BUY_POLL_MS);
+  runBuyWorkerLoop().catch((err) => {
+    console.error("❌ Buy worker crashed:", err?.message || err);
+  });
 }

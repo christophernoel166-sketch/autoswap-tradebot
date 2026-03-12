@@ -2,7 +2,6 @@ import User from "../../models/User.js";
 import { popSellJob } from "../queue/tradeQueue.js";
 
 const SELL_CONCURRENCY = Number(process.env.SELL_CONCURRENCY || 10);
-const SELL_POLL_MS = Number(process.env.SELL_POLL_MS || 500);
 
 let activeSells = 0;
 
@@ -13,6 +12,10 @@ let executeUserSellHandler = null;
 
 export function registerSellExecutor(fn) {
   executeUserSellHandler = fn;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function processOneSellJob(job) {
@@ -43,32 +46,45 @@ async function processOneSellJob(job) {
   });
 }
 
-async function tickSellWorker() {
-  while (activeSells < SELL_CONCURRENCY) {
-    const job = await popSellJob();
-    if (!job) break;
+async function runSellWorkerLoop() {
+  while (true) {
+    try {
+      // Respect concurrency cap
+      if (activeSells >= SELL_CONCURRENCY) {
+        await sleep(100);
+        continue;
+      }
 
-    activeSells++;
+      // Blocking pop: waits until a job exists
+      const job = await popSellJob();
+      if (!job) {
+        // Avoid tight loop if Redis returned null unexpectedly
+        await sleep(100);
+        continue;
+      }
 
-    processOneSellJob(job)
-      .catch((err) => {
-        console.error("❌ Sell worker job failed:", {
-          err: err?.message || err,
-          job,
+      activeSells++;
+
+      processOneSellJob(job)
+        .catch((err) => {
+          console.error("❌ Sell worker job failed:", {
+            err: err?.message || err,
+            job,
+          });
+        })
+        .finally(() => {
+          activeSells--;
         });
-      })
-      .finally(() => {
-        activeSells--;
-      });
+    } catch (err) {
+      console.error("❌ Sell worker loop failed:", err?.message || err);
+      await sleep(500);
+    }
   }
 }
 
 export function startSellWorker() {
   console.log(`🚀 Sell worker started (concurrency=${SELL_CONCURRENCY})`);
-
-  setInterval(() => {
-    tickSellWorker().catch((err) => {
-      console.error("❌ Sell worker tick failed:", err?.message || err);
-    });
-  }, SELL_POLL_MS);
+  runSellWorkerLoop().catch((err) => {
+    console.error("❌ Sell worker crashed:", err?.message || err);
+  });
 }
