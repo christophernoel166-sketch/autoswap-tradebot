@@ -12,6 +12,28 @@ if (!REDIS_URL) {
 }
 
 export const redis = new Redis(REDIS_URL, {
-  maxRetriesPerRequest: null, // Upstash + long-lived connections
-  enableReadyCheck: true,
+  maxRetriesPerRequest: null,
+  enableReadyCheck: false,
+  lazyConnect: false,
+  tls: {},
+});
+
+redis.on("connect", () => {
+  console.log("✅ Redis connected");
+});
+
+redis.on("ready", () => {
+  console.log("✅ Redis ready");
+});
+
+redis.on("error", (err) => {
+  console.error("❌ Redis error:", err?.message || err);
+});
+
+redis.on("close", () => {
+  console.warn("⚠️ Redis connection closed");
+});
+
+redis.on("reconnecting", () => {
+  console.warn("🔄 Redis reconnecting...");
 });
