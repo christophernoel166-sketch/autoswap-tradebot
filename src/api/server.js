@@ -22,7 +22,7 @@ import channelsRoutes from "../../routes/channels.js";
 import adminChannels from "../../routes/adminChannels.js";
 import withdrawRouter from "../../routes/withdraw.js";
 import channelsRouter from "./channels.js";
-
+import onChainBalanceRoute from "./src/api/onChainBalance.js";
 
 
 import userBalance from "./userBalance.js";
@@ -105,7 +105,7 @@ export function createApiServer() {
   app.use("/api/notifications", notificationRoute);
   app.use("/auth", authWalletRouter);
   app.use("/api/active-positions", activePositionsApi);
-
+app.use("/api/onchain-balance", onChainBalanceRoute);
 
   app.use("/api", manualSellApi);
   app.use("/api/channels", channelsRoutes);

@@ -17,7 +17,7 @@ import DepositModal from "./wallet/DepositModal";
 import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
 import WalletBalanceCard from "./WalletBalanceCard";
 import Toggle from "./ui/Toggle";
-import { Connection, LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+
 
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
@@ -26,14 +26,7 @@ import WalletHistoryTable from "./wallet/WalletHistoryTable";
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
 
-const RPC_ENDPOINT =
-  import.meta.env.VITE_RPC_URL || "https://api.mainnet-beta.solana.com";
 
-const connection = new Connection(RPC_ENDPOINT);
-
-if (typeof window !== "undefined") {
-  window.__rpc = connection;
-}
 
 
 
@@ -208,6 +201,36 @@ useEffect(() => {
   }
 }, [isTelegramLinked]);
 
+// USER ONCHAIN BALANCE
+useEffect(() => {
+  async function fetchOnChainBalance() {
+    try {
+      if (!user?.tradingWalletPublicKey) {
+        setOnChainBalance(0);
+        return;
+      }
+
+      const r = await fetch(
+        `${API_BASE}/api/onchain-balance/${encodeURIComponent(user.tradingWalletPublicKey)}`
+      );
+
+      if (!r.ok) {
+        throw new Error("failed_to_fetch_onchain_balance");
+      }
+
+      const data = await r.json();
+      setOnChainBalance(Number(data.sol || 0));
+    } catch (err) {
+      console.warn("Failed to fetch on-chain balance", err);
+      setOnChainBalance(0);
+    }
+  }
+
+  fetchOnChainBalance();
+
+  const interval = setInterval(fetchOnChainBalance, 10000);
+  return () => clearInterval(interval);
+}, [user?.tradingWalletPublicKey]);
 
 /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
 useEffect(() => {
