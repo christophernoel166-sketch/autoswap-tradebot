@@ -22,7 +22,8 @@ import channelsRoutes from "../../routes/channels.js";
 import adminChannels from "../../routes/adminChannels.js";
 import withdrawRouter from "../../routes/withdraw.js";
 import channelsRouter from "./channels.js";
-import onChainBalanceRoute from "./src/api/onChainBalance.js";
+import onChainBalance from "./onChainBalance.js";
+
 
 
 import userBalance from "./userBalance.js";
