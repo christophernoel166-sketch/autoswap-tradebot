@@ -106,7 +106,8 @@ export function createApiServer() {
   app.use("/api/notifications", notificationRoute);
   app.use("/auth", authWalletRouter);
   app.use("/api/active-positions", activePositionsApi);
-app.use("/api/onchain-balance", onChainBalanceRoute);
+app.use("/api/onchain-balance", onChainBalance);
+
 
   app.use("/api", manualSellApi);
   app.use("/api/channels", channelsRoutes);
