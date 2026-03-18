@@ -1426,6 +1426,7 @@ redisSub.on("message", async (channel, message) => {
   }
 });
 
+// ENSURE MONITOR USER
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
   const state = {
@@ -1493,17 +1494,12 @@ for (const [walletAddress] of state.users.entries()) {
   LOG.info({ mint }, "monitor started");
   return state;
 }
-
+// MONITOR USER
 async function monitorUser(mint, price, walletAddress, info, state) {
   const {
-    profile,
-    buyTxid,
-    solAmount,
-    entryPrice: storedEntryPrice,
-    sourceChannel,
-    slippageBps, // 🔐 REQUIRED
-
-  } = info;
+  profile,
+  entryPrice: storedEntryPrice,
+} = info;
 
   const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
   if (!entry) return;
@@ -1512,165 +1508,7 @@ async function monitorUser(mint, price, walletAddress, info, state) {
   if (typeof info.tpStage === "undefined") info.tpStage = 0;
 
 
- /**
- * ===================================================
- * 🔁 INTERNAL HELPER — FINALIZE TRADE (PER-USER WALLET)
- * ===================================================
- */
-async function finalizeTrade({ reason, percent = 100 }) {
-  let sellRes;
-  let exitPrice = price;
-  let sellTxid = null;
-
-  try {
-    // ===================================================
-    // 🔒 GUARD FULL CLOSE ONLY (100%)
-    // Prevent double-sell across bot instances
-    // ===================================================
-    if (percent === 100) {
-      const allowed = await tryMarkPositionClosing(walletAddress, mint);
-      if (!allowed) {
-        LOG.warn(
-          { walletAddress, mint },
-          "Finalize aborted — already closing/closed"
-        );
-        return;
-      }
-    }
-
-    // ===================================================
-    // 🔐 USE USER WALLET FROM MONITOR STATE
-    // (Stored during BUY registration)
-    // ===================================================
-    const wallet = info.wallet;
-
-    if (!wallet) {
-      LOG.error(
-        { walletAddress, mint },
-        "❌ Missing wallet in monitor state"
-      );
-
-      // Revert Redis status if needed
-      if (percent === 100) {
-        await redis.hset(
-          positionKey(walletAddress, mint),
-          "status",
-          "open"
-        );
-      }
-
-      return;
-    }
-
-    LOG.info(
-      {
-        wallet: wallet.publicKey.toBase58(),
-        mint,
-        percent,
-      },
-      "🔐 Using user wallet for SELL"
-    );
-
-    // ===================================================
-// 🚀 EXECUTE SELL FROM USER WALLET
-// ===================================================
-
-// ✅ traceId for one sell attempt
-const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
-
-LOG.info({ traceId, walletAddress, mint, reason, percent }, "🧪 SELL TRACE START");
-
-if (percent === 100) {
-  sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
-} else {
-  sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 4, traceId);
-}
-
-
-    sellTxid =
-  sellRes?.txid ||
-  sellRes?.signature ||
-  sellRes?.sig ||
-  sellRes ||
-  null;
-
-// 💸 Charge platform SELL fee (every sell action)
-await chargeSellFee(wallet, sellTxid, mint, reason);
-
-  } catch (err) {
-    LOG.error(
-      { err, walletAddress, mint, reason },
-      "❌ Sell execution failed"
-    );
-
-    // 🔄 Revert Redis status if full close failed
-    if (percent === 100) {
-      await redis.hset(
-        positionKey(walletAddress, mint),
-        "status",
-        "open"
-      );
-    }
-
-    return;
-  }
-
-  // ===================================================
-  // 🔒 MARK POSITION CLOSED IN REDIS (FULL CLOSE ONLY)
-  // ===================================================
-  if (percent === 100) {
-    const key = positionKey(walletAddress, mint);
-
-    await redis.hset(key, "status", "closed");
-
-    // Remove mint from wallet active set
-    await redis.srem(walletPositionsKey(walletAddress), mint);
-  }
-
-  // ===================================================
-  // 📈 FETCH EXIT PRICE (BEST EFFORT)
-  // ===================================================
-  try {
-    exitPrice = await getCurrentPrice(mint);
-  } catch {
-    // Ignore failure
-  }
-
-  // ===================================================
-  // 📦 SAVE TRADE RECORD
-  // ===================================================
-  await saveTradeToBackend({
-    walletAddress,
-    mint,
-    solAmount,
-    entryPrice: entry,
-    exitPrice,
-    buyTxid,
-    sellTxid,
-    sourceChannel,
-    reason,
-  });
-
-  // ===================================================
-  // 🧹 CLEANUP IN-MEMORY MONITOR (FULL CLOSE ONLY)
-  // ===================================================
-  if (percent === 100) {
-    state.users.delete(walletAddress);
-    state.entryPrices.delete(walletAddress);
-    state.highestPrices.delete(walletAddress);
-  }
-
-  LOG.info(
-    {
-      walletAddress,
-      mint,
-      reason,
-      percent,
-    },
-    "✅ Trade finalized (per-user wallet architecture)"
-  );
-}
-
+// INTERNAL HELPER
 /**
  * ===================================================
  * 🛑 STOP LOSS — SELL ALL
