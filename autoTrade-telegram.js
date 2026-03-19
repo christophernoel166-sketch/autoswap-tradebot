@@ -46,7 +46,7 @@ import {
 } from "./src/workers/buyWorker.js";
 import { startSellWorker, registerSellExecutor } from "./src/workers/sellWorker.js";
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
-
+import { getDexScreenerPrice } from "./src/services/priceFeed.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1382,8 +1382,8 @@ redisSub.on("message", async (channel, message) => {
     // Fetch exit price (best effort)
     let exitPrice = 0;
     try {
-      exitPrice = await getCurrentPrice(mint);
-    } catch {}
+  exitPrice = await getDexScreenerPrice(mint);
+} catch {}
 
     // Entry price (prefer monitor state entryPrices map)
     const entryPrice =
@@ -1443,11 +1443,11 @@ async function ensureMonitor(mint) {
 
   const loop = async () => {
     try {
-      const price = await getCurrentPrice(mint);
-      if (typeof price !== "number" || Number.isNaN(price)) {
-        LOG.warn({ mint, price }, "invalid price from getCurrentPrice");
-        return;
-      }
+      const price = await getDexScreenerPrice(mint);
+if (typeof price !== "number" || Number.isNaN(price)) {
+  LOG.warn({ mint, price }, "invalid price from getDexScreenerPrice");
+  return;
+}
       
     state.lastPrice = price;
 
@@ -1473,6 +1473,93 @@ for (const [walletAddress] of state.users.entries()) {
           LOG.error({ err, mint, walletAddress }, "monitorUser error");
         }
       }
+
+state._lastSnapshotAt = state._lastSnapshotAt || 0;
+
+if (Date.now() - state._lastSnapshotAt < 3000) {
+  return; // ⛔ skip snapshot (only every 3s)
+}
+
+state._lastSnapshotAt = Date.now();
+// ===================================================
+// 📊 BUILD + STORE WALLET SNAPSHOTS (LIGHTWEIGHT)
+// ===================================================
+const snapshotsByWallet = new Map();
+
+for (const [walletAddress, info] of state.users.entries()) {
+  const entry = state.entryPrices.get(walletAddress) ?? info.entryPrice;
+  if (!entry) continue;
+
+  const currentPrice = price;
+  const changePercent = ((currentPrice - entry) / entry) * 100;
+
+  const solAmount = info.solAmount || 0;
+  const pnlSol = (changePercent / 100) * solAmount;
+
+  const snapshotItem = {
+  mint,
+
+  // core trade data
+  entryPrice: entry,
+  currentPrice,
+  changePercent,
+  pnlSol,
+
+  // position info
+  solAmount: info.solAmount || 0,
+  tpStage: info.tpStage || 0,
+  highestPrice: state.highestPrices?.get(walletAddress) || entry,
+
+  // metadata
+  buyTxid: info.buyTxid || null,
+  sourceChannel: info.sourceChannel || null,
+  openedAt: info.openedAt || 0,
+};
+
+  if (!snapshotsByWallet.has(walletAddress)) {
+    snapshotsByWallet.set(walletAddress, []);
+  }
+
+  snapshotsByWallet.get(walletAddress).push(snapshotItem);
+}
+
+// Write snapshots to Redis (MERGE per wallet)
+for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
+  try {
+    const key = walletSnapshotKey(walletAddress);
+
+    // Get existing snapshot (if any)
+    let existing = [];
+    const raw = await redis.get(key);
+
+    if (raw) {
+      try {
+        existing = JSON.parse(raw);
+      } catch {
+        existing = [];
+      }
+    }
+
+    // Remove old entries for this mint
+    const filtered = existing.filter(p => p.mint !== mint);
+
+    // Merge new + existing
+    const merged = [...filtered, ...newPositions];
+
+    await redis.set(
+      key,
+      JSON.stringify(merged),
+      "EX",
+      10
+    );
+
+  } catch (err) {
+    LOG.error(
+      { err, walletAddress },
+      "❌ Failed to write wallet snapshot"
+    );
+  }
+}
 
       if (state.users.size === 0) {
         LOG.info({ mint }, "no users left — stopping monitor");
@@ -1823,8 +1910,8 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
     }
 
     try {
-      exitPrice = await getCurrentPrice(mint);
-    } catch {}
+  exitPrice = await getDexScreenerPrice(mint);
+} catch {}
 
     await saveTradeToBackend({
       walletAddress,
@@ -2130,18 +2217,18 @@ LOG.info(
 
 // 💸 Charge platform BUY fee (INSERT THIS HERE)
 await chargeBuyFee(wallet, buyTxid, mint);
-    // ===================================================
-    // 📈 Determine entry price
-    // ===================================================
-    let entryPrice = null;
-    try {
-      entryPrice = await getCurrentPrice(mint);
-    } catch {
-      LOG.warn(
-        { wallet: user.walletAddress, mint },
-        "⚠️ Failed to fetch entry price"
-      );
-    }
+   // ===================================================
+// 📈 Determine entry price (DexScreener basis)
+// ===================================================
+let entryPrice = null;
+try {
+  entryPrice = await getDexScreenerPrice(mint);
+} catch {
+  LOG.warn(
+    { wallet: user.walletAddress, mint },
+    "⚠️ Failed to fetch DexScreener entry price"
+  );
+}
 
     // ===================================================
 // 🧠 Write position to Redis

@@ -1,57 +1,60 @@
-// src/redis/positionKeys.js
-
 /**
  * ===================================================
- * Redis key helpers for ACTIVE POSITIONS
- * Shared by BOT + API
+ * 📦 REDIS POSITION KEYS
  * ===================================================
  */
 
 /**
- * Set of active token mints for a wallet
- * Used to list active positions fast
+ * Active positions set per wallet
+ * (Tracks which mints a wallet currently holds)
  */
 export function walletActiveSet(walletAddress) {
-  return `active:wallet:${walletAddress}`;
+  return `wallet:active:${walletAddress}`;
 }
 
 /**
- * Alias for compatibility with bot / API naming
- * (DO NOT REMOVE — used by autoTrade-telegram.js)
- */
-export function walletPositionsKey(walletAddress) {
-  return walletActiveSet(walletAddress);
-}
-
-/**
- * Hash key for a specific position
+ * Individual position hash
+ * (Stores entry, size, status, etc.)
  */
 export function positionKey(walletAddress, mint) {
   return `position:${walletAddress}:${mint}`;
 }
 
 /**
- * Standard position hash fields
- * (documented, not enforced by Redis)
+ * Alias for wallet active set (used in some parts of code)
+ */
+export function walletPositionsKey(walletAddress) {
+  return walletActiveSet(walletAddress);
+}
+
+/**
+ * ===================================================
+ * 📊 DASHBOARD SNAPSHOT KEY (NEW)
+ * ===================================================
+ * One compact JSON per wallet
+ */
+export function walletSnapshotKey(walletAddress) {
+  return `wallet:snapshot:${walletAddress}`;
+}
+
+/**
+ * ===================================================
+ * 🧾 POSITION FIELDS (STANDARDIZED)
+ * ===================================================
  */
 export const POSITION_FIELDS = {
   walletAddress: "walletAddress",
   mint: "mint",
   sourceChannel: "sourceChannel",
 
-  // trade info
   solAmount: "solAmount",
   entryPrice: "entryPrice",
-  buyTxid: "buyTxid",
 
-  // TP / SL state
   tpStage: "tpStage",
   highestPrice: "highestPrice",
 
-  // 🔒 Lifecycle state (prevents double sell)
-  // open → closing → closed
-  status: "status",
-
-  // timestamps
+  buyTxid: "buyTxid",
   openedAt: "openedAt",
+
+  status: "status", // open | closing | closed
 };
