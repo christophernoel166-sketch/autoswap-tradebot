@@ -47,7 +47,10 @@ import {
 } from "./src/workers/buyWorker.js";
 import { startSellWorker, registerSellExecutor } from "./src/workers/sellWorker.js";
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
-import { getDexScreenerPrice } from "./src/services/priceFeed.js";
+import {
+  getDexScreenerPrice,
+  getDexScreenerPrices,
+} from "./src/services/priceFeed.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1014,6 +1017,11 @@ registerSellExecutor(executeQueuedSell);
 
 startBuyWorker();
 startSellWorker();
+setInterval(() => {
+  refreshAllMonitoredMintPrices().catch((err) => {
+    LOG.error({ err }, "❌ global price refresh interval failed");
+  });
+}, 3000);
 
     // ========= STEP 3B — Start subscription watcher =========
     const SUBSCRIPTION_POLL_MS = parseInt(
@@ -1427,46 +1435,65 @@ redisSub.on("message", async (channel, message) => {
   }
 });
 
+async function refreshAllMonitoredMintPrices() {
+  try {
+    const mints = Array.from(monitored.keys());
+    if (mints.length === 0) return;
+
+    const prices = await getDexScreenerPrices(mints);
+
+    for (const mint of mints) {
+      const state = monitored.get(mint);
+      if (!state) continue;
+
+      const price = prices.get(mint);
+      if (typeof price !== "number" || Number.isNaN(price)) continue;
+
+      state.lastPrice = price;
+    }
+  } catch (err) {
+    LOG.error({ err }, "❌ refreshAllMonitoredMintPrices failed");
+  }
+}
 // ENSURE MONITOR USER
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
+
   const state = {
-  mint,
-  users: new Map(),
-  entryPrices: new Map(),
+    mint,
+    users: new Map(),
+    entryPrices: new Map(),
 
-  // ✅ NEW: per-wallet highest
-  highestPrices: new Map(), // Map<walletAddress, highestPrice>
+    // ✅ per-wallet highest
+    highestPrices: new Map(), // Map<walletAddress, highestPrice>
 
-  lastPrice: null,
-  intervalId: null,
-};
+    lastPrice: null,
+    intervalId: null,
+  };
 
   const loop = async () => {
     try {
-      const price = await getDexScreenerPrice(mint);
-if (typeof price !== "number" || Number.isNaN(price)) {
-  LOG.warn({ mint, price }, "invalid price from getDexScreenerPrice");
-  return;
-}
-      
-    state.lastPrice = price;
+      const price = state.lastPrice;
 
-// ✅ Update highestPrice PER WALLET (not global)
-for (const [walletAddress] of state.users.entries()) {
-  const prevHigh = state.highestPrices.get(walletAddress);
+      if (typeof price !== "number" || Number.isNaN(price)) {
+        return; // wait until global refresher has populated price
+      }
 
-  if (prevHigh == null || price > prevHigh) {
-    state.highestPrices.set(walletAddress, price);
+      // ✅ Update highestPrice PER WALLET (not global)
+      for (const [walletAddress] of state.users.entries()) {
+        const prevHigh = state.highestPrices.get(walletAddress);
 
-    // 🧪 DEBUG — confirm highest update
-    LOG.info(
-      { walletAddress, mint, prevHigh, newHigh: price },
-      "📈 updated per-wallet highestPrice"
-    );
-  }
-}
-     
+        if (prevHigh == null || price > prevHigh) {
+          state.highestPrices.set(walletAddress, price);
+
+          // 🧪 DEBUG — confirm highest update
+          LOG.info(
+            { walletAddress, mint, prevHigh, newHigh: price },
+            "📈 updated per-wallet highestPrice"
+          );
+        }
+      }
+
       for (const [walletAddress, info] of Array.from(state.users.entries())) {
         try {
           await monitorUser(mint, price, walletAddress, info, state);
@@ -1475,92 +1502,92 @@ for (const [walletAddress] of state.users.entries()) {
         }
       }
 
-state._lastSnapshotAt = state._lastSnapshotAt || 0;
+      state._lastSnapshotAt = state._lastSnapshotAt || 0;
 
-if (Date.now() - state._lastSnapshotAt < 3000) {
-  return; // ⛔ skip snapshot (only every 3s)
-}
-
-state._lastSnapshotAt = Date.now();
-// ===================================================
-// 📊 BUILD + STORE WALLET SNAPSHOTS (LIGHTWEIGHT)
-// ===================================================
-const snapshotsByWallet = new Map();
-
-for (const [walletAddress, info] of state.users.entries()) {
-  const entry = state.entryPrices.get(walletAddress) ?? info.entryPrice;
-  if (!entry) continue;
-
-  const currentPrice = price;
-  const changePercent = ((currentPrice - entry) / entry) * 100;
-
-  const solAmount = info.solAmount || 0;
-  const pnlSol = (changePercent / 100) * solAmount;
-
-  const snapshotItem = {
-  mint,
-
-  // core trade data
-  entryPrice: entry,
-  currentPrice,
-  changePercent,
-  pnlSol,
-
-  // position info
-  solAmount: info.solAmount || 0,
-  tpStage: info.tpStage || 0,
-  highestPrice: state.highestPrices?.get(walletAddress) || entry,
-
-  // metadata
-  buyTxid: info.buyTxid || null,
-  sourceChannel: info.sourceChannel || null,
-  openedAt: info.openedAt || 0,
-};
-
-  if (!snapshotsByWallet.has(walletAddress)) {
-    snapshotsByWallet.set(walletAddress, []);
-  }
-
-  snapshotsByWallet.get(walletAddress).push(snapshotItem);
-}
-
-// Write snapshots to Redis (MERGE per wallet)
-for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
-  try {
-    const key = walletSnapshotKey(walletAddress);
-
-    // Get existing snapshot (if any)
-    let existing = [];
-    const raw = await redis.get(key);
-
-    if (raw) {
-      try {
-        existing = JSON.parse(raw);
-      } catch {
-        existing = [];
+      if (Date.now() - state._lastSnapshotAt < 3000) {
+        return; // ⛔ skip snapshot (only every 3s)
       }
-    }
 
-    // Remove old entries for this mint
-    const filtered = existing.filter(p => p.mint !== mint);
+      state._lastSnapshotAt = Date.now();
 
-    // Merge new + existing
-    const merged = [...filtered, ...newPositions];
+      // ===================================================
+      // 📊 BUILD + STORE WALLET SNAPSHOTS (LIGHTWEIGHT)
+      // ===================================================
+      const snapshotsByWallet = new Map();
 
-    await redis.set(
-      key,
-      JSON.stringify(merged),
-      "EX",
-      10
-    );
+      for (const [walletAddress, info] of state.users.entries()) {
+        const entry = state.entryPrices.get(walletAddress) ?? info.entryPrice;
+        if (!entry) continue;
 
-  } catch (err) {
-    LOG.error(
-      { err, walletAddress },
-      "❌ Failed to write wallet snapshot"
-    );
-  }
-}
+        const currentPrice = price;
+        const changePercent = ((currentPrice - entry) / entry) * 100;
+
+        const solAmount = info.solAmount || 0;
+        const pnlSol = (changePercent / 100) * solAmount;
+
+        const snapshotItem = {
+          mint,
+
+          // core trade data
+          entryPrice: entry,
+          currentPrice,
+          changePercent,
+          pnlSol,
+
+          // position info
+          solAmount: info.solAmount || 0,
+          tpStage: info.tpStage || 0,
+          highestPrice: state.highestPrices?.get(walletAddress) || entry,
+
+          // metadata
+          buyTxid: info.buyTxid || null,
+          sourceChannel: info.sourceChannel || null,
+          openedAt: info.openedAt || 0,
+        };
+
+        if (!snapshotsByWallet.has(walletAddress)) {
+          snapshotsByWallet.set(walletAddress, []);
+        }
+
+        snapshotsByWallet.get(walletAddress).push(snapshotItem);
+      }
+
+      // Write snapshots to Redis (MERGE per wallet)
+      for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
+        try {
+          const key = walletSnapshotKey(walletAddress);
+
+          // Get existing snapshot (if any)
+          let existing = [];
+          const raw = await redis.get(key);
+
+          if (raw) {
+            try {
+              existing = JSON.parse(raw);
+            } catch {
+              existing = [];
+            }
+          }
+
+          // Remove old entries for this mint
+          const filtered = existing.filter((p) => p.mint !== mint);
+
+          // Merge new + existing
+          const merged = [...filtered, ...newPositions];
+
+          await redis.set(
+            key,
+            JSON.stringify(merged),
+            "EX",
+            10
+          );
+        } catch (err) {
+          LOG.error(
+            { err, walletAddress },
+            "❌ Failed to write wallet snapshot"
+          );
+        }
+      }
 
       if (state.users.size === 0) {
         LOG.info({ mint }, "no users left — stopping monitor");
@@ -1573,11 +1600,19 @@ for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
   };
 
   state.intervalId = setInterval(() => {
-    loop().catch((err) => LOG.error({ err, mint }, "monitor loop async error"));
+    loop().catch((err) =>
+      LOG.error({ err, mint }, "monitor loop async error")
+    );
   }, POLL_INTERVAL_MS);
 
   monitored.set(mint, state);
   LOG.info({ mint }, "monitor started");
+
+  // ✅ seed first price quickly for this/new monitored mint(s)
+  refreshAllMonitoredMintPrices().catch((err) => {
+    LOG.error({ err }, "❌ initial global price refresh failed");
+  });
+
   return state;
 }
 // MONITOR USER

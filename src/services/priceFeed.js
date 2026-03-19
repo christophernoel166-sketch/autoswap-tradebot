@@ -61,15 +61,13 @@ export async function getDexScreenerPrice(mint) {
   const url = `${DEXSCREENER_BASE}/token-pairs/v1/solana/${mint}`;
   const res = await fetch(url);
 
-if (res.status === 429) {
-  // fallback to stale cache if available
-  const cached = priceCache.get(mint);
-  if (cached) {
-    return cached.value;
+  if (res.status === 429) {
+    const stale = priceCache.get(mint);
+    if (stale?.value != null) {
+      return stale.value;
+    }
+    throw new Error(`DexScreener rate limited (429) for mint ${mint}`);
   }
-
-  throw new Error("DexScreener rate limited (429)");
-}
 
   if (!res.ok) {
     throw new Error(`DexScreener price fetch failed: ${res.status}`);
