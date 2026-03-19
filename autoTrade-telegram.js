@@ -1575,8 +1575,6 @@ for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
     loop().catch((err) => LOG.error({ err, mint }, "monitor loop async error"));
   }, POLL_INTERVAL_MS);
 
-  loop().catch((err) => LOG.error({ err, mint }, "initial monitor tick error"));
-
   monitored.set(mint, state);
   LOG.info({ mint }, "monitor started");
   return state;
