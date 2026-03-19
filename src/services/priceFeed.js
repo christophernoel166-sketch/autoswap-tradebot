@@ -7,7 +7,7 @@ const DEXSCREENER_BASE = "https://api.dexscreener.com";
  */
 const priceCache = new Map(); // mint -> { value, expiresAt }
 
-const CACHE_TTL_MS = Number(process.env.PRICE_CACHE_TTL_MS || 5000);
+const CACHE_TTL_MS = Number(process.env.PRICE_CACHE_TTL_MS || 15000);
 
 /**
  * ===================================================
@@ -60,6 +60,16 @@ export async function getDexScreenerPrice(mint) {
 
   const url = `${DEXSCREENER_BASE}/token-pairs/v1/solana/${mint}`;
   const res = await fetch(url);
+
+if (res.status === 429) {
+  // fallback to stale cache if available
+  const cached = priceCache.get(mint);
+  if (cached) {
+    return cached.value;
+  }
+
+  throw new Error("DexScreener rate limited (429)");
+}
 
   if (!res.ok) {
     throw new Error(`DexScreener price fetch failed: ${res.status}`);

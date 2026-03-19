@@ -37,7 +37,8 @@ import { redis } from "./src/utils/redis.js";
 import {
   positionKey,
   walletActiveSet,
-  walletPositionsKey, // ✅ add this
+  walletPositionsKey,
+  walletSnapshotKey,
   POSITION_FIELDS,
 } from "./src/redis/positionKeys.js";
 import {
