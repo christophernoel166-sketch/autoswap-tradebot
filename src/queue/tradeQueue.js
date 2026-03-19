@@ -1,10 +1,15 @@
 import { redis } from "../utils/redis.js";
+
 import {
   buyQueueKey,
   sellQueueKey,
   buyLockKey,
   sellLockKey,
 } from "../redis/tradeQueueKeys.js";
+
+// Dedicated blocking clients for queue consumers
+const buyQueueRedis = redis.duplicate();
+const sellQueueRedis = redis.duplicate();
 
 const BUY_LOCK_TTL = 120; // seconds
 const SELL_LOCK_TTL = 120;
@@ -49,7 +54,7 @@ export async function enqueueBuyJob(job) {
  */
 export async function popBuyJob() {
   try {
-    const res = await redis.brpop(buyQueueKey(), 0);
+    const res = await buyQueueRedis.brpop(buyQueueKey(), 0);
     if (!res) return null;
 
     const payload = Array.isArray(res) ? res[1] : res;
@@ -87,7 +92,7 @@ export async function enqueueSellJob(job) {
  */
 export async function popSellJob() {
   try {
-    const res = await redis.brpop(sellQueueKey(), 0);
+    const res = await sellQueueRedis.brpop(sellQueueKey(), 0);
     if (!res) return null;
 
     const payload = Array.isArray(res) ? res[1] : res;
