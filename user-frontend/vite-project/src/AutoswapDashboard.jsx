@@ -11,6 +11,7 @@ import Subscriptions from "./channels/Subscriptions";
 import TradingSettings from "./settings/TradingSettings";
 import ActivePositions from "./positions/ActivePositions";
 import TradeHistory from "./history/TradeHistory";
+import ManualTrade from "./pages/ManualTrade";
 import Sidebar from "./layout/Sidebar";
 import MainPanel from "./layout/MainPanel";
 import DepositModal from "./wallet/DepositModal";
@@ -50,7 +51,10 @@ const [withdrawLoading, setWithdrawLoading] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
 const [withdrawals, setWithdrawals] = useState([]);
 const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
-
+const [manualTokenMint, setManualTokenMint] = useState("");
+const [scanLoading, setScanLoading] = useState(false);
+const [scanResult, setScanResult] = useState(null);
+const [scanError, setScanError] = useState("");
 
 
 
@@ -65,8 +69,7 @@ const [showLinkPopup, setShowLinkPopup] = useState(false);
 // MOBILE TABS (STEP 2)
 // ================================
 const [mobileTab, setMobileTab] = useState("dashboard");
-// "dashboard" | "channels" | "settings"
-
+// "dashboard" | "manual" | "channels" | "settings"
 
 const isTelegramLinked = !!user?.telegram?.userId;
 
@@ -383,6 +386,38 @@ useEffect(() => {
       console.warn("fetchUserSettings error:", err);
     }
   }
+
+// SCANNING MANUAL TOKEN
+async function scanManualToken() {
+  try {
+    setScanLoading(true);
+    setScanError("");
+    setScanResult(null);
+
+    const res = await fetch(`${API_BASE}/api/tokens/scan`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        walletAddress: walletAddress,
+        tokenMint: manualTokenMint.trim(),
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to scan token");
+    }
+
+    setScanResult(data);
+  } catch (err) {
+    setScanError(err.message || "Failed to scan token");
+  } finally {
+    setScanLoading(false);
+  }
+}
 
 /* --- FETCH USER CHANNEL SUBSCRIPTIONS (STEP 5.5) --- */
 async function fetchUserChannels() {
@@ -1069,17 +1104,46 @@ async function reRequestChannel(channelId) {
   } lg:block`}
 >
   <div className="space-y-6">
-    <PerformanceSummary
-      totalPnl={totalPnl}
-      metrics={metrics}
-      tokenFilter={tokenFilter}
-      setTokenFilter={setTokenFilter}
-      dateFrom={dateFrom}
-      setDateFrom={setDateFrom}
-      dateTo={dateTo}
-      setDateTo={setDateTo}
-      fmt={fmt}
-    />
+  <PerformanceSummary
+    totalPnl={totalPnl}
+    metrics={metrics}
+    tokenFilter={tokenFilter}
+    setTokenFilter={setTokenFilter}
+    dateFrom={dateFrom}
+    setDateFrom={setDateFrom}
+    dateTo={dateTo}
+    setDateTo={setDateTo}
+    fmt={fmt}
+  />
+
+  <ManualTrade
+    manualTokenMint={manualTokenMint}
+    setManualTokenMint={setManualTokenMint}
+    scanManualToken={scanManualToken}
+    scanLoading={scanLoading}
+    scanResult={scanResult}
+    scanError={scanError}
+  />
+
+  <EliteAnalytics
+    historyLoading={historyLoading}
+    filteredTradesCount={filteredHistory.length}
+    metrics={metrics}
+    distribution={distribution}
+    renderCumulativePath={renderCumulativePath}
+    fmt={fmt}
+  />
+
+  <TradeHistory filteredHistory={filteredHistory} />
+
+  <ActivePositions
+    positions={positions}
+    loading={loading}
+    fetchPositions={fetchPositions}
+    manualSell={manualSell}
+    manualSellAll={manualSellAll}
+  />
+</div>
 
     <EliteAnalytics
       historyLoading={historyLoading}
