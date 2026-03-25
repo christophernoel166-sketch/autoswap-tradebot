@@ -1097,53 +1097,33 @@ async function reRequestChannel(channelId) {
 
 
 
-  {/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
-  <div
+{/* LEFT SECTION – PERFORMANCE + ELITE CHARTS */}
+<div
   className={`col-span-12 lg:col-span-8 ${
     mobileTab === "dashboard" ? "block" : "hidden"
   } lg:block`}
 >
   <div className="space-y-6">
-  <PerformanceSummary
-    totalPnl={totalPnl}
-    metrics={metrics}
-    tokenFilter={tokenFilter}
-    setTokenFilter={setTokenFilter}
-    dateFrom={dateFrom}
-    setDateFrom={setDateFrom}
-    dateTo={dateTo}
-    setDateTo={setDateTo}
-    fmt={fmt}
-  />
+    <PerformanceSummary
+      totalPnl={totalPnl}
+      metrics={metrics}
+      tokenFilter={tokenFilter}
+      setTokenFilter={setTokenFilter}
+      dateFrom={dateFrom}
+      setDateFrom={setDateFrom}
+      dateTo={dateTo}
+      setDateTo={setDateTo}
+      fmt={fmt}
+    />
 
-  <ManualTrade
-    manualTokenMint={manualTokenMint}
-    setManualTokenMint={setManualTokenMint}
-    scanManualToken={scanManualToken}
-    scanLoading={scanLoading}
-    scanResult={scanResult}
-    scanError={scanError}
-  />
-
-  <EliteAnalytics
-    historyLoading={historyLoading}
-    filteredTradesCount={filteredHistory.length}
-    metrics={metrics}
-    distribution={distribution}
-    renderCumulativePath={renderCumulativePath}
-    fmt={fmt}
-  />
-
-  <TradeHistory filteredHistory={filteredHistory} />
-
-  <ActivePositions
-    positions={positions}
-    loading={loading}
-    fetchPositions={fetchPositions}
-    manualSell={manualSell}
-    manualSellAll={manualSellAll}
-  />
-</div>
+    <ManualTrade
+      manualTokenMint={manualTokenMint}
+      setManualTokenMint={setManualTokenMint}
+      scanManualToken={scanManualToken}
+      scanLoading={scanLoading}
+      scanResult={scanResult}
+      scanError={scanError}
+    />
 
     <EliteAnalytics
       historyLoading={historyLoading}
