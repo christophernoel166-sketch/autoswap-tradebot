@@ -33,22 +33,26 @@ export function createApiServer() {
   const server = http.createServer(app);
 
   // ============================
-  // ✅ GLOBAL CORS (FIXED)
-  // ============================
-  app.use(
-    cors({
-      origin: [
-        "https://www.autoswaps.online",
-        "https://autoswaps.online",
-        "http://localhost:5173",
-        "http://localhost:3000",
-      ],
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    })
-  );
+// ✅ GLOBAL CORS (FIXED)
+// ============================
+app.use(
+  cors({
+    origin: [
+      "https://autoswaps.online",
+      "https://www.autoswaps.online",
+      "http://localhost:5173",
+      "http://localhost:3000",
+    ],
+    credentials: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  })
+);
 
-  app.use(express.json());
+// ✅ VERY IMPORTANT (handles preflight requests)
+app.options("*", cors());
+
+app.use(express.json());
 
   // ============================
   // Socket.io
