@@ -13,8 +13,8 @@ export const HARD_FAIL_RULES = {
   minAgeMinutes: 3,
   minLiquidityUsd: 15_000,
   minMarketCapUsd: 30_000,
-  minHolderCount: 80,
 
+  // holder count removed for now
   maxLargestHolderPercent: 18,
   maxTop10HoldingPercent: 35,
 
@@ -39,7 +39,6 @@ export const REQUIRED_FIELDS = [
   "volume5mUsd",
   "buys5m",
   "sells5m",
-  "holderCount",
   "largestHolderPercent",
   "top10HoldingPercent",
   "bundleScore",
@@ -78,6 +77,7 @@ function normalizeMetrics(raw = {}) {
     buys5m: toNumber(raw.buys5m),
     sells5m: toNumber(raw.sells5m),
 
+    // holderCount intentionally kept optional / unused for scoring
     holderCount: toNumber(raw.holderCount),
     largestHolderPercent: toNumber(raw.largestHolderPercent),
     top10HoldingPercent: toNumber(raw.top10HoldingPercent),
@@ -176,41 +176,31 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  if (m.holderCount >= 1000) {
-    score += 8;
-    reasons.push("Strong holder count");
-  } else if (m.holderCount >= 500) {
-    score += 6;
-  } else if (m.holderCount >= 250) {
-    score += 4;
-  } else if (m.holderCount >= 80) {
-    score += 2;
-    warnings.push("Holder count is still thin");
-  }
-
+  // Largest holder (15)
   if (m.largestHolderPercent <= 8) {
-    score += 12;
+    score += 15;
     reasons.push("Largest holder concentration is low");
   } else if (m.largestHolderPercent <= 10) {
-    score += 10;
+    score += 12;
   } else if (m.largestHolderPercent <= 12) {
-    score += 8;
+    score += 9;
   } else if (m.largestHolderPercent <= 15) {
-    score += 5;
+    score += 6;
   } else if (m.largestHolderPercent <= 18) {
-    score += 2;
+    score += 3;
     warnings.push("Largest holder concentration is elevated");
   }
 
+  // Top 10 holding (15)
   if (m.top10HoldingPercent <= 20) {
-    score += 10;
+    score += 15;
     reasons.push("Top 10 concentration is healthy");
   } else if (m.top10HoldingPercent <= 25) {
-    score += 8;
+    score += 11;
   } else if (m.top10HoldingPercent <= 30) {
-    score += 5;
+    score += 7;
   } else if (m.top10HoldingPercent <= 35) {
-    score += 2;
+    score += 3;
     warnings.push("Top 10 concentration is elevated");
   }
 
@@ -361,9 +351,6 @@ function runHardFailChecks(m) {
   }
   if (m.marketCapUsd < HARD_FAIL_RULES.minMarketCapUsd) {
     failedRules.push("Market cap is below minimum");
-  }
-  if (m.holderCount < HARD_FAIL_RULES.minHolderCount) {
-    failedRules.push("Holder count is below minimum");
   }
   if (m.largestHolderPercent > HARD_FAIL_RULES.maxLargestHolderPercent) {
     failedRules.push("Largest holder concentration too high");

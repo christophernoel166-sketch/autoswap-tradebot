@@ -192,10 +192,6 @@ export default function ManualTrade({
 
             <Section title="Holder Safety">
               <MetricRow
-                label="Total Holders"
-                value={formatValue(metrics?.holderCount)}
-              />
-              <MetricRow
                 label="Largest Holder"
                 value={formatValue(metrics?.largestHolderPercent, "%")}
               />
