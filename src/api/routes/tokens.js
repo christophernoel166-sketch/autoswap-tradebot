@@ -19,7 +19,6 @@ router.post("/scan", async (req, res) => {
     }
 
     let market;
-    let holderData;
 
     try {
       market = await fetchTokenMarketData(tokenMint);
@@ -39,18 +38,23 @@ router.post("/scan", async (req, res) => {
             volume5mUsd: null,
             buys5m: null,
             sells5m: null,
+
+            // intentionally not using total holder count
             holderCount: null,
             largestHolderPercent: null,
             top10HoldingPercent: null,
+
             smartDegenCount: 0,
             botDegenCount: 0,
             ratTraderCount: 0,
             alphaCallerCount: 0,
             sniperWalletCount: null,
+
             bundleScore: null,
             bundledWalletCount: null,
             fundingClusterScore: null,
             largestFundingCluster: null,
+
             momentumScore: null,
             velocityBreakoutScore: null,
             boosted: false,
@@ -67,6 +71,8 @@ router.post("/scan", async (req, res) => {
           pairAddress: null,
           dexId: null,
           chainId: "solana",
+          holderWarning: "No live market pair found for this token yet",
+          excludedAccounts: [],
           ...response,
           evaluation: {
             ...response.evaluation,
@@ -81,9 +87,36 @@ router.post("/scan", async (req, res) => {
       throw err;
     }
 
-    holderData = await fetchTokenHolderData(tokenMint, {
-      excludeAddresses: [],
-    });
+    let holderData = {
+      holderCount: null,
+      largestHolderPercent: null,
+      top10HoldingPercent: null,
+      topHolders: [],
+      excludedAccounts: [],
+      holderWarning: null,
+    };
+
+    try {
+      holderData = await fetchTokenHolderData(tokenMint, {
+        excludeAddresses: [
+          // Add known Pump.fun AMM / LP / exchange / protocol token-account addresses here
+        ],
+      });
+    } catch (err) {
+      console.warn("Holder scan failed:", err?.message || err);
+
+      holderData = {
+        holderCount: null,
+        largestHolderPercent: null,
+        top10HoldingPercent: null,
+        topHolders: [],
+        excludedAccounts: [],
+        holderWarning:
+          err?.message?.includes("429")
+            ? "Holder analysis temporarily unavailable due to RPC rate limits"
+            : "Holder analysis temporarily unavailable",
+      };
+    }
 
     const rawMetrics = {
       ageMinutes: market.metrics.ageMinutes,
@@ -94,7 +127,8 @@ router.post("/scan", async (req, res) => {
       sells5m: market.metrics.sells5m,
       boosted: market.metrics.boosted,
 
-      holderCount: holderData.holderCount,
+      // total holder count intentionally removed for now
+      holderCount: null,
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
 
@@ -126,6 +160,11 @@ router.post("/scan", async (req, res) => {
       },
     });
 
+    const mergedWarnings = [
+      ...(response.evaluation?.warnings || []),
+      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+    ];
+
     return res.status(200).json({
       ok: true,
       walletAddress: walletAddress || null,
@@ -133,11 +172,14 @@ router.post("/scan", async (req, res) => {
       pairAddress: market.token.pairAddress,
       dexId: market.token.dexId,
       chainId: market.token.chainId,
-      rawHolderCount: holderData.rawHolderCount,
-      rawLargestHolderPercent: holderData.rawLargestHolderPercent,
-      rawTop10HoldingPercent: holderData.rawTop10HoldingPercent,
-      excludedAccounts: holderData.excludedAccounts,
+      topHolders: holderData.topHolders || [],
+      excludedAccounts: holderData.excludedAccounts || [],
+      holderWarning: holderData.holderWarning || null,
       ...response,
+      evaluation: {
+        ...response.evaluation,
+        warnings: mergedWarnings,
+      },
     });
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
