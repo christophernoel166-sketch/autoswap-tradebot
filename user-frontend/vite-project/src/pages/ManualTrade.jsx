@@ -15,6 +15,12 @@ function formatUsd(value) {
   })}`;
 }
 
+function shortAddress(value) {
+  if (!value || typeof value !== "string") return "—";
+  if (value.length <= 12) return value;
+  return `${value.slice(0, 6)}...${value.slice(-6)}`;
+}
+
 function Section({ title, children }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
@@ -48,6 +54,13 @@ export default function ManualTrade({
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
   const token = scanResult?.token || null;
+  const excludedAccounts = Array.isArray(scanResult?.excludedAccounts)
+    ? scanResult.excludedAccounts
+    : [];
+  const holderWarning = scanResult?.holderWarning || null;
+  const topHolders = Array.isArray(scanResult?.topHolders)
+    ? scanResult.topHolders
+    : [];
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
@@ -147,6 +160,12 @@ export default function ManualTrade({
                 </div>
               </div>
             </div>
+
+            {holderWarning ? (
+              <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
+                {holderWarning}
+              </div>
+            ) : null}
 
             {showBuy ? (
               <div className="mt-4">
@@ -278,6 +297,60 @@ export default function ManualTrade({
               />
             </Section>
           </div>
+
+          {topHolders.length > 0 ? (
+            <Section title="Top Included Holders">
+              <div className="space-y-2">
+                {topHolders.map((holder, idx) => (
+                  <div
+                    key={`${holder.address}-${idx}`}
+                    className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
+                        {shortAddress(holder.address)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {holder?.classification?.label || "wallet"}
+                      </div>
+                    </div>
+
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right">
+                      {formatValue(holder.percent, "%")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
+
+          {excludedAccounts.length > 0 ? (
+            <Section title="Excluded Accounts">
+              <div className="space-y-2">
+                {excludedAccounts.map((item, idx) => (
+                  <div
+                    key={`${item.address}-${idx}`}
+                    className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
+                        {shortAddress(item.address)}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {item?.classification?.label ||
+                          item?.exclusionReason ||
+                          "excluded"}
+                      </div>
+                    </div>
+
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right">
+                      {formatValue(item.percent, "%")}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Section>
+          ) : null}
 
           {(evaluation?.reasons?.length > 0 ||
             evaluation?.warnings?.length > 0 ||

@@ -4,6 +4,7 @@ import express from "express";
 import { formatScanResponse } from "../../scanner/tokenSafetyEngine.js";
 import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
 import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
+import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderAccounts.js";
 
 const router = express.Router();
 
