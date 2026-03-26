@@ -18,8 +18,72 @@ router.post("/scan", async (req, res) => {
       });
     }
 
-    const market = await fetchTokenMarketData(tokenMint);
-    const holderData = await fetchTokenHolderData(tokenMint);
+    let market;
+    let holderData;
+
+    try {
+      market = await fetchTokenMarketData(tokenMint);
+    } catch (err) {
+      if ((err?.message || "").includes("No market pairs found")) {
+        const response = formatScanResponse({
+          token: {
+            mintAddress: tokenMint.trim(),
+            symbol: "UNKNOWN",
+            name: "Unknown Token",
+            boosted: false,
+          },
+          rawMetrics: {
+            ageMinutes: null,
+            liquidityUsd: null,
+            marketCapUsd: null,
+            volume5mUsd: null,
+            buys5m: null,
+            sells5m: null,
+            holderCount: null,
+            largestHolderPercent: null,
+            top10HoldingPercent: null,
+            smartDegenCount: 0,
+            botDegenCount: 0,
+            ratTraderCount: 0,
+            alphaCallerCount: 0,
+            sniperWalletCount: null,
+            bundleScore: null,
+            bundledWalletCount: null,
+            fundingClusterScore: null,
+            largestFundingCluster: null,
+            momentumScore: null,
+            velocityBreakoutScore: null,
+            boosted: false,
+          },
+          options: {
+            scannedAt: new Date(),
+          },
+        });
+
+        return res.status(200).json({
+          ok: true,
+          walletAddress: walletAddress || null,
+          tokenMint: tokenMint.trim(),
+          pairAddress: null,
+          dexId: null,
+          chainId: "solana",
+          ...response,
+          evaluation: {
+            ...response.evaluation,
+            warnings: [
+              ...(response.evaluation?.warnings || []),
+              "No live market pair found for this token yet",
+            ],
+          },
+        });
+      }
+
+      throw err;
+    }
+
+    holderData = await fetchTokenHolderData(tokenMint, {
+      excludeAddresses: [],
+    });
 
     const rawMetrics = {
       ageMinutes: market.metrics.ageMinutes,
@@ -30,12 +94,10 @@ router.post("/scan", async (req, res) => {
       sells5m: market.metrics.sells5m,
       boosted: market.metrics.boosted,
 
-      // ✅ REAL HOLDER DATA
       holderCount: holderData.holderCount,
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
 
-      // Temporary placeholders until risk/intelligence services are added
       smartDegenCount: 0,
       botDegenCount: 0,
       ratTraderCount: 0,
@@ -71,6 +133,10 @@ router.post("/scan", async (req, res) => {
       pairAddress: market.token.pairAddress,
       dexId: market.token.dexId,
       chainId: market.token.chainId,
+      rawHolderCount: holderData.rawHolderCount,
+      rawLargestHolderPercent: holderData.rawLargestHolderPercent,
+      rawTop10HoldingPercent: holderData.rawTop10HoldingPercent,
+      excludedAccounts: holderData.excludedAccounts,
       ...response,
     });
   } catch (error) {
