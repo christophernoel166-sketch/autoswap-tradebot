@@ -3,6 +3,7 @@
 import express from "express";
 import { formatScanResponse } from "../../scanner/tokenSafetyEngine.js";
 import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
+import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
 
 const router = express.Router();
 
@@ -18,9 +19,8 @@ router.post("/scan", async (req, res) => {
     }
 
     const market = await fetchTokenMarketData(tokenMint);
+    const holderData = await fetchTokenHolderData(tokenMint);
 
-    // Temporary placeholder metrics for categories we haven't made live yet.
-    // We keep these conservative so the engine still works.
     const rawMetrics = {
       ageMinutes: market.metrics.ageMinutes,
       liquidityUsd: market.metrics.liquidityUsd,
@@ -30,11 +30,12 @@ router.post("/scan", async (req, res) => {
       sells5m: market.metrics.sells5m,
       boosted: market.metrics.boosted,
 
-      // Temporary placeholders until holder/risk/intelligence services are added
-      holderCount: 100,
-      largestHolderPercent: 15,
-      top10HoldingPercent: 30,
+      // ✅ REAL HOLDER DATA
+      holderCount: holderData.holderCount,
+      largestHolderPercent: holderData.largestHolderPercent,
+      top10HoldingPercent: holderData.top10HoldingPercent,
 
+      // Temporary placeholders until risk/intelligence services are added
       smartDegenCount: 0,
       botDegenCount: 0,
       ratTraderCount: 0,
