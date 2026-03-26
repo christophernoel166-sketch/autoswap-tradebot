@@ -2,19 +2,10 @@
 
 import express from "express";
 import { formatScanResponse } from "../../scanner/tokenSafetyEngine.js";
+import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
 
 const router = express.Router();
 
-/**
- * POST /api/tokens/scan
- *
- * Temporary version:
- * - accepts tokenMint from frontend
- * - returns mock scan data
- * - runs through tokenSafetyEngine
- *
- * Later, we will replace the mock metrics with real scanner services.
- */
 router.post("/scan", async (req, res) => {
   try {
     const { tokenMint, walletAddress } = req.body || {};
@@ -26,47 +17,46 @@ router.post("/scan", async (req, res) => {
       });
     }
 
-    // Temporary mock token info
-    const token = {
-      mintAddress: tokenMint.trim(),
-      symbol: "TOKEN",
-      name: "Scanned Token",
-      boosted: true,
-    };
+    const market = await fetchTokenMarketData(tokenMint);
 
-    // Temporary mock metrics
-    // Replace this later with real fetches from DexScreener / holders / momentum / etc.
+    // Temporary placeholder metrics for categories we haven't made live yet.
+    // We keep these conservative so the engine still works.
     const rawMetrics = {
-      ageMinutes: 49,
-      liquidityUsd: 24078.87,
-      marketCapUsd: 92727,
-      volume5mUsd: 9551.77,
-      buys5m: 261,
-      sells5m: 218,
+      ageMinutes: market.metrics.ageMinutes,
+      liquidityUsd: market.metrics.liquidityUsd,
+      marketCapUsd: market.metrics.marketCapUsd,
+      volume5mUsd: market.metrics.volume5mUsd,
+      buys5m: market.metrics.buys5m,
+      sells5m: market.metrics.sells5m,
+      boosted: market.metrics.boosted,
 
-      holderCount: 1245,
-      largestHolderPercent: 12.42,
-      top10HoldingPercent: 18.54,
+      // Temporary placeholders until holder/risk/intelligence services are added
+      holderCount: 100,
+      largestHolderPercent: 15,
+      top10HoldingPercent: 30,
 
       smartDegenCount: 0,
       botDegenCount: 0,
       ratTraderCount: 0,
       alphaCallerCount: 0,
-      sniperWalletCount: 10,
+      sniperWalletCount: 5,
 
-      bundleScore: 6,
-      bundledWalletCount: 2,
+      bundleScore: 4,
+      bundledWalletCount: 1,
       fundingClusterScore: 0,
       largestFundingCluster: 0,
 
-      momentumScore: 75,
-      velocityBreakoutScore: 100,
-
-      boosted: true,
+      momentumScore: 50,
+      velocityBreakoutScore: 50,
     };
 
     const response = formatScanResponse({
-      token,
+      token: {
+        mintAddress: market.token.mintAddress,
+        symbol: market.token.symbol,
+        name: market.token.name,
+        boosted: market.token.boosted,
+      },
       rawMetrics,
       options: {
         scannedAt: new Date(),
@@ -77,6 +67,9 @@ router.post("/scan", async (req, res) => {
       ok: true,
       walletAddress: walletAddress || null,
       tokenMint: tokenMint.trim(),
+      pairAddress: market.token.pairAddress,
+      dexId: market.token.dexId,
+      chainId: market.token.chainId,
       ...response,
     });
   } catch (error) {
