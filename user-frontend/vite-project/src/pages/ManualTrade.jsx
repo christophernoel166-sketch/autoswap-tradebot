@@ -413,69 +413,25 @@ export default function ManualTrade({
             </Section>
           </div>
 
-          {(evaluation?.reasons?.length > 0 ||
-  evaluation?.warnings?.length > 0 ||
-  evaluation?.failedRules?.length > 0 ||
-  social?.socialWarning ||
-  scanResult?.activity?.activityWarning) && (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    <Section title="Reasons">
-      {evaluation?.reasons?.length ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          {evaluation.reasons.map((item, idx) => (
-            <li key={idx}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No reasons available.
-        </div>
-      )}
-    </Section>
-
-    <Section title="Warnings">
-      {(evaluation?.warnings?.length ||
-        social?.socialWarning ||
-        scanResult?.activity?.activityWarning) ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          
-          {evaluation?.warnings?.map((item, idx) => (
-            <li key={`warn-${idx}`}>• {item}</li>
-          ))}
-
-          {social?.socialWarning && (
-            <li>• {social.socialWarning}</li>
-          )}
-
-          {scanResult?.activity?.activityWarning && (
-            <li>• {scanResult.activity.activityWarning}</li>
-          )}
-
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No warnings.
-        </div>
-      )}
-    </Section>
-
-    <Section title="Failed Rules">
-      {evaluation?.failedRules?.length ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          {evaluation.failedRules.map((item, idx) => (
-            <li key={`fail-${idx}`}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No failed rules.
-        </div>
-      )}
-    </Section>
-
-  </div>
-)}
+          (evaluation?.reasons?.length > 0 ||
+ evaluation?.warnings?.length > 0 ||
+ evaluation?.failedRules?.length > 0 ||
+ social?.socialWarning ||
+ scanResult?.activity?.activityWarning) &&
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Section title="Reasons">
+                {evaluation?.reasons?.length ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation.reasons.map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No reasons available.
+                  </div>
+                )}
+              </Section>
 
               <Section title="Warnings">
   {(evaluation?.warnings?.length ||
