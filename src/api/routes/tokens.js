@@ -9,6 +9,7 @@ import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
 import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
 import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
 import { fetchAlphaActivityData } from "../../scanner/fetchAlphaActivityData.js";
+import { fetchTelegramAlphaPosts } from "../../scanner/fetchTelegramAlphaPosts.js";
 
 const router = express.Router();
 
@@ -143,16 +144,32 @@ router.post("/scan", async (req, res) => {
         .join(" | ");
     }
 
-    const activityData = await fetchAlphaActivityData({
-      tokenMint: tokenMint.trim(),
-      token: market.token,
-      social: enrichedSocialData,
-      context: {
-        pairAddress: market.token.pairAddress,
-        dexId: market.token.dexId,
-        chainId: market.token.chainId,
-      },
-    });
+    const telegramAlpha = await fetchTelegramAlphaPosts({
+  // Phase 1: no real live Telegram feed yet.
+  // Later, replace [] with recent messages from your DB / bot ingestion pipeline.
+  recentTelegramMessages: [],
+});
+
+const activityData = await fetchAlphaActivityData({
+  tokenMint: tokenMint.trim(),
+  token: market.token,
+  social: enrichedSocialData,
+  context: {
+    pairAddress: market.token.pairAddress,
+    dexId: market.token.dexId,
+    chainId: market.token.chainId,
+    recentPosts: telegramAlpha.posts,
+  },
+});
+
+if (telegramAlpha.warning) {
+  activityData.activityWarning = [
+    activityData.activityWarning,
+    telegramAlpha.warning,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
 
     let holderData = {
       holderCount: null,

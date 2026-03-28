@@ -303,6 +303,15 @@ export default function ManualTrade({
     }
   />
 
+<MetricRow
+  label="Alpha Caller Score"
+  value={
+    scanResult?.activity?.alphaCallerScore != null
+      ? scanResult.activity.alphaCallerScore
+      : "Not Available"
+  }
+/>
+
   <MetricRow
     label="X Activity Score"
     value={
