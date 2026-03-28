@@ -225,32 +225,59 @@ export default function ManualTrade({
             </Section>
 
             <Section title="Social / Presence">
-              <LinkRow
-                label="Website"
-                url={social?.websiteUrl}
-                exists={social?.hasWebsite}
-              />
-              <LinkRow
-                label="Telegram"
-                url={social?.telegramUrl}
-                exists={social?.hasTelegram}
-              />
-              <LinkRow
-                label="X Account"
-                url={social?.twitterUrl}
-                exists={social?.hasTwitter}
-              />
-              <MetricRow
-                label="Website Status"
-                value={
-                  social?.websiteWorking === true
-                    ? "Working"
-                    : social?.websiteWorking === false
-                    ? "Not Working"
-                    : "Not Checked Yet"
-                }
-              />
-            </Section>
+  <LinkRow
+    label="Website"
+    url={social?.websiteUrl}
+    exists={social?.hasWebsite}
+  />
+  <LinkRow
+    label="Telegram"
+    url={social?.telegramUrl}
+    exists={social?.hasTelegram}
+  />
+  <LinkRow
+    label="X Account"
+    url={social?.twitterUrl}
+    exists={social?.hasTwitter}
+  />
+
+  <MetricRow
+    label="Website Status"
+    value={
+      social?.websiteWorking === true
+        ? "Working"
+        : social?.websiteWorking === false
+        ? "Not Working"
+        : "Not Checked Yet"
+    }
+  />
+
+  <MetricRow
+    label="Telegram Status"
+    value={
+      social?.telegramWorking === true
+        ? "Working"
+        : social?.telegramWorking === false
+        ? "Not Working"
+        : social?.hasTelegram
+        ? "Not Checked Yet"
+        : "Missing"
+    }
+  />
+
+  <MetricRow
+    label="X Status"
+    value={
+      social?.twitterWorking === true
+        ? "Working"
+        : social?.twitterWorking === false
+        ? "Not Working"
+        : social?.hasTwitter
+        ? "Not Checked Yet"
+        : "Missing"
+    }
+  />
+</Section>
 
             <Section title="Wallet Intelligence">
               <MetricRow

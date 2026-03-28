@@ -7,6 +7,7 @@ import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
 import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderAccounts.js";
 import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
 import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
+import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
 
 const router = express.Router();
 
@@ -110,15 +111,27 @@ if (socialData.websiteUrl) {
   const websiteCheck = await checkWebsiteStatus(socialData.websiteUrl);
 
   enrichedSocialData = {
-    ...socialData,
+    ...enrichedSocialData,
     websiteWorking: websiteCheck.websiteWorking,
     websiteStatusCode: websiteCheck.websiteStatusCode,
     websiteFinalUrl: websiteCheck.websiteFinalUrl,
-    socialWarning:
-      socialData.socialWarning || websiteCheck.websiteWarning || null,
   };
+
+  if (websiteCheck.websiteWarning) {
+    enrichedSocialData.socialWarning = websiteCheck.websiteWarning;
+  }
 }
 
+enrichedSocialData = await checkSocialStatus(enrichedSocialData);
+
+if (enrichedSocialData.socialWarnings?.length) {
+  enrichedSocialData.socialWarning = [
+    enrichedSocialData.socialWarning,
+    ...enrichedSocialData.socialWarnings,
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
     let holderData = {
       holderCount: null,
       largestHolderPercent: null,
