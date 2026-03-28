@@ -279,6 +279,53 @@ export default function ManualTrade({
   />
 </Section>
 
+     <Section title="Activity / Alpha">
+  <MetricRow
+    label="Alpha Callers"
+    value={formatValue(scanResult?.activity?.alphaCallerCount)}
+  />
+
+  <MetricRow
+    label="X Replies"
+    value={
+      scanResult?.activity?.xReplyCount !== null
+        ? scanResult.activity.xReplyCount
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Telegram Replies"
+    value={
+      scanResult?.activity?.telegramReplyCount !== null
+        ? scanResult.activity.telegramReplyCount
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="X Activity Score"
+    value={
+      scanResult?.activity?.xActivityScore !== null
+        ? scanResult.activity.xActivityScore
+        : scanResult?.social?.hasTwitter
+        ? "Low (placeholder)"
+        : "No X"
+    }
+  />
+
+  <MetricRow
+    label="Telegram Activity Score"
+    value={
+      scanResult?.activity?.telegramActivityScore !== null
+        ? scanResult.activity.telegramActivityScore
+        : scanResult?.social?.hasTelegram
+        ? "Low (placeholder)"
+        : "No Telegram"
+    }
+  />
+</Section>
+
             <Section title="Wallet Intelligence">
               <MetricRow
                 label="Smart Degens"
@@ -357,10 +404,11 @@ export default function ManualTrade({
             </Section>
           </div>
 
-          {(evaluation?.reasons?.length > 0 ||
-            evaluation?.warnings?.length > 0 ||
-            evaluation?.failedRules?.length > 0 ||
-            social?.socialWarning) && (
+          (evaluation?.reasons?.length > 0 ||
+ evaluation?.warnings?.length > 0 ||
+ evaluation?.failedRules?.length > 0 ||
+ social?.socialWarning ||
+ scanResult?.activity?.activityWarning) &&
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Section title="Reasons">
                 {evaluation?.reasons?.length ? (
@@ -377,19 +425,26 @@ export default function ManualTrade({
               </Section>
 
               <Section title="Warnings">
-                {evaluation?.warnings?.length || social?.socialWarning ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation?.warnings?.map((item, idx) => (
-                      <li key={`warn-${idx}`}>• {item}</li>
-                    ))}
-                    {social?.socialWarning ? <li>• {social.socialWarning}</li> : null}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No warnings.
-                  </div>
-                )}
-              </Section>
+  {(evaluation?.warnings?.length ||
+    social?.socialWarning ||
+    scanResult?.activity?.activityWarning) ? (
+    <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+      {evaluation?.warnings?.map((item, idx) => (
+        <li key={`warn-${idx}`}>• {item}</li>
+      ))}
+
+      {social?.socialWarning ? <li>• {social.socialWarning}</li> : null}
+
+      {scanResult?.activity?.activityWarning ? (
+        <li>• {scanResult.activity.activityWarning}</li>
+      ) : null}
+    </ul>
+  ) : (
+    <div className="text-sm text-gray-500 dark:text-gray-400">
+      No warnings.
+    </div>
+  )}
+</Section>
 
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (

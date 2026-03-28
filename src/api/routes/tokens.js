@@ -8,6 +8,7 @@ import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderA
 import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
 import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
 import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
+import { fetchAlphaActivityData } from "../../scanner/fetchAlphaActivityData.js";
 
 const router = express.Router();
 
@@ -89,6 +90,15 @@ router.post("/scan", async (req, res) => {
             telegramReplyCount: null,
             socialWarning: "No market pair found, so social links could not be extracted",
           },
+          activity: {
+            alphaCallerCount: 0,
+            alphaCallerMentions: [],
+            xReplyCount: null,
+            telegramReplyCount: null,
+            telegramActivityScore: null,
+            xActivityScore: null,
+            activityWarning: "No market pair found, so activity could not be analyzed",
+          },
           ...response,
           evaluation: {
             ...response.evaluation,
@@ -103,35 +113,47 @@ router.post("/scan", async (req, res) => {
       throw err;
     }
 
-   const socialData = fetchTokenSocialData(market.rawPair);
+    const socialData = fetchTokenSocialData(market.rawPair);
 
-let enrichedSocialData = { ...socialData };
+    let enrichedSocialData = { ...socialData };
 
-if (socialData.websiteUrl) {
-  const websiteCheck = await checkWebsiteStatus(socialData.websiteUrl);
+    if (socialData.websiteUrl) {
+      const websiteCheck = await checkWebsiteStatus(socialData.websiteUrl);
 
-  enrichedSocialData = {
-    ...enrichedSocialData,
-    websiteWorking: websiteCheck.websiteWorking,
-    websiteStatusCode: websiteCheck.websiteStatusCode,
-    websiteFinalUrl: websiteCheck.websiteFinalUrl,
-  };
+      enrichedSocialData = {
+        ...enrichedSocialData,
+        websiteWorking: websiteCheck.websiteWorking,
+        websiteStatusCode: websiteCheck.websiteStatusCode,
+        websiteFinalUrl: websiteCheck.websiteFinalUrl,
+      };
 
-  if (websiteCheck.websiteWarning) {
-    enrichedSocialData.socialWarning = websiteCheck.websiteWarning;
-  }
-}
+      if (websiteCheck.websiteWarning) {
+        enrichedSocialData.socialWarning = websiteCheck.websiteWarning;
+      }
+    }
 
-enrichedSocialData = await checkSocialStatus(enrichedSocialData);
+    enrichedSocialData = await checkSocialStatus(enrichedSocialData);
 
-if (enrichedSocialData.socialWarnings?.length) {
-  enrichedSocialData.socialWarning = [
-    enrichedSocialData.socialWarning,
-    ...enrichedSocialData.socialWarnings,
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
+    if (enrichedSocialData.socialWarnings?.length) {
+      enrichedSocialData.socialWarning = [
+        enrichedSocialData.socialWarning,
+        ...enrichedSocialData.socialWarnings,
+      ]
+        .filter(Boolean)
+        .join(" | ");
+    }
+
+    const activityData = await fetchAlphaActivityData({
+      tokenMint: tokenMint.trim(),
+      token: market.token,
+      social: enrichedSocialData,
+      context: {
+        pairAddress: market.token.pairAddress,
+        dexId: market.token.dexId,
+        chainId: market.token.chainId,
+      },
+    });
+
     let holderData = {
       holderCount: null,
       largestHolderPercent: null,
@@ -177,7 +199,7 @@ if (enrichedSocialData.socialWarnings?.length) {
       smartDegenCount: 0,
       botDegenCount: 0,
       ratTraderCount: 0,
-      alphaCallerCount: null,
+      alphaCallerCount: activityData.alphaCallerCount,
       sniperWalletCount: 5,
 
       bundleScore: 4,
@@ -202,14 +224,14 @@ if (enrichedSocialData.socialWarnings?.length) {
       },
     });
 
-   const mergedWarnings = [
-  ...(response.evaluation?.warnings || []),
-  ...(holderData.holderWarning ? [holderData.holderWarning] : []),
-  ...(enrichedSocialData.socialWarning
-    ? [enrichedSocialData.socialWarning]
-    : []),
-];
-
+    const mergedWarnings = [
+      ...(response.evaluation?.warnings || []),
+      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+      ...(enrichedSocialData.socialWarning
+        ? [enrichedSocialData.socialWarning]
+        : []),
+      ...(activityData.activityWarning ? [activityData.activityWarning] : []),
+    ];
 
     return res.status(200).json({
       ok: true,
@@ -222,6 +244,7 @@ if (enrichedSocialData.socialWarnings?.length) {
       excludedAccounts: holderData.excludedAccounts || [],
       holderWarning: holderData.holderWarning || null,
       social: enrichedSocialData,
+      activity: activityData,
       ...response,
       evaluation: {
         ...response.evaluation,
