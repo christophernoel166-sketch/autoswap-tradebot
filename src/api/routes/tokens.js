@@ -4,6 +4,8 @@ import express from "express";
 import { formatScanResponse } from "../../scanner/tokenSafetyEngine.js";
 import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
 import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
+import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderAccounts.js";
+import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
 
 const router = express.Router();
 
@@ -39,7 +41,6 @@ router.post("/scan", async (req, res) => {
             buys5m: null,
             sells5m: null,
 
-            // intentionally not using total holder count
             holderCount: null,
             largestHolderPercent: null,
             top10HoldingPercent: null,
@@ -47,7 +48,7 @@ router.post("/scan", async (req, res) => {
             smartDegenCount: 0,
             botDegenCount: 0,
             ratTraderCount: 0,
-            alphaCallerCount: 0,
+            alphaCallerCount: null,
             sniperWalletCount: null,
 
             bundleScore: null,
@@ -73,6 +74,19 @@ router.post("/scan", async (req, res) => {
           chainId: "solana",
           holderWarning: "No live market pair found for this token yet",
           excludedAccounts: [],
+          social: {
+            websiteUrl: null,
+            telegramUrl: null,
+            twitterUrl: null,
+            hasWebsite: false,
+            hasTelegram: false,
+            hasTwitter: false,
+            websiteWorking: null,
+            alphaCallerCount: null,
+            xReplyCount: null,
+            telegramReplyCount: null,
+            socialWarning: "No market pair found, so social links could not be extracted",
+          },
           ...response,
           evaluation: {
             ...response.evaluation,
@@ -87,6 +101,8 @@ router.post("/scan", async (req, res) => {
       throw err;
     }
 
+    const socialData = fetchTokenSocialData(market.rawPair);
+
     let holderData = {
       holderCount: null,
       largestHolderPercent: null,
@@ -98,9 +114,7 @@ router.post("/scan", async (req, res) => {
 
     try {
       holderData = await fetchTokenHolderData(tokenMint, {
-        excludeAddresses: [
-          // Add known Pump.fun AMM / LP / exchange / protocol token-account addresses here
-        ],
+        excludeAddresses: getExcludedHolderAddressesForMint(tokenMint),
       });
     } catch (err) {
       console.warn("Holder scan failed:", err?.message || err);
@@ -127,7 +141,6 @@ router.post("/scan", async (req, res) => {
       sells5m: market.metrics.sells5m,
       boosted: market.metrics.boosted,
 
-      // total holder count intentionally removed for now
       holderCount: null,
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
@@ -135,7 +148,7 @@ router.post("/scan", async (req, res) => {
       smartDegenCount: 0,
       botDegenCount: 0,
       ratTraderCount: 0,
-      alphaCallerCount: 0,
+      alphaCallerCount: null,
       sniperWalletCount: 5,
 
       bundleScore: 4,
@@ -163,6 +176,7 @@ router.post("/scan", async (req, res) => {
     const mergedWarnings = [
       ...(response.evaluation?.warnings || []),
       ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+      ...(socialData.socialWarning ? [socialData.socialWarning] : []),
     ];
 
     return res.status(200).json({
@@ -175,6 +189,7 @@ router.post("/scan", async (req, res) => {
       topHolders: holderData.topHolders || [],
       excludedAccounts: holderData.excludedAccounts || [],
       holderWarning: holderData.holderWarning || null,
+      social: socialData,
       ...response,
       evaluation: {
         ...response.evaluation,
