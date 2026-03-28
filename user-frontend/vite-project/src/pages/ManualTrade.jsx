@@ -15,12 +15,6 @@ function formatUsd(value) {
   })}`;
 }
 
-function shortAddress(value) {
-  if (!value || typeof value !== "string") return "—";
-  if (value.length <= 12) return value;
-  return `${value.slice(0, 6)}...${value.slice(-6)}`;
-}
-
 function Section({ title, children }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
@@ -36,9 +30,31 @@ function MetricRow({ label, value }) {
   return (
     <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0">
       <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
-      <span className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right">
+      <span className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right break-all">
         {value}
       </span>
+    </div>
+  );
+}
+
+function LinkRow({ label, url, exists }) {
+  return (
+    <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0 gap-4">
+      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+      <div className="text-sm font-medium text-right">
+        {exists && url ? (
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 dark:text-blue-400 hover:underline break-all"
+          >
+            Open
+          </a>
+        ) : (
+          <span className="text-gray-900 dark:text-gray-100">Missing</span>
+        )}
+      </div>
     </div>
   );
 }
@@ -54,13 +70,7 @@ export default function ManualTrade({
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
   const token = scanResult?.token || null;
-  const excludedAccounts = Array.isArray(scanResult?.excludedAccounts)
-    ? scanResult.excludedAccounts
-    : [];
-  const holderWarning = scanResult?.holderWarning || null;
-  const topHolders = Array.isArray(scanResult?.topHolders)
-    ? scanResult.topHolders
-    : [];
+  const social = scanResult?.social || null;
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
@@ -161,12 +171,6 @@ export default function ManualTrade({
               </div>
             </div>
 
-            {holderWarning ? (
-              <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
-                {holderWarning}
-              </div>
-            ) : null}
-
             {showBuy ? (
               <div className="mt-4">
                 <button
@@ -217,6 +221,34 @@ export default function ManualTrade({
               <MetricRow
                 label="Top 10 Holding"
                 value={formatValue(metrics?.top10HoldingPercent, "%")}
+              />
+            </Section>
+
+            <Section title="Social / Presence">
+              <LinkRow
+                label="Website"
+                url={social?.websiteUrl}
+                exists={social?.hasWebsite}
+              />
+              <LinkRow
+                label="Telegram"
+                url={social?.telegramUrl}
+                exists={social?.hasTelegram}
+              />
+              <LinkRow
+                label="X Account"
+                url={social?.twitterUrl}
+                exists={social?.hasTwitter}
+              />
+              <MetricRow
+                label="Website Status"
+                value={
+                  social?.websiteWorking === true
+                    ? "Working"
+                    : social?.websiteWorking === false
+                    ? "Not Working"
+                    : "Not Checked Yet"
+                }
               />
             </Section>
 
@@ -298,63 +330,10 @@ export default function ManualTrade({
             </Section>
           </div>
 
-          {topHolders.length > 0 ? (
-            <Section title="Top Included Holders">
-              <div className="space-y-2">
-                {topHolders.map((holder, idx) => (
-                  <div
-                    key={`${holder.address}-${idx}`}
-                    className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
-                        {shortAddress(holder.address)}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {holder?.classification?.label || "wallet"}
-                      </div>
-                    </div>
-
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right">
-                      {formatValue(holder.percent, "%")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          ) : null}
-
-          {excludedAccounts.length > 0 ? (
-            <Section title="Excluded Accounts">
-              <div className="space-y-2">
-                {excludedAccounts.map((item, idx) => (
-                  <div
-                    key={`${item.address}-${idx}`}
-                    className="flex items-start justify-between gap-4 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                  >
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
-                        {shortAddress(item.address)}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {item?.classification?.label ||
-                          item?.exclusionReason ||
-                          "excluded"}
-                      </div>
-                    </div>
-
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100 text-right">
-                      {formatValue(item.percent, "%")}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Section>
-          ) : null}
-
           {(evaluation?.reasons?.length > 0 ||
             evaluation?.warnings?.length > 0 ||
-            evaluation?.failedRules?.length > 0) && (
+            evaluation?.failedRules?.length > 0 ||
+            social?.socialWarning) && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Section title="Reasons">
                 {evaluation?.reasons?.length ? (
@@ -371,11 +350,12 @@ export default function ManualTrade({
               </Section>
 
               <Section title="Warnings">
-                {evaluation?.warnings?.length ? (
+                {evaluation?.warnings?.length || social?.socialWarning ? (
                   <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation.warnings.map((item, idx) => (
-                      <li key={idx}>• {item}</li>
+                    {evaluation?.warnings?.map((item, idx) => (
+                      <li key={`warn-${idx}`}>• {item}</li>
                     ))}
+                    {social?.socialWarning ? <li>• {social.socialWarning}</li> : null}
                   </ul>
                 ) : (
                   <div className="text-sm text-gray-500 dark:text-gray-400">
