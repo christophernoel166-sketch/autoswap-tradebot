@@ -6,6 +6,7 @@ import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
 import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
 import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderAccounts.js";
 import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
+import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
 
 const router = express.Router();
 
@@ -101,7 +102,22 @@ router.post("/scan", async (req, res) => {
       throw err;
     }
 
-    const socialData = fetchTokenSocialData(market.rawPair);
+   const socialData = fetchTokenSocialData(market.rawPair);
+
+let enrichedSocialData = { ...socialData };
+
+if (socialData.websiteUrl) {
+  const websiteCheck = await checkWebsiteStatus(socialData.websiteUrl);
+
+  enrichedSocialData = {
+    ...socialData,
+    websiteWorking: websiteCheck.websiteWorking,
+    websiteStatusCode: websiteCheck.websiteStatusCode,
+    websiteFinalUrl: websiteCheck.websiteFinalUrl,
+    socialWarning:
+      socialData.socialWarning || websiteCheck.websiteWarning || null,
+  };
+}
 
     let holderData = {
       holderCount: null,
@@ -173,11 +189,14 @@ router.post("/scan", async (req, res) => {
       },
     });
 
-    const mergedWarnings = [
-      ...(response.evaluation?.warnings || []),
-      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
-      ...(socialData.socialWarning ? [socialData.socialWarning] : []),
-    ];
+   const mergedWarnings = [
+  ...(response.evaluation?.warnings || []),
+  ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+  ...(enrichedSocialData.socialWarning
+    ? [enrichedSocialData.socialWarning]
+    : []),
+];
+
 
     return res.status(200).json({
       ok: true,
@@ -189,7 +208,7 @@ router.post("/scan", async (req, res) => {
       topHolders: holderData.topHolders || [],
       excludedAccounts: holderData.excludedAccounts || [],
       holderWarning: holderData.holderWarning || null,
-      social: socialData,
+      social: enrichedSocialData,
       ...response,
       evaluation: {
         ...response.evaluation,
