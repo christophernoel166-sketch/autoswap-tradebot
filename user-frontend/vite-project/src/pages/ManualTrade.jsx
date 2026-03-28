@@ -413,7 +413,7 @@ export default function ManualTrade({
             </Section>
           </div>
 
-          (evaluation?.reasons?.length > 0 ||
+          {(evaluation?.reasons?.length > 0 ||
  evaluation?.warnings?.length > 0 ||
  evaluation?.failedRules?.length > 0 ||
  social?.socialWarning ||
