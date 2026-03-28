@@ -187,7 +187,7 @@ export default function ManualTrade({
             )}
           </Section>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Section title="Market">
               <MetricRow
                 label="Age"
@@ -225,115 +225,107 @@ export default function ManualTrade({
             </Section>
 
             <Section title="Social / Presence">
-  <LinkRow
-    label="Website"
-    url={social?.websiteUrl}
-    exists={social?.hasWebsite}
-  />
-  <LinkRow
-    label="Telegram"
-    url={social?.telegramUrl}
-    exists={social?.hasTelegram}
-  />
-  <LinkRow
-    label="X Account"
-    url={social?.twitterUrl}
-    exists={social?.hasTwitter}
-  />
+              <LinkRow
+                label="Website"
+                url={social?.websiteUrl}
+                exists={social?.hasWebsite}
+              />
+              <LinkRow
+                label="Telegram"
+                url={social?.telegramUrl}
+                exists={social?.hasTelegram}
+              />
+              <LinkRow
+                label="X Account"
+                url={social?.twitterUrl}
+                exists={social?.hasTwitter}
+              />
+              <MetricRow
+                label="Website Status"
+                value={
+                  social?.websiteWorking === true
+                    ? "Working"
+                    : social?.websiteWorking === false
+                    ? "Not Working"
+                    : "Not Checked Yet"
+                }
+              />
+              <MetricRow
+                label="Telegram Status"
+                value={
+                  social?.telegramWorking === true
+                    ? "Working"
+                    : social?.telegramWorking === false
+                    ? "Not Working"
+                    : social?.hasTelegram
+                    ? "Not Checked Yet"
+                    : "Missing"
+                }
+              />
+              <MetricRow
+                label="X Status"
+                value={
+                  social?.twitterWorking === true
+                    ? "Working"
+                    : social?.twitterWorking === false
+                    ? "Not Working"
+                    : social?.hasTwitter
+                    ? "Not Checked Yet"
+                    : "Missing"
+                }
+              />
+            </Section>
 
-  <MetricRow
-    label="Website Status"
-    value={
-      social?.websiteWorking === true
-        ? "Working"
-        : social?.websiteWorking === false
-        ? "Not Working"
-        : "Not Checked Yet"
-    }
-  />
-
-  <MetricRow
-    label="Telegram Status"
-    value={
-      social?.telegramWorking === true
-        ? "Working"
-        : social?.telegramWorking === false
-        ? "Not Working"
-        : social?.hasTelegram
-        ? "Not Checked Yet"
-        : "Missing"
-    }
-  />
-
-  <MetricRow
-    label="X Status"
-    value={
-      social?.twitterWorking === true
-        ? "Working"
-        : social?.twitterWorking === false
-        ? "Not Working"
-        : social?.hasTwitter
-        ? "Not Checked Yet"
-        : "Missing"
-    }
-  />
-</Section>
-
-     <Section title="Activity / Alpha">
-  <MetricRow
-    label="Alpha Callers"
-    value={formatValue(scanResult?.activity?.alphaCallerCount)}
-  />
-
-  <MetricRow
-    label="X Replies"
-    value={
-      scanResult?.activity?.xReplyCount !== null
-        ? scanResult.activity.xReplyCount
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Telegram Replies"
-    value={
-      scanResult?.activity?.telegramReplyCount !== null
-        ? scanResult.activity.telegramReplyCount
-        : "Not Available"
-    }
-  />
-
-<MetricRow
-  label="Alpha Caller Score"
-  value={
-    scanResult?.activity?.alphaCallerScore != null
-      ? scanResult.activity.alphaCallerScore
-      : "Not Available"
-  }
-/>
-
-  <MetricRow
-    label="X Activity Score"
-    value={
-      scanResult?.activity?.xActivityScore !== null
-        ? scanResult.activity.xActivityScore
-        : scanResult?.social?.hasTwitter
-        ? "Low (placeholder)"
-        : "No X"
-    }
-  />
-
-  <MetricRow
-    label="Telegram Activity Score"
-    value={
-      scanResult?.activity?.telegramActivityScore !== null
-        ? scanResult.activity.telegramActivityScore
-        : scanResult?.social?.hasTelegram
-        ? "Low (placeholder)"
-        : "No Telegram"
-    }
-  />
-</Section>
+            <Section title="Activity / Alpha">
+              <MetricRow
+                label="Alpha Callers"
+                value={formatValue(scanResult?.activity?.alphaCallerCount)}
+              />
+              <MetricRow
+                label="X Replies"
+                value={
+                  scanResult?.activity?.xReplyCount !== null
+                    ? scanResult.activity.xReplyCount
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Telegram Replies"
+                value={
+                  scanResult?.activity?.telegramReplyCount !== null
+                    ? scanResult.activity.telegramReplyCount
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Alpha Caller Score"
+                value={
+                  scanResult?.activity?.alphaCallerScore != null
+                    ? scanResult.activity.alphaCallerScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="X Activity Score"
+                value={
+                  scanResult?.activity?.xActivityScore !== null
+                    ? scanResult.activity.xActivityScore
+                    : scanResult?.social?.hasTwitter
+                    ? "Low (placeholder)"
+                    : "No X"
+                }
+              />
+              <MetricRow
+                label="Telegram Activity Score"
+                value={
+                  scanResult?.activity?.telegramActivityScore !== null
+                    ? scanResult.activity.telegramActivityScore
+                    : scanResult?.social?.hasTelegram
+                    ? "Low (placeholder)"
+                    : "No Telegram"
+                }
+              />
+            </Section>
 
             <Section title="Wallet Intelligence">
               <MetricRow
@@ -390,10 +382,7 @@ export default function ManualTrade({
 
             <Section title="Evaluation">
               <MetricRow label="Verdict" value={formatValue(verdict)} />
-              <MetricRow
-                label="Score"
-                value={formatValue(evaluation?.score)}
-              />
+              <MetricRow label="Score" value={formatValue(evaluation?.score)} />
               <MetricRow
                 label="Scanned At"
                 value={
@@ -413,11 +402,11 @@ export default function ManualTrade({
             </Section>
           </div>
 
-          (evaluation?.reasons?.length > 0 ||
- evaluation?.warnings?.length > 0 ||
- evaluation?.failedRules?.length > 0 ||
- social?.socialWarning ||
- scanResult?.activity?.activityWarning) &&
+          {(evaluation?.reasons?.length > 0 ||
+            evaluation?.warnings?.length > 0 ||
+            evaluation?.failedRules?.length > 0 ||
+            social?.socialWarning ||
+            scanResult?.activity?.activityWarning) ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Section title="Reasons">
                 {evaluation?.reasons?.length ? (
@@ -434,32 +423,32 @@ export default function ManualTrade({
               </Section>
 
               <Section title="Warnings">
-  {(evaluation?.warnings?.length ||
-    social?.socialWarning ||
-    scanResult?.activity?.activityWarning) ? (
-    <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-      {evaluation?.warnings?.map((item, idx) => (
-        <li key={`warn-${idx}`}>• {item}</li>
-      ))}
-
-      {social?.socialWarning ? <li>• {social.socialWarning}</li> : null}
-
-      {scanResult?.activity?.activityWarning ? (
-        <li>• {scanResult.activity.activityWarning}</li>
-      ) : null}
-    </ul>
-  ) : (
-    <div className="text-sm text-gray-500 dark:text-gray-400">
-      No warnings.
-    </div>
-  )}
-</Section>
+                {evaluation?.warnings?.length ||
+                social?.socialWarning ||
+                scanResult?.activity?.activityWarning ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation?.warnings?.map((item, idx) => (
+                      <li key={`warn-${idx}`}>• {item}</li>
+                    ))}
+                    {social?.socialWarning ? (
+                      <li>• {social.socialWarning}</li>
+                    ) : null}
+                    {scanResult?.activity?.activityWarning ? (
+                      <li>• {scanResult.activity.activityWarning}</li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No warnings.
+                  </div>
+                )}
+              </Section>
 
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (
                   <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
                     {evaluation.failedRules.map((item, idx) => (
-                      <li key={idx}>• {item}</li>
+                      <li key={`fail-${idx}`}>• {item}</li>
                     ))}
                   </ul>
                 ) : (
@@ -469,7 +458,7 @@ export default function ManualTrade({
                 )}
               </Section>
             </div>
-          )}
+          ) : null}
         </>
       ) : null}
     </div>
