@@ -74,6 +74,7 @@ export default function ManualTrade({
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
+  const buyConfidence = evaluation?.buyConfidence || "NONE";
 
   const verdictColor =
     verdict === "SAFE"
@@ -83,6 +84,12 @@ export default function ManualTrade({
       : verdict === "UNSAFE"
       ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
       : "bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300";
+
+  const buyButtonClass = showBuy
+    ? buyConfidence === "MEDIUM"
+      ? "bg-yellow-500 hover:bg-yellow-600 text-white"
+      : "bg-green-600 hover:bg-green-700 text-white"
+    : "bg-gray-400 text-white cursor-not-allowed";
 
   return (
     <div className="space-y-6">
@@ -172,13 +179,22 @@ export default function ManualTrade({
             </div>
 
             {showBuy ? (
-              <div className="mt-4">
+              <div className="mt-4 space-y-2">
                 <button
                   type="button"
-                  className="px-5 py-3 rounded-lg bg-green-600 hover:bg-green-700 text-white font-medium"
+                  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass}`}
                 >
-                  Buy Token
+                  {buyConfidence === "MEDIUM"
+                    ? "Buy Token (Caution)"
+                    : "Buy Token"}
                 </button>
+
+                {buyConfidence === "MEDIUM" ? (
+                  <div className="text-sm text-yellow-700 dark:text-yellow-400">
+                    ⚠️ Caution trade: buy is allowed, but this token is not in the
+                    safest category.
+                  </div>
+                ) : null}
               </div>
             ) : (
               <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
@@ -187,7 +203,7 @@ export default function ManualTrade({
             )}
           </Section>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <Section title="Market">
               <MetricRow
                 label="Age"
@@ -284,7 +300,7 @@ export default function ManualTrade({
               <MetricRow
                 label="X Replies"
                 value={
-                  scanResult?.activity?.xReplyCount !== null
+                  scanResult?.activity?.xReplyCount != null
                     ? scanResult.activity.xReplyCount
                     : "Not Available"
                 }
@@ -292,70 +308,65 @@ export default function ManualTrade({
               <MetricRow
                 label="Telegram Replies"
                 value={
-                  scanResult?.activity?.telegramReplyCount !== null
+                  scanResult?.activity?.telegramReplyCount != null
                     ? scanResult.activity.telegramReplyCount
                     : "Not Available"
                 }
               />
               <MetricRow
-  label="Alpha Caller Score"
-  value={
-    scanResult?.activity?.alphaCallerScore != null
-      ? scanResult.activity.alphaCallerScore
-      : "Not Available"
-  }
-/>
-
-<MetricRow
-  label="Buy Confidence"
-  value={
-    scanResult?.evaluation?.buyConfidence === "HIGH"
-      ? "🟢 High (Safe Trade)"
-      : scanResult?.evaluation?.buyConfidence === "MEDIUM"
-      ? "🟡 Medium (Caution Trade)"
-      : "🔴 Not Allowed"
-  }
-/>
-
-<MetricRow
-  label="X Activity Score"
-  value={
-    scanResult?.activity?.xActivityScore != null
-      ? scanResult.activity.xActivityScore
-      : scanResult?.social?.hasTwitter
-      ? "Low (placeholder)"
-      : "No X"
-  }
-/>
-
-<MetricRow
-  label="X Pump Reply Score"
-  value={
-    scanResult?.activity?.xPumpReplyScore != null
-      ? scanResult.activity.xPumpReplyScore
-      : "Not Available"
-  }
-/>
-
-<MetricRow
-  label="X Pump Replies"
-  value={
-    scanResult?.activity?.xReplyCount != null
-      ? scanResult.activity.xReplyCount
-      : "Not Available"
-  }
-/>
-
-<MetricRow
-  label="Telegram Activity Score"
-  value={
-    scanResult?.activity?.telegramActivityScore != null
-      ? scanResult.activity.telegramActivityScore
-      : scanResult?.social?.hasTelegram
-      ? "Low (placeholder)"
-      : "No Telegram"
-  }
-/>
+                label="Alpha Caller Score"
+                value={
+                  scanResult?.activity?.alphaCallerScore != null
+                    ? scanResult.activity.alphaCallerScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Buy Confidence"
+                value={
+                  scanResult?.evaluation?.buyConfidence === "HIGH"
+                    ? "🟢 High (Safe Trade)"
+                    : scanResult?.evaluation?.buyConfidence === "MEDIUM"
+                    ? "🟡 Medium (Caution Trade)"
+                    : "🔴 Not Allowed"
+                }
+              />
+              <MetricRow
+                label="X Activity Score"
+                value={
+                  scanResult?.activity?.xActivityScore != null
+                    ? scanResult.activity.xActivityScore
+                    : scanResult?.social?.hasTwitter
+                    ? "Low (placeholder)"
+                    : "No X"
+                }
+              />
+              <MetricRow
+                label="X Pump Reply Score"
+                value={
+                  scanResult?.activity?.xPumpReplyScore != null
+                    ? scanResult.activity.xPumpReplyScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="X Pump Replies"
+                value={
+                  scanResult?.activity?.xReplyCount != null
+                    ? scanResult.activity.xReplyCount
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Telegram Activity Score"
+                value={
+                  scanResult?.activity?.telegramActivityScore != null
+                    ? scanResult.activity.telegramActivityScore
+                    : scanResult?.social?.hasTelegram
+                    ? "Low (placeholder)"
+                    : "No Telegram"
+                }
+              />
             </Section>
 
             <Section title="Wallet Intelligence">
@@ -434,46 +445,42 @@ export default function ManualTrade({
           </div>
 
           {(evaluation?.reasons?.length > 0 ||
-  evaluation?.warnings?.length > 0 ||
-  evaluation?.failedRules?.length > 0 ||
-  social?.socialWarning ||
-  scanResult?.activity?.activityWarning) ? (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            evaluation?.warnings?.length > 0 ||
+            evaluation?.failedRules?.length > 0 ||
+            social?.socialWarning ||
+            scanResult?.activity?.activityWarning) ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Section title="Reasons">
+                {evaluation?.reasons?.length ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation.reasons.map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No reasons available.
+                  </div>
+                )}
+              </Section>
 
-    <Section title="Reasons">
-      {evaluation?.reasons?.length ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          {evaluation.reasons.map((item, idx) => (
-            <li key={idx}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No reasons available.
-        </div>
-      )}
-    </Section>
+              <Section title="Warnings">
+                {evaluation?.warnings?.length || social?.socialWarning ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation?.warnings?.map((item, idx) => (
+                      <li key={`warn-${idx}`}>• {item}</li>
+                    ))}
 
-    <Section title="Warnings">
-      {evaluation?.warnings?.length ||
-      social?.socialWarning ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-
-          {evaluation?.warnings?.map((item, idx) => (
-            <li key={`warn-${idx}`}>• {item}</li>
-          ))}
-
-          {social?.socialWarning ? (
-            <li>• {social.socialWarning}</li>
-          ) : null}
-
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No warnings.
-        </div>
-      )}
-    </Section>
+                    {social?.socialWarning ? (
+                      <li>• {social.socialWarning}</li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No warnings.
+                  </div>
+                )}
+              </Section>
 
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (
