@@ -242,13 +242,15 @@ if (telegramAlpha.warning) {
     });
 
     const mergedWarnings = [
-      ...(response.evaluation?.warnings || []),
-      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
-      ...(enrichedSocialData.socialWarning
-        ? [enrichedSocialData.socialWarning]
-        : []),
-      ...(activityData.activityWarning ? [activityData.activityWarning] : []),
-    ];
+  ...(response.evaluation?.warnings || []),
+  ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+  ...(enrichedSocialData.socialWarning
+    ? [enrichedSocialData.socialWarning]
+    : []),
+  ...(activityData.activityWarning ? [activityData.activityWarning] : []),
+]
+  .filter(Boolean)
+  .filter((warning, index, arr) => arr.indexOf(warning) === index);
 
     return res.status(200).json({
       ok: true,
