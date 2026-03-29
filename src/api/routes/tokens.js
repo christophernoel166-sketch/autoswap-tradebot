@@ -11,6 +11,8 @@ import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
 import { fetchAlphaActivityData } from "../../scanner/fetchAlphaActivityData.js";
 import { fetchTelegramAlphaPosts } from "../../scanner/fetchTelegramAlphaPosts.js";
 import { fetchXPumpReplyData } from "../../scanner/fetchXPumpReplyData.js";
+import { fetchRecentXPosts } from "../../scanner/fetchRecentXPosts.js";
+import { getAlphaCallers } from "../../scanner/alphaCallers.js";
 
 const router = express.Router();
 
@@ -90,7 +92,8 @@ router.post("/scan", async (req, res) => {
             alphaCallerCount: null,
             xReplyCount: null,
             telegramReplyCount: null,
-            socialWarning: "No market pair found, so social links could not be extracted",
+            socialWarning:
+              "No market pair found, so social links could not be extracted",
           },
           activity: {
             alphaCallerCount: 0,
@@ -99,6 +102,8 @@ router.post("/scan", async (req, res) => {
             telegramReplyCount: null,
             telegramActivityScore: null,
             xActivityScore: null,
+            xPumpReplyScore: null,
+            xPumpReplyMentions: [],
             activityWarning: "No market pair found, so activity could not be analyzed",
           },
           ...response,
@@ -146,88 +151,74 @@ router.post("/scan", async (req, res) => {
     }
 
     const telegramAlpha = await fetchTelegramAlphaPosts({
-  recentTelegramMessages: [
-    {
-      handle: "signalsolanaby4am",
-      text: `New call: ${tokenMint.trim()}`,
-      url: "https://t.me/signalsolanaby4am/70897",
-      timestamp: new Date().toISOString(),
-    },
-    {
-      handle: "solhousesignal",
-      text: `Potential gem spotted ${tokenMint.trim()}`,
-      url: "https://t.me/solhousesignal/1",
-      timestamp: new Date().toISOString(),
-    },
-  ],
-});
+      recentTelegramMessages: [
+        {
+          handle: "signalsolanaby4am",
+          text: `New call: ${tokenMint.trim()}`,
+          url: "https://t.me/signalsolanaby4am/70897",
+          timestamp: new Date().toISOString(),
+        },
+        {
+          handle: "solhousesignal",
+          text: `Potential gem spotted ${tokenMint.trim()}`,
+          url: "https://t.me/solhousesignal/1",
+          timestamp: new Date().toISOString(),
+        },
+      ],
+    });
 
-const activityData = await fetchAlphaActivityData({
-  tokenMint: tokenMint.trim(),
-  token: market.token,
-  social: enrichedSocialData,
-  context: {
-    pairAddress: market.token.pairAddress,
-    dexId: market.token.dexId,
-    chainId: market.token.chainId,
-    recentPosts: telegramAlpha.posts,
-  },
-});
+    const xHandles = getAlphaCallers()
+      .filter((caller) => caller.source === "twitter")
+      .map((caller) => caller.handle);
 
-const xPumpReplyData = await fetchXPumpReplyData({
-  tokenMint: tokenMint.trim(),
-  token: market.token,
-  social: enrichedSocialData,
-  context: {
-    pairAddress: market.token.pairAddress,
-    dexId: market.token.dexId,
-    chainId: market.token.chainId,
+    const recentX = await fetchRecentXPosts({
+      handles: xHandles,
+      limitPerHandle: 5,
+    });
 
-    // 🔥 TEMP TEST DATA
-    recentXPosts: [
-      {
-        handle: "testcaller1",
-        text: `LFG ${tokenMint.trim()} looks clean 🚀`,
-        url: "https://x.com/test/status/1",
-        timestamp: new Date().toISOString(),
-        isReply: true,
+    const activityData = await fetchAlphaActivityData({
+      tokenMint: tokenMint.trim(),
+      token: market.token,
+      social: enrichedSocialData,
+      context: {
+        pairAddress: market.token.pairAddress,
+        dexId: market.token.dexId,
+        chainId: market.token.chainId,
+        recentPosts: [...telegramAlpha.posts, ...recentX.posts],
       },
-      {
-        handle: "testcaller2",
-        text: `This is a gem $${market.token.symbol || ""} send it`,
-        url: "https://x.com/test/status/2",
-        timestamp: new Date().toISOString(),
-        isReply: true,
+    });
+
+    const xPumpReplyData = await fetchXPumpReplyData({
+      tokenMint: tokenMint.trim(),
+      token: market.token,
+      social: enrichedSocialData,
+      context: {
+        pairAddress: market.token.pairAddress,
+        dexId: market.token.dexId,
+        chainId: market.token.chainId,
+        recentXPosts: recentX.posts,
       },
-    ],
-  },
-});
+    });
 
-activityData.xReplyCount = xPumpReplyData.xReplyCount;
-activityData.xPumpReplyScore = xPumpReplyData.xPumpReplyScore;
-activityData.xPumpReplyMentions = xPumpReplyData.xPumpReplyMentions;
+    activityData.xReplyCount = xPumpReplyData.xReplyCount;
+    activityData.xPumpReplyScore = xPumpReplyData.xPumpReplyScore;
+    activityData.xPumpReplyMentions = xPumpReplyData.xPumpReplyMentions;
 
-if (xPumpReplyData.xPumpReplyWarning || telegramAlpha.warning) {
-  activityData.activityWarning = [
-    activityData.activityWarning,
-    xPumpReplyData.xPumpReplyWarning,
-    telegramAlpha.warning,
-  ]
-    .filter(Boolean)
-    .filter((warning, index, arr) => arr.indexOf(warning) === index)
-    .join(" | ");
-}
-
-
-
-if (telegramAlpha.warning) {
-  activityData.activityWarning = [
-    activityData.activityWarning,
-    telegramAlpha.warning,
-  ]
-    .filter(Boolean)
-    .join(" | ");
-}
+    if (
+      xPumpReplyData.xPumpReplyWarning ||
+      telegramAlpha.warning ||
+      recentX.warning
+    ) {
+      activityData.activityWarning = [
+        activityData.activityWarning,
+        xPumpReplyData.xPumpReplyWarning,
+        telegramAlpha.warning,
+        recentX.warning,
+      ]
+        .filter(Boolean)
+        .filter((warning, index, arr) => arr.indexOf(warning) === index)
+        .join(" | ");
+    }
 
     let holderData = {
       holderCount: null,
@@ -251,10 +242,9 @@ if (telegramAlpha.warning) {
         top10HoldingPercent: null,
         topHolders: [],
         excludedAccounts: [],
-        holderWarning:
-          err?.message?.includes("429")
-            ? "Holder analysis temporarily unavailable due to RPC rate limits"
-            : "Holder analysis temporarily unavailable",
+        holderWarning: err?.message?.includes("429")
+          ? "Holder analysis temporarily unavailable due to RPC rate limits"
+          : "Holder analysis temporarily unavailable",
       };
     }
 
@@ -300,15 +290,15 @@ if (telegramAlpha.warning) {
     });
 
     const mergedWarnings = [
-  ...(response.evaluation?.warnings || []),
-  ...(holderData.holderWarning ? [holderData.holderWarning] : []),
-  ...(enrichedSocialData.socialWarning
-    ? [enrichedSocialData.socialWarning]
-    : []),
-  ...(activityData.activityWarning ? [activityData.activityWarning] : []),
-]
-  .filter(Boolean)
-  .filter((warning, index, arr) => arr.indexOf(warning) === index);
+      ...(response.evaluation?.warnings || []),
+      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+      ...(enrichedSocialData.socialWarning
+        ? [enrichedSocialData.socialWarning]
+        : []),
+      ...(activityData.activityWarning ? [activityData.activityWarning] : []),
+    ]
+      .filter(Boolean)
+      .filter((warning, index, arr) => arr.indexOf(warning) === index);
 
     return res.status(200).json({
       ok: true,
