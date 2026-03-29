@@ -10,6 +10,7 @@ import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
 import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
 import { fetchAlphaActivityData } from "../../scanner/fetchAlphaActivityData.js";
 import { fetchTelegramAlphaPosts } from "../../scanner/fetchTelegramAlphaPosts.js";
+import { fetchXPumpReplyData } from "../../scanner/fetchXPumpReplyData.js";
 
 const router = express.Router();
 
@@ -172,6 +173,34 @@ const activityData = await fetchAlphaActivityData({
     recentPosts: telegramAlpha.posts,
   },
 });
+
+const xPumpReplyData = await fetchXPumpReplyData({
+  tokenMint: tokenMint.trim(),
+  token: market.token,
+  social: enrichedSocialData,
+  context: {
+    pairAddress: market.token.pairAddress,
+    dexId: market.token.dexId,
+    chainId: market.token.chainId,
+  },
+});
+
+activityData.xReplyCount = xPumpReplyData.xReplyCount;
+activityData.xPumpReplyScore = xPumpReplyData.xPumpReplyScore;
+activityData.xPumpReplyMentions = xPumpReplyData.xPumpReplyMentions;
+
+if (xPumpReplyData.xPumpReplyWarning || telegramAlpha.warning) {
+  activityData.activityWarning = [
+    activityData.activityWarning,
+    xPumpReplyData.xPumpReplyWarning,
+    telegramAlpha.warning,
+  ]
+    .filter(Boolean)
+    .filter((warning, index, arr) => arr.indexOf(warning) === index)
+    .join(" | ");
+}
+
+
 
 if (telegramAlpha.warning) {
   activityData.activityWarning = [

@@ -298,33 +298,53 @@ export default function ManualTrade({
                 }
               />
               <MetricRow
-                label="Alpha Caller Score"
-                value={
-                  scanResult?.activity?.alphaCallerScore != null
-                    ? scanResult.activity.alphaCallerScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="X Activity Score"
-                value={
-                  scanResult?.activity?.xActivityScore !== null
-                    ? scanResult.activity.xActivityScore
-                    : scanResult?.social?.hasTwitter
-                    ? "Low (placeholder)"
-                    : "No X"
-                }
-              />
-              <MetricRow
-                label="Telegram Activity Score"
-                value={
-                  scanResult?.activity?.telegramActivityScore !== null
-                    ? scanResult.activity.telegramActivityScore
-                    : scanResult?.social?.hasTelegram
-                    ? "Low (placeholder)"
-                    : "No Telegram"
-                }
-              />
+  label="Alpha Caller Score"
+  value={
+    scanResult?.activity?.alphaCallerScore != null
+      ? scanResult.activity.alphaCallerScore
+      : "Not Available"
+  }
+/>
+
+<MetricRow
+  label="X Activity Score"
+  value={
+    scanResult?.activity?.xActivityScore != null
+      ? scanResult.activity.xActivityScore
+      : scanResult?.social?.hasTwitter
+      ? "Low (placeholder)"
+      : "No X"
+  }
+/>
+
+<MetricRow
+  label="X Pump Reply Score"
+  value={
+    scanResult?.activity?.xPumpReplyScore != null
+      ? scanResult.activity.xPumpReplyScore
+      : "Not Available"
+  }
+/>
+
+<MetricRow
+  label="X Pump Replies"
+  value={
+    scanResult?.activity?.xReplyCount != null
+      ? scanResult.activity.xReplyCount
+      : "Not Available"
+  }
+/>
+
+<MetricRow
+  label="Telegram Activity Score"
+  value={
+    scanResult?.activity?.telegramActivityScore != null
+      ? scanResult.activity.telegramActivityScore
+      : scanResult?.social?.hasTelegram
+      ? "Low (placeholder)"
+      : "No Telegram"
+  }
+/>
             </Section>
 
             <Section title="Wallet Intelligence">
