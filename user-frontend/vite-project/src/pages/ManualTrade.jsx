@@ -307,6 +307,17 @@ export default function ManualTrade({
 />
 
 <MetricRow
+  label="Buy Confidence"
+  value={
+    scanResult?.evaluation?.buyConfidence === "HIGH"
+      ? "🟢 High (Safe Trade)"
+      : scanResult?.evaluation?.buyConfidence === "MEDIUM"
+      ? "🟡 Medium (Caution Trade)"
+      : "🔴 Not Allowed"
+  }
+/>
+
+<MetricRow
   label="X Activity Score"
   value={
     scanResult?.activity?.xActivityScore != null

@@ -15,8 +15,8 @@ export const HARD_FAIL_RULES = {
   minMarketCapUsd: 30_000,
 
   // holder count removed for now
-  maxLargestHolderPercent: 18,
-  maxTop10HoldingPercent: 35,
+  maxLargestHolderPercent: 15,
+  maxTop10HoldingPercent: 30,
 
   maxBundleScore: 7,
   maxBundledWallets: 5,
@@ -391,6 +391,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
       verdict: VERDICTS.INSUFFICIENT_DATA,
       score: 0,
       showBuy: false,
+      buyConfidence: "NONE",
       failedRules: [],
       reasons: [],
       warnings: [`Missing required scan fields: ${missingFields.join(", ")}`],
@@ -415,6 +416,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
       verdict: VERDICTS.UNSAFE,
       score: 0,
       showBuy: false,
+      buyConfidence: "NONE",
       failedRules,
       reasons: [],
       warnings: [],
@@ -469,10 +471,20 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...momentum.warnings,
   ]);
 
+  const roundedScore = round2(totalScore);
+
   return {
     verdict,
-    score: round2(totalScore),
-    showBuy: verdict === VERDICTS.SAFE,
+    score: roundedScore,
+    showBuy:
+      verdict === VERDICTS.SAFE ||
+      (verdict === VERDICTS.CAUTION && roundedScore >= SCORE_THRESHOLDS.caution),
+    buyConfidence:
+      verdict === VERDICTS.SAFE
+        ? "HIGH"
+        : verdict === VERDICTS.CAUTION
+        ? "MEDIUM"
+        : "NONE",
     failedRules: [],
     reasons,
     warnings,
@@ -495,7 +507,7 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
     return { ok: false, reason: "No scan result found" };
   }
 
-  if (scanResult.verdict !== VERDICTS.SAFE) {
+  if (!scanResult.showBuy) {
     return { ok: false, reason: "Token is not approved for trading" };
   }
 
@@ -528,6 +540,7 @@ export function formatScanResponse({ token = {}, rawMetrics = {}, options = {} }
       verdict: evaluation.verdict,
       score: evaluation.score,
       showBuy: evaluation.showBuy,
+      buyConfidence: evaluation.buyConfidence,
       failedRules: evaluation.failedRules,
       reasons: evaluation.reasons,
       warnings: evaluation.warnings,
