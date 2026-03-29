@@ -7,6 +7,12 @@ export const TELEGRAM_ALPHA_SOURCES = [
     handle: "signalsolanaby4am",
     weight: 3,
   },
+  {
+    id: "tg-solhouse-signal",
+    name: "SolHouse Signal",
+    handle: "solhousesignal",
+    weight: 2,
+  },
 ];
 
 export function getTelegramAlphaSources() {
