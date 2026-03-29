@@ -145,9 +145,14 @@ router.post("/scan", async (req, res) => {
     }
 
     const telegramAlpha = await fetchTelegramAlphaPosts({
-  // Phase 1: no real live Telegram feed yet.
-  // Later, replace [] with recent messages from your DB / bot ingestion pipeline.
-  recentTelegramMessages: [],
+  recentTelegramMessages: [
+    {
+      handle: "signalsolanaby4am",
+      text: "Pixelization (PIXEL) | Pump Fun Token ⚠️ Looks clean to me H43xqMLiFLNLLGRhXKxJUVXdEe8uVdXs93Emo5Wzpump",
+      url: "https://t.me/signalsolanaby4am/70897",
+      timestamp: new Date().toISOString(),
+    },
+  ],
 });
 
 const activityData = await fetchAlphaActivityData({
