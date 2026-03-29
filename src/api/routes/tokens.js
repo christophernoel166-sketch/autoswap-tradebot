@@ -148,8 +148,14 @@ router.post("/scan", async (req, res) => {
   recentTelegramMessages: [
     {
       handle: "signalsolanaby4am",
-      text: "Pixelization (PIXEL) | Pump Fun Token ⚠️ Looks clean to me H43xqMLiFLNLLGRhXKxJUVXdEe8uVdXs93Emo5Wzpump",
+      text: `New call: ${tokenMint.trim()}`,
       url: "https://t.me/signalsolanaby4am/70897",
+      timestamp: new Date().toISOString(),
+    },
+    {
+      handle: "solhousesignal",
+      text: `Potential gem spotted ${tokenMint.trim()}`,
+      url: "https://t.me/solhousesignal/1",
       timestamp: new Date().toISOString(),
     },
   ],
