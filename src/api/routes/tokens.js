@@ -182,6 +182,24 @@ const xPumpReplyData = await fetchXPumpReplyData({
     pairAddress: market.token.pairAddress,
     dexId: market.token.dexId,
     chainId: market.token.chainId,
+
+    // 🔥 TEMP TEST DATA
+    recentXPosts: [
+      {
+        handle: "testcaller1",
+        text: `LFG ${tokenMint.trim()} looks clean 🚀`,
+        url: "https://x.com/test/status/1",
+        timestamp: new Date().toISOString(),
+        isReply: true,
+      },
+      {
+        handle: "testcaller2",
+        text: `This is a gem $${market.token.symbol || ""} send it`,
+        url: "https://x.com/test/status/2",
+        timestamp: new Date().toISOString(),
+        isReply: true,
+      },
+    ],
   },
 });
 
