@@ -66,6 +66,7 @@ export default function ManualTrade({
   scanLoading,
   scanResult,
   scanError,
+  walletAddress,
 }) {
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
@@ -90,6 +91,41 @@ export default function ManualTrade({
       ? "bg-yellow-500 hover:bg-yellow-600 text-white"
       : "bg-green-600 hover:bg-green-700 text-white"
     : "bg-gray-400 text-white cursor-not-allowed";
+
+
+    async function handleManualBuy() {
+  try {
+    if (!walletAddress || !scanResult?.token?.mintAddress) {
+      alert("Wallet or token is missing");
+      return;
+    }
+
+    const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+    const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        walletAddress,
+        tokenMint: scanResult.token.mintAddress,
+        source: "manual_dashboard",
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to queue manual buy");
+    }
+
+    alert("Manual buy queued successfully");
+  } catch (err) {
+    alert(err.message || "Manual buy failed");
+  }
+}
+
 
   return (
     <div className="space-y-6">
@@ -180,14 +216,16 @@ export default function ManualTrade({
 
             {showBuy ? (
               <div className="mt-4 space-y-2">
-                <button
-                  type="button"
-                  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass}`}
-                >
-                  {buyConfidence === "MEDIUM"
-                    ? "Buy Token (Caution)"
-                    : "Buy Token"}
-                </button>
+               <button
+  type="button"
+  onClick={handleManualBuy}
+  disabled={!showBuy || !walletAddress}
+  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+>
+  {buyConfidence === "MEDIUM"
+    ? "Buy Token (Caution)"
+    : "Buy Token"}
+</button>
 
                 {buyConfidence === "MEDIUM" ? (
                   <div className="text-sm text-yellow-700 dark:text-yellow-400">
