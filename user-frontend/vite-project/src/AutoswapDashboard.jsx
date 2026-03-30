@@ -27,11 +27,6 @@ import WalletHistoryTable from "./wallet/WalletHistoryTable";
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
 
-
-
-
-
-
 export default function AutoswapDashboard() {
   const { publicKey, connected } = useWallet();
 
@@ -1117,13 +1112,14 @@ async function reRequestChannel(channelId) {
     />
 
     <ManualTrade
-      manualTokenMint={manualTokenMint}
-      setManualTokenMint={setManualTokenMint}
-      scanManualToken={scanManualToken}
-      scanLoading={scanLoading}
-      scanResult={scanResult}
-      scanError={scanError}
-    />
+  manualTokenMint={manualTokenMint}
+  setManualTokenMint={setManualTokenMint}
+  scanManualToken={scanManualToken}
+  scanLoading={scanLoading}
+  scanResult={scanResult}
+  scanError={scanError}
+  walletAddress={walletAddress}
+/>
 
     <EliteAnalytics
       historyLoading={historyLoading}
