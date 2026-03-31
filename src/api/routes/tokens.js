@@ -210,7 +210,7 @@ router.post("/scan", async (req, res) => {
 // =====================================================
 router.post("/manual-buy", async (req, res) => {
   try {
-    const { walletAddress, tokenMint, source } = req.body || {};
+    const { walletAddress, tokenMint, source, scanResult } = req.body || {};
 
     if (!walletAddress || typeof walletAddress !== "string") {
       return res.status(400).json({
@@ -226,6 +226,13 @@ router.post("/manual-buy", async (req, res) => {
       });
     }
 
+    if (!scanResult || typeof scanResult !== "object") {
+      return res.status(400).json({
+        ok: false,
+        error: "scanResult is required. Please rescan token.",
+      });
+    }
+
     const cleanWalletAddress = walletAddress.trim();
     const cleanTokenMint = tokenMint.trim();
     const cleanSource =
@@ -233,37 +240,13 @@ router.post("/manual-buy", async (req, res) => {
         ? source.trim()
         : MANUAL_BUY_CHANNEL_ID;
 
-    const market = await fetchTokenMarketData(cleanTokenMint);
-
-    const rawMetrics = {
-      ageMinutes: market.metrics.ageMinutes,
-      liquidityUsd: market.metrics.liquidityUsd,
-      marketCapUsd: market.metrics.marketCapUsd,
-      volume5mUsd: market.metrics.volume5mUsd,
-      buys5m: market.metrics.buys5m,
-      sells5m: market.metrics.sells5m,
-
-      largestHolderPercent: 10,
-      top10HoldingPercent: 25,
-
-      bundleScore: 4,
-      bundledWalletCount: 1,
-      fundingClusterScore: 0,
-      largestFundingCluster: 0,
-
-      momentumScore: 50,
-      velocityBreakoutScore: 50,
-      sniperWalletCount: 5,
+    const scan = {
+      evaluation: scanResult.evaluation,
+      expiresAt: scanResult.expiresAt,
+      scannedAt: scanResult.scannedAt,
     };
 
-    const scan = formatScanResponse({
-      token: market.token,
-      rawMetrics,
-      options: { scannedAt: new Date() },
-    });
-
-console.log("manual-buy rawMetrics:", rawMetrics);
-console.log("manual-buy evaluation:", scan.evaluation);
+    console.log("manual-buy using provided scanResult:", scan);
 
     const check = canExecuteManualBuy(
       {
@@ -278,6 +261,7 @@ console.log("manual-buy evaluation:", scan.evaluation);
         ok: false,
         error: check.reason,
         evaluation: scan.evaluation,
+        expiresAt: scan.expiresAt,
       });
     }
 
@@ -306,7 +290,6 @@ console.log("manual-buy evaluation:", scan.evaluation);
       message: "Manual buy queued successfully",
       job,
       evaluation: scan.evaluation,
-      token: scan.token,
       expiresAt: scan.expiresAt,
     });
   } catch (error) {

@@ -108,11 +108,15 @@ export default function ManualTrade({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        walletAddress,
-        tokenMint: scanResult.token.mintAddress,
-        source: "manual_dashboard",
-      }),
-    });
+  walletAddress,
+  tokenMint: scanResult.token.mintAddress,
+  source: "manual_dashboard",
+  scanResult: {
+    evaluation: scanResult.evaluation,
+    expiresAt: scanResult.expiresAt,
+    scannedAt: scanResult.scannedAt,
+  },
+}),
 
     const data = await res.json();
 
