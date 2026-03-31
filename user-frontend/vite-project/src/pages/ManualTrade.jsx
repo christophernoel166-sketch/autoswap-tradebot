@@ -108,10 +108,16 @@ export default function ManualTrade({
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-  walletAddress,
-  tokenMint: scanResult.token.mintAddress,
-  source: "manual_dashboard",
-}),
+        walletAddress,
+        tokenMint: scanResult.token.mintAddress,
+        source: "manual_dashboard",
+        scanResult: {
+          evaluation: scanResult.evaluation,
+          expiresAt: scanResult.expiresAt,
+          scannedAt: scanResult.scannedAt,
+        },
+      }),
+    });
 
     const data = await res.json();
 
@@ -124,8 +130,6 @@ export default function ManualTrade({
     alert(err.message || "Manual buy failed");
   }
 }
-
-
   return (
     <div className="space-y-6">
       <Section title="Manual Token Scan">
