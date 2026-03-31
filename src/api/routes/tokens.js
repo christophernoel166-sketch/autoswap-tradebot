@@ -262,6 +262,9 @@ router.post("/manual-buy", async (req, res) => {
       options: { scannedAt: new Date() },
     });
 
+console.log("manual-buy rawMetrics:", rawMetrics);
+console.log("manual-buy evaluation:", scan.evaluation);
+
     const check = canExecuteManualBuy(
       {
         evaluation: scan.evaluation,
