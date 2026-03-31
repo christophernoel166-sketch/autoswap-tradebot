@@ -2133,22 +2133,36 @@ async function executeUserTrade(user, mint, sourceChannel) {
     }
 
     // ===================================================
-    // 🔒 Channel approval enforcement
-    // ===================================================
-    const sub = user.subscribedChannels?.find(
-      (s) => String(s.channelId) === String(sourceChannel)
-    );
+// 🔒 Channel approval enforcement
+// Skip for manual dashboard buys
+// ===================================================
+const isManualBuy =
+  String(sourceChannel) === "manual_dashboard";
 
-    if (!sub || sub.enabled !== true || sub.status !== "approved") {
-      LOG.warn(
-        {
-          wallet: user.walletAddress,
-          channel: sourceChannel,
-        },
-        "⛔ Trade blocked: channel not approved"
-      );
-      return;
-    }
+if (!isManualBuy) {
+  const sub = user.subscribedChannels?.find(
+    (s) => String(s.channelId) === String(sourceChannel)
+  );
+
+  if (!sub || sub.enabled !== true || sub.status !== "approved") {
+    LOG.warn(
+      {
+        wallet: user.walletAddress,
+        channel: sourceChannel,
+      },
+      "⛔ Trade blocked: channel not approved"
+    );
+    return;
+  }
+} else {
+  LOG.info(
+    {
+      wallet: user.walletAddress,
+      channel: sourceChannel,
+    },
+    "✅ Manual dashboard buy — channel approval bypassed"
+  );
+}
 
     // ===================================================
     // 🔐 Restore USER trading wallet
