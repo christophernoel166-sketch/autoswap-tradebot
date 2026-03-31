@@ -212,15 +212,26 @@ router.post("/manual-buy", async (req, res) => {
   try {
     const { walletAddress, tokenMint, source } = req.body || {};
 
-    if (!walletAddress || !tokenMint) {
+    if (!walletAddress || typeof walletAddress !== "string") {
       return res.status(400).json({
         ok: false,
-        error: "walletAddress and tokenMint are required",
+        error: "walletAddress is required",
+      });
+    }
+
+    if (!tokenMint || typeof tokenMint !== "string") {
+      return res.status(400).json({
+        ok: false,
+        error: "tokenMint is required",
       });
     }
 
     const cleanWalletAddress = walletAddress.trim();
     const cleanTokenMint = tokenMint.trim();
+    const cleanSource =
+      typeof source === "string" && source.trim()
+        ? source.trim()
+        : MANUAL_BUY_CHANNEL_ID;
 
     const market = await fetchTokenMarketData(cleanTokenMint);
 
@@ -231,12 +242,15 @@ router.post("/manual-buy", async (req, res) => {
       volume5mUsd: market.metrics.volume5mUsd,
       buys5m: market.metrics.buys5m,
       sells5m: market.metrics.sells5m,
+
       largestHolderPercent: 10,
       top10HoldingPercent: 25,
+
       bundleScore: 4,
       bundledWalletCount: 1,
       fundingClusterScore: 0,
       largestFundingCluster: 0,
+
       momentumScore: 50,
       velocityBreakoutScore: 50,
       sniperWalletCount: 5,
@@ -248,12 +262,19 @@ router.post("/manual-buy", async (req, res) => {
       options: { scannedAt: new Date() },
     });
 
-    const check = canExecuteManualBuy(scan, new Date());
+    const check = canExecuteManualBuy(
+      {
+        evaluation: scan.evaluation,
+        expiresAt: scan.expiresAt,
+      },
+      new Date()
+    );
 
     if (!check.ok) {
       return res.status(400).json({
         ok: false,
         error: check.reason,
+        evaluation: scan.evaluation,
       });
     }
 
@@ -272,23 +293,26 @@ router.post("/manual-buy", async (req, res) => {
       channelId: MANUAL_BUY_CHANNEL_ID,
       createdAt: Date.now(),
       manual: true,
-      source: source || MANUAL_BUY_CHANNEL_ID,
+      source: cleanSource,
     };
 
     await enqueueBuyJob(job);
 
     return res.status(200).json({
       ok: true,
-      message: "Manual buy queued",
+      message: "Manual buy queued successfully",
       job,
+      evaluation: scan.evaluation,
+      token: scan.token,
+      expiresAt: scan.expiresAt,
     });
-
   } catch (error) {
     console.error("manual-buy error:", error);
 
     return res.status(500).json({
       ok: false,
       error: "Manual buy failed",
+      details: error?.message || String(error),
     });
   }
 });
