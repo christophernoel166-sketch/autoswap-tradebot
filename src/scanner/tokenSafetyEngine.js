@@ -507,9 +507,9 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
     return { ok: false, reason: "No scan result found" };
   }
 
-  if (!scanResult.showBuy) {
-    return { ok: false, reason: "Token is not approved for trading" };
-  }
+  const evaluation = scanResult?.evaluation || {};
+  const verdict = evaluation.verdict;
+  const showBuy = evaluation.showBuy;
 
   const expiresAtMs = new Date(scanResult.expiresAt).getTime();
   const nowMs = now instanceof Date ? now.getTime() : new Date(now).getTime();
@@ -522,7 +522,22 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
     return { ok: false, reason: "Scan result expired, please rescan token" };
   }
 
-  return { ok: true };
+  if (!showBuy) {
+    return { ok: false, reason: "Token is not approved for trading" };
+  }
+
+  if (verdict === "SAFE") {
+    return { ok: true };
+  }
+
+  if (verdict === "CAUTION") {
+    return { ok: true };
+  }
+
+  return {
+    ok: false,
+    reason: "Token is unsafe",
+  };
 }
 
 export function formatScanResponse({ token = {}, rawMetrics = {}, options = {} } = {}) {
