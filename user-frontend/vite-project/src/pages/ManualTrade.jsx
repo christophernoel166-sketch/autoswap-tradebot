@@ -111,11 +111,6 @@ export default function ManualTrade({
   walletAddress,
   tokenMint: scanResult.token.mintAddress,
   source: "manual_dashboard",
-  scanResult: {
-    evaluation: scanResult.evaluation,
-    expiresAt: scanResult.expiresAt,
-    scannedAt: scanResult.scannedAt,
-  },
 }),
 
     const data = await res.json();
