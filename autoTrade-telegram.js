@@ -1296,32 +1296,46 @@ redisSub.subscribe(manualSellCommandKey()).then(() => {
 redisSub.on("message", async (channel, message) => {
   if (channel !== manualSellCommandKey()) return;
 
-  let walletAddress, mint;
+  let walletAddress, mint, percent;
 
   try {
     const cmd = JSON.parse(message);
     walletAddress = String(cmd.walletAddress || "").trim();
     mint = String(cmd.mint || "").trim();
+    percent = Number(cmd.percent || 100);
 
     if (!walletAddress || !mint) {
-      LOG.warn({ message }, "Manual sell ignored — missing walletAddress or mint");
+      LOG.warn(
+        { message },
+        "Manual sell ignored — missing walletAddress or mint"
+      );
       return;
     }
 
-    LOG.info({ walletAddress, mint }, "🔥 Manual sell command received");
+    if (![25, 50, 75, 100].includes(percent)) {
+      LOG.warn(
+        { walletAddress, mint, percent },
+        "Manual sell ignored — invalid percent"
+      );
+      return;
+    }
+
+    LOG.info(
+      { walletAddress, mint, percent },
+      "🔥 Manual sell command received"
+    );
 
     // 🔒 Verify position still exists in memory
     const state = monitored.get(mint);
     const info = state?.users?.get(walletAddress);
 
     if (!state || !info) {
-      LOG.warn({ walletAddress, mint }, "Manual sell ignored — position not found");
+      LOG.warn(
+        { walletAddress, mint, percent },
+        "Manual sell ignored — position not found"
+      );
       return;
     }
-
-    // 🔒 Prevent double-sell across bot instances
-    const allowed = await tryMarkPositionClosing(walletAddress, mint);
-    if (!allowed) return;
 
     // ✅ Resolve wallet (prefer stored wallet from monitor state)
     let wallet = info.wallet;
@@ -1334,10 +1348,10 @@ redisSub.on("message", async (channel, message) => {
     if (!wallet || !slippageBps) {
       const user = await User.findOne({ walletAddress }).lean();
       if (!user) {
-        LOG.warn({ walletAddress, mint }, "Manual sell failed — user not found");
-
-        // revert redis status so it can be retried safely
-        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+        LOG.warn(
+          { walletAddress, mint, percent },
+          "Manual sell failed — user not found"
+        );
         return;
       }
 
@@ -1347,7 +1361,9 @@ redisSub.on("message", async (channel, message) => {
 
       if (!slippageBps) {
         const userSlippagePercent =
-          typeof user.maxSlippagePercent === "number" ? user.maxSlippagePercent : 5;
+          typeof user.maxSlippagePercent === "number"
+            ? user.maxSlippagePercent
+            : 5;
 
         slippageBps = Math.min(
           Math.max(Math.round(userSlippagePercent * 100), 50), // min 0.5%
@@ -1357,18 +1373,38 @@ redisSub.on("message", async (channel, message) => {
     }
 
     if (!wallet?.publicKey) {
-      LOG.error({ walletAddress, mint }, "Manual sell failed — wallet missing/invalid");
-      await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      LOG.error(
+        { walletAddress, mint, percent },
+        "Manual sell failed — wallet missing/invalid"
+      );
       return;
     }
 
-    // ---------------------------------------------------
-    // Execute FULL sell with retries
-    // ---------------------------------------------------
-    const traceId = `${walletAddress}:${mint}:manual_sell:${Date.now()}`;
-    LOG.info({ traceId, walletAddress, mint, slippageBps }, "🧪 MANUAL SELL TRACE START");
+    const traceId = `${walletAddress}:${mint}:manual_sell_${percent}:${Date.now()}`;
+    LOG.info(
+      { traceId, walletAddress, mint, percent, slippageBps },
+      "🧪 MANUAL SELL TRACE START"
+    );
 
-    const sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
+    let sellRes;
+
+    if (percent === 100) {
+      // 🔒 Prevent double full-close across bot instances
+      const allowed = await tryMarkPositionClosing(walletAddress, mint);
+      if (!allowed) return;
+
+      sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
+    } else {
+      // ✅ Partial sell: keep position open
+      sellRes = await safeSellPartial(
+        wallet,
+        mint,
+        percent,
+        slippageBps,
+        4,
+        traceId
+      );
+    }
 
     const sellTxid =
       sellRes?.txid ||
@@ -1377,57 +1413,79 @@ redisSub.on("message", async (channel, message) => {
       sellRes ||
       null;
 
-    // 💸 Charge platform SELL fee (every sell action)
-    await chargeSellFee(wallet, sellTxid, mint, "manual_sell");
+    // 💸 Charge platform SELL fee
+    await chargeSellFee(
+      wallet,
+      sellTxid,
+      mint,
+      percent === 100 ? "manual_sell" : `manual_sell_${percent}`
+    );
 
-    // ---------------------------------------------------
-    // Mark position closed in Redis + cleanup
-    // ---------------------------------------------------
-    const posKey = positionKey(walletAddress, mint);
+    if (percent === 100) {
+      // ---------------------------------------------------
+      // Mark position closed in Redis + cleanup
+      // ---------------------------------------------------
+      const posKey = positionKey(walletAddress, mint);
 
-    await redis.hset(posKey, "status", "closed");
-    await redis.srem(walletPositionsKey(walletAddress), mint);
+      await redis.hset(posKey, "status", "closed");
+      await redis.srem(walletPositionsKey(walletAddress), mint);
 
-    // Fetch exit price (best effort)
-    let exitPrice = 0;
-    try {
-  exitPrice = await getDexScreenerPrice(mint);
-} catch {}
+      // Fetch exit price (best effort)
+      let exitPrice = 0;
+      try {
+        exitPrice = await getDexScreenerPrice(mint);
+      } catch {}
 
-    // Entry price (prefer monitor state entryPrices map)
-    const entryPrice =
-      state.entryPrices.get(walletAddress) ??
-      info.entryPrice ??
-      0;
+      // Entry price (prefer monitor state entryPrices map)
+      const entryPrice =
+        state.entryPrices.get(walletAddress) ??
+        info.entryPrice ??
+        0;
 
-    // Save trade to backend (best effort)
-    try {
-      await saveTradeToBackend({
-        walletAddress,
-        mint,
-        solAmount: info.solAmount || 0,
-        entryPrice: entryPrice || 0,
-        exitPrice: exitPrice || 0,
-        buyTxid: info.buyTxid || null,
-        sellTxid,
-        sourceChannel: info.sourceChannel || "manual_redis",
-        reason: "manual_sell",
-        tradeType: "manual",
-      });
-    } catch (err) {
-      LOG.error({ err, walletAddress, mint }, "Manual sell: saveTradeToBackend failed");
+      // Save trade to backend (best effort)
+      try {
+        await saveTradeToBackend({
+          walletAddress,
+          mint,
+          solAmount: info.solAmount || 0,
+          entryPrice: entryPrice || 0,
+          exitPrice: exitPrice || 0,
+          buyTxid: info.buyTxid || null,
+          sellTxid,
+          sourceChannel: info.sourceChannel || "manual_redis",
+          reason: "manual_sell",
+          tradeType: "manual",
+        });
+      } catch (err) {
+        LOG.error(
+          { err, walletAddress, mint },
+          "Manual sell: saveTradeToBackend failed"
+        );
+      }
+
+      // Remove from monitoring
+      state.users.delete(walletAddress);
+      state.entryPrices.delete(walletAddress);
+      state.highestPrices?.delete?.(walletAddress);
+
+      LOG.info(
+        { walletAddress, mint, percent, sellTxid },
+        "✅ Manual sell all executed"
+      );
+    } else {
+      LOG.info(
+        { walletAddress, mint, percent, sellTxid },
+        "✅ Manual partial sell executed"
+      );
     }
-
-    // Remove from monitoring
-    state.users.delete(walletAddress);
-    state.entryPrices.delete(walletAddress);
-
-    LOG.info({ walletAddress, mint, sellTxid }, "✅ Manual sell executed");
   } catch (err) {
-    LOG.error({ err, walletAddress, mint }, "❌ Manual sell command failed");
+    LOG.error(
+      { err, walletAddress, mint, percent },
+      "❌ Manual sell command failed"
+    );
 
-    // If we already marked closing, revert to open so it can retry
-    if (walletAddress && mint) {
+    // Only revert closing state for full sell
+    if (walletAddress && mint && percent === 100) {
       try {
         await redis.hset(positionKey(walletAddress, mint), "status", "open");
       } catch {}
