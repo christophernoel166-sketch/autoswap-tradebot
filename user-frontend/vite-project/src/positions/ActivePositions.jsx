@@ -5,6 +5,9 @@ export default function ActivePositions({
   manualSell,
   manualSellAll,
 }) {
+  function handleSellPercent(mint, percent) {
+    manualSell(mint, percent);
+  }
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-sm mt-6 mb-10">
       {/* HEADER */}
