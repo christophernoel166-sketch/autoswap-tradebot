@@ -695,37 +695,79 @@ async function fetchWithdrawals() {
   }
 
 
-  /* --- Manual sells (keep existing behavior) --- */
-  async function manualSell(mint) {
-    if (!confirm(`Sell ${mint}?`)) return;
-    try {
-      await fetch(`${API_BASE}/api/manual-sell`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress, mint }),
-      });
-    } catch (err) {
-      console.warn("manualSell error:", err);
-    }
-    fetchPositions();
-    fetchHistory();
+  /* --- Manual sells --- */
+async function manualSell(mint, percent = 100) {
+  if (!walletAddress || !mint) {
+    return setMessage({
+      type: "error",
+      text: "Wallet or token missing",
+    });
   }
 
-  async function manualSellAll() {
-    if (!confirm("Sell ALL positions?")) return;
-    try {
-      await fetch(`${API_BASE}/api/manual-sell-all`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ walletAddress }),
-      });
-    } catch (err) {
-      console.warn("manualSellAll error:", err);
+  const label = percent === 100 ? "Sell ALL" : `Sell ${percent}%`;
+  if (!confirm(`${label} of ${mint}?`)) return;
+
+  try {
+    const r = await fetch(`${API_BASE}/api/manual-sell`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        mint,
+        percent,
+      }),
+    });
+
+    const data = await r.json().catch(() => ({}));
+
+    if (!r.ok) {
+      throw new Error(data?.error || "Manual sell failed");
     }
-    fetchPositions();
-    fetchHistory();
+
+    setMessage({
+      type: "success",
+      text:
+        percent === 100
+          ? "Sell all queued successfully"
+          : `Sell ${percent}% queued successfully`,
+    });
+  } catch (err) {
+    console.warn("manualSell error:", err);
+    setMessage({
+      type: "error",
+      text: err.message || "Manual sell failed",
+    });
   }
 
+  fetchPositions();
+  fetchHistory();
+}
+
+async function manualSellAll() {
+  if (!confirm("Sell ALL positions?")) return;
+
+  try {
+    await fetch(`${API_BASE}/api/manual-sell-all`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ walletAddress }),
+    });
+
+    setMessage({
+      type: "success",
+      text: "Sell all positions queued successfully",
+    });
+  } catch (err) {
+    console.warn("manualSellAll error:", err);
+    setMessage({
+      type: "error",
+      text: "Sell all positions failed",
+    });
+  }
+
+  fetchPositions();
+  fetchHistory();
+}
   
 
   // ================================
