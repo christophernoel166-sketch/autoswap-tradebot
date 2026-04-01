@@ -109,16 +109,47 @@ export default function ActivePositions({
                   </div>
                 </div>
 
-                <button
-                  onClick={() => manualSell(p.mint)}
-                  className="mt-2 px-3 py-1 border dark:border-gray-600
-                             bg-white dark:bg-gray-800
-                             text-sm rounded
-                             text-gray-900 dark:text-gray-100"
-                >
-                  Sell
-                </button>
-              </div>
+                <div className="mt-2 grid grid-cols-4 gap-2">
+  <button
+    onClick={() => handleSellPercent(p.mint, 25)}
+    className="px-2 py-1 border dark:border-gray-600
+               bg-white dark:bg-gray-800
+               text-xs rounded
+               text-gray-900 dark:text-gray-100"
+  >
+    25%
+  </button>
+
+  <button
+    onClick={() => handleSellPercent(p.mint, 50)}
+    className="px-2 py-1 border dark:border-gray-600
+               bg-white dark:bg-gray-800
+               text-xs rounded
+               text-gray-900 dark:text-gray-100"
+  >
+    50%
+  </button>
+
+  <button
+    onClick={() => handleSellPercent(p.mint, 75)}
+    className="px-2 py-1 border dark:border-gray-600
+               bg-white dark:bg-gray-800
+               text-xs rounded
+               text-gray-900 dark:text-gray-100"
+  >
+    75%
+  </button>
+
+  <button
+    onClick={() => handleSellPercent(p.mint, 100)}
+    className="px-2 py-1 border dark:border-gray-600
+               bg-white dark:bg-gray-800
+               text-xs rounded
+               text-gray-900 dark:text-gray-100"
+  >
+    All
+  </button>
+</div>
             ))}
           </div>
 
