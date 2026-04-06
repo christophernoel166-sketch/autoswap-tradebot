@@ -558,8 +558,12 @@ const integrity = scanResult?.integrity || null;
 
           {(evaluation?.reasons?.length > 0 ||
             evaluation?.warnings?.length > 0 ||
-            evaluation?.failedRules?.length > 0 ||
-            social?.socialWarning ||
+            {evaluation?.warnings?.length ||
+             social?.socialWarning ||
+
+            
+
+            integrity?.integrityWarning ? (
             scanResult?.activity?.activityWarning) ? (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <Section title="Reasons">
@@ -576,24 +580,34 @@ const integrity = scanResult?.integrity || null;
                 )}
               </Section>
 
-              <Section title="Warnings">
-                {evaluation?.warnings?.length || social?.socialWarning ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation?.warnings?.map((item, idx) => (
-                      <li key={`warn-${idx}`}>• {item}</li>
-                    ))}
+             <Section title="Warnings">
+  {evaluation?.warnings?.length ||
+  social?.socialWarning ||
+  scanResult?.activity?.activityWarning ||
+  integrity?.integrityWarning ? (
+    <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+      {evaluation?.warnings?.map((item, idx) => (
+        <li key={`warn-${idx}`}>• {item}</li>
+      ))}
 
-                    {social?.socialWarning ? (
-                      <li>• {social.socialWarning}</li>
-                    ) : null}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No warnings.
-                  </div>
-                )}
-              </Section>
+      {social?.socialWarning ? (
+        <li>• {social.socialWarning}</li>
+      ) : null}
 
+      {scanResult?.activity?.activityWarning ? (
+        <li>• {scanResult.activity.activityWarning}</li>
+      ) : null}
+
+      {integrity?.integrityWarning ? (
+        <li>• {integrity.integrityWarning}</li>
+      ) : null}
+    </ul>
+  ) : (
+    <div className="text-sm text-gray-500 dark:text-gray-400">
+      No warnings.
+    </div>
+  )}
+</Section>
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (
                   <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
