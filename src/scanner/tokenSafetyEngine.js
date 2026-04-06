@@ -26,11 +26,17 @@ export const HARD_FAIL_RULES = {
 
   maxSniperWallets: 15,
 
-  // NEW: anti-fake-pump integrity hard fails
+  // anti-fake-pump integrity hard fails
   minWalletParticipationScore: 30,
   minVelocitySanityScore: 35,
   maxWashTradingRiskScore: 75,
   maxBundleSuspicionScore: 80,
+
+  // anti-rug hard fails
+  maxDevDumpRiskScore: 85,
+  maxLiquidityPullRiskScore: 85,
+  maxInsiderRiskScore: 85,
+  maxRugRiskScore: 80,
 };
 
 export const SCORE_THRESHOLDS = {
@@ -55,13 +61,19 @@ export const REQUIRED_FIELDS = [
   "velocityBreakoutScore",
   "sniperWalletCount",
 
-  // NEW: integrity
+  // integrity
   "walletParticipationScore",
   "velocitySanityScore",
   "washTradingRiskScore",
   "bundleSuspicionScore",
   "artificialVolumeFlag",
   "fakeMomentumFlag",
+
+  // rug risk
+  "devDumpRiskScore",
+  "liquidityPullRiskScore",
+  "insiderRiskScore",
+  "rugRiskScore",
 ];
 
 function isNil(value) {
@@ -110,13 +122,19 @@ function normalizeMetrics(raw = {}) {
     momentumScore: toNumber(raw.momentumScore),
     velocityBreakoutScore: toNumber(raw.velocityBreakoutScore),
 
-    // NEW: market integrity
+    // market integrity
     walletParticipationScore: toNumber(raw.walletParticipationScore),
     velocitySanityScore: toNumber(raw.velocitySanityScore),
     washTradingRiskScore: toNumber(raw.washTradingRiskScore),
     bundleSuspicionScore: toNumber(raw.bundleSuspicionScore),
     artificialVolumeFlag: Boolean(raw.artificialVolumeFlag),
     fakeMomentumFlag: Boolean(raw.fakeMomentumFlag),
+
+    // rug risk
+    devDumpRiskScore: toNumber(raw.devDumpRiskScore),
+    liquidityPullRiskScore: toNumber(raw.liquidityPullRiskScore),
+    insiderRiskScore: toNumber(raw.insiderRiskScore),
+    rugRiskScore: toNumber(raw.rugRiskScore),
 
     boosted: Boolean(raw.boosted),
   };
@@ -198,7 +216,6 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  // Largest holder (15)
   if (m.largestHolderPercent <= 8) {
     score += 15;
     reasons.push("Largest holder concentration is low");
@@ -213,7 +230,6 @@ function scoreHolderSafety(m) {
     warnings.push("Largest holder concentration is elevated");
   }
 
-  // Top 10 holding (15)
   if (m.top10HoldingPercent <= 20) {
     score += 15;
     reasons.push("Top 10 concentration is healthy");
@@ -435,6 +451,61 @@ function scoreMarketIntegrity(m) {
   return { score, reasons, warnings };
 }
 
+function scoreRugRisk(m) {
+  let score = 0;
+  const reasons = [];
+  const warnings = [];
+
+  if (m.rugRiskScore <= 20) {
+    score += 10;
+    reasons.push("Low rug risk profile");
+  } else if (m.rugRiskScore <= 35) {
+    score += 7;
+  } else if (m.rugRiskScore <= 50) {
+    score += 4;
+  } else if (m.rugRiskScore <= 65) {
+    score += 1;
+    warnings.push("Overall rug risk is elevated");
+  } else {
+    warnings.push("Overall rug risk is high");
+  }
+
+  if (m.devDumpRiskScore <= 20) {
+    score += 5;
+  } else if (m.devDumpRiskScore <= 35) {
+    score += 3;
+  } else if (m.devDumpRiskScore <= 50) {
+    score += 1;
+    warnings.push("Dev dump risk is elevated");
+  } else {
+    warnings.push("Dev dump risk is high");
+  }
+
+  if (m.liquidityPullRiskScore <= 20) {
+    score += 5;
+  } else if (m.liquidityPullRiskScore <= 35) {
+    score += 3;
+  } else if (m.liquidityPullRiskScore <= 50) {
+    score += 1;
+    warnings.push("Liquidity pull risk is elevated");
+  } else {
+    warnings.push("Liquidity pull risk is high");
+  }
+
+  if (m.insiderRiskScore <= 20) {
+    score += 4;
+  } else if (m.insiderRiskScore <= 35) {
+    score += 2;
+  } else if (m.insiderRiskScore <= 50) {
+    score += 1;
+    warnings.push("Insider control risk is elevated");
+  } else {
+    warnings.push("Insider control risk is high");
+  }
+
+  return { score, reasons, warnings };
+}
+
 function runHardFailChecks(m) {
   const failedRules = [];
 
@@ -469,7 +540,6 @@ function runHardFailChecks(m) {
     failedRules.push("Sniper wallet count too high");
   }
 
-  // NEW: anti-fake-pump / integrity hard fails
   if (m.walletParticipationScore < HARD_FAIL_RULES.minWalletParticipationScore) {
     failedRules.push("Wallet participation quality too weak");
   }
@@ -487,6 +557,19 @@ function runHardFailChecks(m) {
   }
   if (m.fakeMomentumFlag) {
     failedRules.push("Fake momentum detected");
+  }
+
+  if (m.devDumpRiskScore > HARD_FAIL_RULES.maxDevDumpRiskScore) {
+    failedRules.push("Dev dump risk too high");
+  }
+  if (m.liquidityPullRiskScore > HARD_FAIL_RULES.maxLiquidityPullRiskScore) {
+    failedRules.push("Liquidity pull risk too high");
+  }
+  if (m.insiderRiskScore > HARD_FAIL_RULES.maxInsiderRiskScore) {
+    failedRules.push("Insider control risk too high");
+  }
+  if (m.rugRiskScore > HARD_FAIL_RULES.maxRugRiskScore) {
+    failedRules.push("Overall rug risk too high");
   }
 
   return failedRules;
@@ -523,6 +606,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         riskStructure: 0,
         momentum: 0,
         marketIntegrity: 0,
+        rugRisk: 0,
       },
       scannedAt,
       expiresAt,
@@ -549,6 +633,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         riskStructure: 0,
         momentum: 0,
         marketIntegrity: 0,
+        rugRisk: 0,
       },
       scannedAt,
       expiresAt,
@@ -561,6 +646,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
   const riskStructure = scoreRiskStructure(metrics);
   const momentum = scoreMomentum(metrics);
   const marketIntegrity = scoreMarketIntegrity(metrics);
+  const rugRisk = scoreRugRisk(metrics);
 
   const totalScore =
     market.score +
@@ -568,7 +654,8 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     walletIntelligence.score +
     riskStructure.score +
     momentum.score +
-    marketIntegrity.score;
+    marketIntegrity.score +
+    rugRisk.score;
 
   let verdict = VERDICTS.UNSAFE;
   if (totalScore >= SCORE_THRESHOLDS.safe) {
@@ -584,6 +671,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...riskStructure.reasons,
     ...momentum.reasons,
     ...marketIntegrity.reasons,
+    ...rugRisk.reasons,
     ...(metrics.boosted ? ["Token is boosted"] : []),
   ]);
 
@@ -594,6 +682,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...riskStructure.warnings,
     ...momentum.warnings,
     ...marketIntegrity.warnings,
+    ...rugRisk.warnings,
   ]);
 
   const roundedScore = round2(totalScore);
@@ -623,6 +712,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
       riskStructure: riskStructure.score,
       momentum: momentum.score,
       marketIntegrity: marketIntegrity.score,
+      rugRisk: rugRisk.score,
     },
     scannedAt,
     expiresAt,

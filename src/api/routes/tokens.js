@@ -18,6 +18,7 @@ import { fetchRecentXPosts } from "../../scanner/fetchRecentXPosts.js";
 import { getAlphaCallers } from "../../scanner/alphaCallers.js";
 import { acquireBuyLock, enqueueBuyJob } from "../../queue/tradeQueue.js";
 import { fetchMarketIntegrityData } from "../../scanner/fetchMarketIntegrityData.js";
+import { fetchRugRiskData } from "../../scanner/fetchRugRiskData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -77,6 +78,10 @@ router.post("/scan", async (req, res) => {
             bundleSuspicionScore: null,
             artificialVolumeFlag: null,
             fakeMomentumFlag: null,
+            devDumpRiskScore: null,
+            liquidityPullRiskScore: null,
+            insiderRiskScore: null,
+            rugRiskScore: null,
             boosted: false,
           },
           options: { scannedAt: new Date() },
@@ -130,6 +135,14 @@ router.post("/scan", async (req, res) => {
             artificialVolumeFlag: null,
             fakeMomentumFlag: null,
             integrityWarning: "No market pair found, so integrity checks could not run",
+          },
+          rugRisk: {
+            devDumpRiskScore: null,
+            liquidityPullRiskScore: null,
+            insiderRiskScore: null,
+            rugRiskScore: null,
+            rugRiskLevel: null,
+            rugWarning: "No market pair found, so rug checks could not run",
           },
           ...response,
         });
@@ -221,6 +234,14 @@ router.post("/scan", async (req, res) => {
       },
     });
 
+    // ================= RUG RISK =================
+    const rugRiskData = await fetchRugRiskData({
+      tokenMint: tokenMint.trim(),
+      market,
+      holderData,
+      context: {},
+    });
+
     // ================= METRICS =================
     const rawMetrics = {
       ageMinutes: market.metrics.ageMinutes,
@@ -256,6 +277,12 @@ router.post("/scan", async (req, res) => {
       bundleSuspicionScore: integrityData.bundleSuspicionScore,
       artificialVolumeFlag: integrityData.artificialVolumeFlag,
       fakeMomentumFlag: integrityData.fakeMomentumFlag,
+
+      // rug risk metrics
+      devDumpRiskScore: rugRiskData.devDumpRiskScore,
+      liquidityPullRiskScore: rugRiskData.liquidityPullRiskScore,
+      insiderRiskScore: rugRiskData.insiderRiskScore,
+      rugRiskScore: rugRiskData.rugRiskScore,
     };
 
     const response = formatScanResponse({
@@ -272,6 +299,7 @@ router.post("/scan", async (req, res) => {
         : []),
       ...(activityData.activityWarning ? [activityData.activityWarning] : []),
       ...(integrityData.integrityWarning ? [integrityData.integrityWarning] : []),
+      ...(rugRiskData.rugWarning ? [rugRiskData.rugWarning] : []),
     ]
       .filter(Boolean)
       .filter((warning, index, arr) => arr.indexOf(warning) === index);
@@ -289,6 +317,7 @@ router.post("/scan", async (req, res) => {
       social: enrichedSocialData,
       activity: activityData,
       integrity: integrityData,
+      rugRisk: rugRiskData,
       ...response,
       evaluation: {
         ...response.evaluation,
