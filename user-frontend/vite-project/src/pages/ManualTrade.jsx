@@ -556,48 +556,56 @@ const integrity = scanResult?.integrity || null;
             </Section>
           </div>
 
-          {(evaluation?.reasons?.length > 0 ||
-            evaluation?.warnings?.length > 0 ||
-            {evaluation?.warnings?.length ||
-             social?.socialWarning ||
+         {(evaluation?.reasons?.length > 0 ||
+  evaluation?.warnings?.length > 0 ||
+  evaluation?.failedRules?.length > 0 ||
+  social?.socialWarning ||
+  scanResult?.activity?.activityWarning ||
+  integrity?.integrityWarning) ? (
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+    <Section title="Reasons">
+      {evaluation?.reasons?.length ? (
+        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+          {evaluation.reasons.map((item, idx) => (
+            <li key={idx}>• {item}</li>
+          ))}
+        </ul>
+      ) : (
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          No reasons available.
+        </div>
+      )}
+    </Section>
 
-            
+    <Section title="Warnings">
+      {evaluation?.warnings?.length ||
+      social?.socialWarning ||
+      scanResult?.activity?.activityWarning ||
+      integrity?.integrityWarning ? (
+        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+          {evaluation?.warnings?.map((item, idx) => (
+            <li key={`warn-${idx}`}>• {item}</li>
+          ))}
 
-            integrity?.integrityWarning ? (
-            scanResult?.activity?.activityWarning) ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Section title="Reasons">
-                {evaluation?.reasons?.length ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation.reasons.map((item, idx) => (
-                      <li key={idx}>• {item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No reasons available.
-                  </div>
-                )}
-              </Section>
+          {social?.socialWarning ? (
+            <li>• {social.socialWarning}</li>
+          ) : null}
 
-              <Section title="Warnings">
-                {evaluation?.warnings?.length || social?.socialWarning ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation?.warnings?.map((item, idx) => (
-                      <li key={`warn-${idx}`}>• {item}</li>
-                    ))}
+          {scanResult?.activity?.activityWarning ? (
+            <li>• {scanResult.activity.activityWarning}</li>
+          ) : null}
 
-                    {social?.socialWarning ? (
-                      <li>• {social.socialWarning}</li>
-                    ) : null}
-                     
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No warnings.
-                  </div>
-                )}
-              </Section>
+          {integrity?.integrityWarning ? (
+            <li>• {integrity.integrityWarning}</li>
+          ) : null}
+        </ul>
+      ) : (
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          No warnings.
+        </div>
+      )}
+    </Section>
+
 
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (
