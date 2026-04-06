@@ -69,9 +69,10 @@ export default function ManualTrade({
   walletAddress,
 }) {
   const evaluation = scanResult?.evaluation || null;
-  const metrics = scanResult?.metrics || null;
-  const token = scanResult?.token || null;
-  const social = scanResult?.social || null;
+const metrics = scanResult?.metrics || null;
+const token = scanResult?.token || null;
+const social = scanResult?.social || null;
+const integrity = scanResult?.integrity || null;
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);

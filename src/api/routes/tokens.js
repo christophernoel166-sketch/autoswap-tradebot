@@ -1,7 +1,10 @@
 // src/api/routes/tokens.js
 
 import express from "express";
-import { formatScanResponse, canExecuteManualBuy } from "../../scanner/tokenSafetyEngine.js";
+import {
+  formatScanResponse,
+  canExecuteManualBuy,
+} from "../../scanner/tokenSafetyEngine.js";
 import { fetchTokenMarketData } from "../../scanner/fetchTokenMarketData.js";
 import { fetchTokenHolderData } from "../../scanner/fetchTokenHolderData.js";
 import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderAccounts.js";
@@ -14,10 +17,10 @@ import { fetchXPumpReplyData } from "../../scanner/fetchXPumpReplyData.js";
 import { fetchRecentXPosts } from "../../scanner/fetchRecentXPosts.js";
 import { getAlphaCallers } from "../../scanner/alphaCallers.js";
 import { acquireBuyLock, enqueueBuyJob } from "../../queue/tradeQueue.js";
+import { fetchMarketIntegrityData } from "../../scanner/fetchMarketIntegrityData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
-
 
 // =====================================================
 // SCAN ROUTE
@@ -68,6 +71,12 @@ router.post("/scan", async (req, res) => {
             largestFundingCluster: null,
             momentumScore: null,
             velocityBreakoutScore: null,
+            walletParticipationScore: null,
+            velocitySanityScore: null,
+            washTradingRiskScore: null,
+            bundleSuspicionScore: null,
+            artificialVolumeFlag: null,
+            fakeMomentumFlag: null,
             boosted: false,
           },
           options: { scannedAt: new Date() },
@@ -75,7 +84,53 @@ router.post("/scan", async (req, res) => {
 
         return res.status(200).json({
           ok: true,
+          walletAddress: walletAddress || null,
           tokenMint: tokenMint.trim(),
+          pairAddress: null,
+          dexId: null,
+          chainId: "solana",
+          topHolders: [],
+          excludedAccounts: [],
+          holderWarning: "No market pair found, so holder analysis could not run",
+          social: {
+            websiteUrl: null,
+            telegramUrl: null,
+            twitterUrl: null,
+            hasWebsite: false,
+            hasTelegram: false,
+            hasTwitter: false,
+            websiteWorking: null,
+            telegramWorking: null,
+            twitterWorking: null,
+            socialWarning: "No market pair found, so social checks could not run",
+          },
+          activity: {
+            alphaCallerCount: 0,
+            alphaCallerMentions: [],
+            alphaCallerScore: null,
+            xReplyCount: null,
+            telegramReplyCount: null,
+            telegramActivityScore: null,
+            xActivityScore: null,
+            xPumpReplyScore: null,
+            xPumpReplyMentions: [],
+            activityWarning: "No market pair found, so activity checks could not run",
+          },
+          integrity: {
+            buySellRatio5m: null,
+            uniqueBuyerCount5m: null,
+            uniqueSellerCount5m: null,
+            walletParticipationRatio: null,
+            walletParticipationScore: null,
+            volumePerTx5m: null,
+            volumePerUniqueBuyer5m: null,
+            velocitySanityScore: null,
+            washTradingRiskScore: null,
+            bundleSuspicionScore: null,
+            artificialVolumeFlag: null,
+            fakeMomentumFlag: null,
+            integrityWarning: "No market pair found, so integrity checks could not run",
+          },
           ...response,
         });
       }
@@ -144,6 +199,8 @@ router.post("/scan", async (req, res) => {
       largestHolderPercent: null,
       top10HoldingPercent: null,
       topHolders: [],
+      excludedAccounts: [],
+      holderWarning: null,
     };
 
     try {
@@ -152,7 +209,17 @@ router.post("/scan", async (req, res) => {
       });
     } catch (err) {
       console.warn("Holder scan failed:", err?.message);
+      holderData.holderWarning = "Holder scan temporarily unavailable";
     }
+
+    // ================= INTEGRITY =================
+    const integrityData = await fetchMarketIntegrityData({
+      tokenMint: tokenMint.trim(),
+      market,
+      context: {
+        recentTrades: [],
+      },
+    });
 
     // ================= METRICS =================
     const rawMetrics = {
@@ -164,9 +231,13 @@ router.post("/scan", async (req, res) => {
       sells5m: market.metrics.sells5m,
       boosted: market.metrics.boosted,
 
+      holderCount: null,
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
 
+      smartDegenCount: 0,
+      botDegenCount: 0,
+      ratTraderCount: 0,
       alphaCallerCount: activityData.alphaCallerCount,
       sniperWalletCount: 5,
 
@@ -177,6 +248,14 @@ router.post("/scan", async (req, res) => {
 
       momentumScore: 50,
       velocityBreakoutScore: 50,
+
+      // market integrity / anti-fake-pump metrics
+      walletParticipationScore: integrityData.walletParticipationScore,
+      velocitySanityScore: integrityData.velocitySanityScore,
+      washTradingRiskScore: integrityData.washTradingRiskScore,
+      bundleSuspicionScore: integrityData.bundleSuspicionScore,
+      artificialVolumeFlag: integrityData.artificialVolumeFlag,
+      fakeMomentumFlag: integrityData.fakeMomentumFlag,
     };
 
     const response = formatScanResponse({
@@ -185,14 +264,37 @@ router.post("/scan", async (req, res) => {
       options: { scannedAt: new Date() },
     });
 
+    const mergedWarnings = [
+      ...(response.evaluation?.warnings || []),
+      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+      ...(enrichedSocialData.socialWarning
+        ? [enrichedSocialData.socialWarning]
+        : []),
+      ...(activityData.activityWarning ? [activityData.activityWarning] : []),
+      ...(integrityData.integrityWarning ? [integrityData.integrityWarning] : []),
+    ]
+      .filter(Boolean)
+      .filter((warning, index, arr) => arr.indexOf(warning) === index);
+
     return res.status(200).json({
       ok: true,
+      walletAddress: walletAddress || null,
       tokenMint: tokenMint.trim(),
-      ...response,
-      activity: activityData,
+      pairAddress: market.token.pairAddress,
+      dexId: market.token.dexId,
+      chainId: market.token.chainId,
+      topHolders: holderData.topHolders || [],
+      excludedAccounts: holderData.excludedAccounts || [],
+      holderWarning: holderData.holderWarning || null,
       social: enrichedSocialData,
+      activity: activityData,
+      integrity: integrityData,
+      ...response,
+      evaluation: {
+        ...response.evaluation,
+        warnings: mergedWarnings,
+      },
     });
-
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
 
@@ -203,7 +305,6 @@ router.post("/scan", async (req, res) => {
     });
   }
 });
-
 
 // =====================================================
 // MANUAL BUY ROUTE

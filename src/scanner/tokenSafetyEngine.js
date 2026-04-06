@@ -25,6 +25,12 @@ export const HARD_FAIL_RULES = {
   maxLargestFundingCluster: 4,
 
   maxSniperWallets: 15,
+
+  // NEW: anti-fake-pump integrity hard fails
+  minWalletParticipationScore: 30,
+  minVelocitySanityScore: 35,
+  maxWashTradingRiskScore: 75,
+  maxBundleSuspicionScore: 80,
 };
 
 export const SCORE_THRESHOLDS = {
@@ -48,6 +54,14 @@ export const REQUIRED_FIELDS = [
   "momentumScore",
   "velocityBreakoutScore",
   "sniperWalletCount",
+
+  // NEW: integrity
+  "walletParticipationScore",
+  "velocitySanityScore",
+  "washTradingRiskScore",
+  "bundleSuspicionScore",
+  "artificialVolumeFlag",
+  "fakeMomentumFlag",
 ];
 
 function isNil(value) {
@@ -95,6 +109,14 @@ function normalizeMetrics(raw = {}) {
 
     momentumScore: toNumber(raw.momentumScore),
     velocityBreakoutScore: toNumber(raw.velocityBreakoutScore),
+
+    // NEW: market integrity
+    walletParticipationScore: toNumber(raw.walletParticipationScore),
+    velocitySanityScore: toNumber(raw.velocitySanityScore),
+    washTradingRiskScore: toNumber(raw.washTradingRiskScore),
+    bundleSuspicionScore: toNumber(raw.bundleSuspicionScore),
+    artificialVolumeFlag: Boolean(raw.artificialVolumeFlag),
+    fakeMomentumFlag: Boolean(raw.fakeMomentumFlag),
 
     boosted: Boolean(raw.boosted),
   };
@@ -340,6 +362,79 @@ function scoreMomentum(m) {
   return { score, reasons, warnings };
 }
 
+function scoreMarketIntegrity(m) {
+  let score = 0;
+  const reasons = [];
+  const warnings = [];
+
+  if (m.walletParticipationScore >= 85) {
+    score += 10;
+    reasons.push("Strong wallet participation quality");
+  } else if (m.walletParticipationScore >= 70) {
+    score += 8;
+  } else if (m.walletParticipationScore >= 55) {
+    score += 5;
+  } else if (m.walletParticipationScore >= 40) {
+    score += 2;
+    warnings.push("Wallet participation is only moderate");
+  } else {
+    warnings.push("Wallet participation is weak");
+  }
+
+  if (m.velocitySanityScore >= 85) {
+    score += 8;
+    reasons.push("Velocity profile looks organic");
+  } else if (m.velocitySanityScore >= 70) {
+    score += 6;
+  } else if (m.velocitySanityScore >= 55) {
+    score += 4;
+  } else if (m.velocitySanityScore >= 40) {
+    score += 1;
+    warnings.push("Velocity profile is somewhat suspicious");
+  } else {
+    warnings.push("Velocity profile looks abnormal");
+  }
+
+  if (m.washTradingRiskScore <= 15) {
+    score += 8;
+    reasons.push("Low wash-trading risk");
+  } else if (m.washTradingRiskScore <= 30) {
+    score += 6;
+  } else if (m.washTradingRiskScore <= 45) {
+    score += 3;
+  } else if (m.washTradingRiskScore <= 60) {
+    score += 1;
+    warnings.push("Wash-trading risk is elevated");
+  } else {
+    warnings.push("Wash-trading risk is high");
+  }
+
+  if (m.bundleSuspicionScore <= 15) {
+    score += 4;
+  } else if (m.bundleSuspicionScore <= 30) {
+    score += 3;
+  } else if (m.bundleSuspicionScore <= 50) {
+    score += 1;
+    warnings.push("Bundle-like activity is elevated");
+  } else {
+    warnings.push("Bundle-like activity looks suspicious");
+  }
+
+  if (m.artificialVolumeFlag) {
+    warnings.push("Artificial volume risk detected");
+  } else {
+    score += 2;
+  }
+
+  if (m.fakeMomentumFlag) {
+    warnings.push("Fake momentum pattern detected");
+  } else {
+    score += 2;
+  }
+
+  return { score, reasons, warnings };
+}
+
 function runHardFailChecks(m) {
   const failedRules = [];
 
@@ -374,12 +469,36 @@ function runHardFailChecks(m) {
     failedRules.push("Sniper wallet count too high");
   }
 
+  // NEW: anti-fake-pump / integrity hard fails
+  if (m.walletParticipationScore < HARD_FAIL_RULES.minWalletParticipationScore) {
+    failedRules.push("Wallet participation quality too weak");
+  }
+  if (m.velocitySanityScore < HARD_FAIL_RULES.minVelocitySanityScore) {
+    failedRules.push("Velocity profile looks artificial");
+  }
+  if (m.washTradingRiskScore > HARD_FAIL_RULES.maxWashTradingRiskScore) {
+    failedRules.push("Wash-trading risk too high");
+  }
+  if (m.bundleSuspicionScore > HARD_FAIL_RULES.maxBundleSuspicionScore) {
+    failedRules.push("Bundle suspicion too high");
+  }
+  if (m.artificialVolumeFlag) {
+    failedRules.push("Artificial volume detected");
+  }
+  if (m.fakeMomentumFlag) {
+    failedRules.push("Fake momentum detected");
+  }
+
   return failedRules;
 }
 
 export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
-  const ttlMs = Number.isFinite(options.ttlMs) ? options.ttlMs : SCAN_RESULT_TTL_MS;
-  const scannedAtDate = options.scannedAt ? new Date(options.scannedAt) : new Date();
+  const ttlMs = Number.isFinite(options.ttlMs)
+    ? options.ttlMs
+    : SCAN_RESULT_TTL_MS;
+  const scannedAtDate = options.scannedAt
+    ? new Date(options.scannedAt)
+    : new Date();
   const scannedAt = scannedAtDate.toISOString();
   const expiresAt = new Date(scannedAtDate.getTime() + ttlMs).toISOString();
 
@@ -403,6 +522,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         walletIntelligence: 0,
         riskStructure: 0,
         momentum: 0,
+        marketIntegrity: 0,
       },
       scannedAt,
       expiresAt,
@@ -428,6 +548,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         walletIntelligence: 0,
         riskStructure: 0,
         momentum: 0,
+        marketIntegrity: 0,
       },
       scannedAt,
       expiresAt,
@@ -439,13 +560,15 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
   const walletIntelligence = scoreWalletIntelligence(metrics);
   const riskStructure = scoreRiskStructure(metrics);
   const momentum = scoreMomentum(metrics);
+  const marketIntegrity = scoreMarketIntegrity(metrics);
 
   const totalScore =
     market.score +
     holderSafety.score +
     walletIntelligence.score +
     riskStructure.score +
-    momentum.score;
+    momentum.score +
+    marketIntegrity.score;
 
   let verdict = VERDICTS.UNSAFE;
   if (totalScore >= SCORE_THRESHOLDS.safe) {
@@ -460,6 +583,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...walletIntelligence.reasons,
     ...riskStructure.reasons,
     ...momentum.reasons,
+    ...marketIntegrity.reasons,
     ...(metrics.boosted ? ["Token is boosted"] : []),
   ]);
 
@@ -469,6 +593,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...walletIntelligence.warnings,
     ...riskStructure.warnings,
     ...momentum.warnings,
+    ...marketIntegrity.warnings,
   ]);
 
   const roundedScore = round2(totalScore);
@@ -478,7 +603,8 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     score: roundedScore,
     showBuy:
       verdict === VERDICTS.SAFE ||
-      (verdict === VERDICTS.CAUTION && roundedScore >= SCORE_THRESHOLDS.caution),
+      (verdict === VERDICTS.CAUTION &&
+        roundedScore >= SCORE_THRESHOLDS.caution),
     buyConfidence:
       verdict === VERDICTS.SAFE
         ? "HIGH"
@@ -496,6 +622,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
       walletIntelligence: walletIntelligence.score,
       riskStructure: riskStructure.score,
       momentum: momentum.score,
+      marketIntegrity: marketIntegrity.score,
     },
     scannedAt,
     expiresAt,
@@ -540,7 +667,11 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
   };
 }
 
-export function formatScanResponse({ token = {}, rawMetrics = {}, options = {} } = {}) {
+export function formatScanResponse({
+  token = {},
+  rawMetrics = {},
+  options = {},
+} = {}) {
   const evaluation = evaluateTokenSafety(rawMetrics, options);
 
   return {
