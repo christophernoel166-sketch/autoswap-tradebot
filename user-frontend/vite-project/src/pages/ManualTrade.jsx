@@ -580,34 +580,28 @@ const integrity = scanResult?.integrity || null;
                 )}
               </Section>
 
-             <Section title="Warnings">
-  {evaluation?.warnings?.length ||
-  social?.socialWarning ||
-  scanResult?.activity?.activityWarning ||
-  integrity?.integrityWarning ? (
-    <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-      {evaluation?.warnings?.map((item, idx) => (
-        <li key={`warn-${idx}`}>• {item}</li>
-      ))}
+              <Section title="Warnings">
+                {evaluation?.warnings?.length || social?.socialWarning ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation?.warnings?.map((item, idx) => (
+                      <li key={`warn-${idx}`}>• {item}</li>
+                    ))}
 
-      {social?.socialWarning ? (
-        <li>• {social.socialWarning}</li>
-      ) : null}
+                    {social?.socialWarning ? (
+                      <li>• {social.socialWarning}</li>
+                    ) : null}
+                     {integrity?.integrityWarning ? (
+  <li>• {integrity.integrityWarning}</li>
+) : null}
+                  
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No warnings.
+                  </div>
+                )}
+              </Section>
 
-      {scanResult?.activity?.activityWarning ? (
-        <li>• {scanResult.activity.activityWarning}</li>
-      ) : null}
-
-      {integrity?.integrityWarning ? (
-        <li>• {integrity.integrityWarning}</li>
-      ) : null}
-    </ul>
-  ) : (
-    <div className="text-sm text-gray-500 dark:text-gray-400">
-      No warnings.
-    </div>
-  )}
-</Section>
               <Section title="Failed Rules">
                 {evaluation?.failedRules?.length ? (
                   <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
