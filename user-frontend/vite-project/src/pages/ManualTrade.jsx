@@ -411,6 +411,76 @@ const integrity = scanResult?.integrity || null;
               />
             </Section>
 
+<Section title="Market Integrity">
+  <MetricRow
+    label="Buy / Sell Ratio"
+    value={
+      integrity?.buySellRatio5m != null
+        ? integrity.buySellRatio5m
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Wallet Participation Score"
+    value={
+      integrity?.walletParticipationScore != null
+        ? integrity.walletParticipationScore
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Velocity Sanity Score"
+    value={
+      integrity?.velocitySanityScore != null
+        ? integrity.velocitySanityScore
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Wash Trading Risk"
+    value={
+      integrity?.washTradingRiskScore != null
+        ? integrity.washTradingRiskScore
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Bundle Suspicion"
+    value={
+      integrity?.bundleSuspicionScore != null
+        ? integrity.bundleSuspicionScore
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Fake Momentum"
+    value={
+      integrity?.fakeMomentumFlag === true
+        ? "Yes"
+        : integrity?.fakeMomentumFlag === false
+        ? "No"
+        : "Not Available"
+    }
+  />
+
+  <MetricRow
+    label="Artificial Volume"
+    value={
+      integrity?.artificialVolumeFlag === true
+        ? "Yes"
+        : integrity?.artificialVolumeFlag === false
+        ? "No"
+        : "Not Available"
+    }
+  />
+</Section>
+
+
             <Section title="Wallet Intelligence">
               <MetricRow
                 label="Smart Degens"
