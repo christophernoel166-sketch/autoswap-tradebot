@@ -284,16 +284,67 @@ const topHolders =
               />
             </Section>
 
-            <Section title="Holder Safety">
-              <MetricRow
-                label="Largest Holder"
-                value={formatValue(metrics?.largestHolderPercent, "%")}
-              />
-              <MetricRow
-                label="Top 10 Holding"
-                value={formatValue(metrics?.top10HoldingPercent, "%")}
-              />
-            </Section>
+           <Section title="Holder Safety">
+  <MetricRow
+    label="Largest Holder"
+    value={formatValue(metrics?.largestHolderPercent, "%")}
+  />
+  <MetricRow
+    label="Top 10 Holding"
+    value={formatValue(metrics?.top10HoldingPercent, "%")}
+  />
+
+  <div className="mt-4">
+    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+      Top 5 Holders
+    </div>
+
+    {topHolders.length ? (
+      <div className="space-y-2">
+        {topHolders.slice(0, 5).map((holder, idx) => (
+          <div
+            key={`${holder.address || holder.owner || idx}-${idx}`}
+            className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+          >
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
+                {shortAddress(holder.address || holder.owner)}
+              </div>
+
+              <div className="text-xs text-gray-500 dark:text-gray-400 break-all mt-1">
+                {holder.address || holder.owner || "Unknown"}
+              </div>
+
+              {holder.reason ? (
+                <div className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                  {holder.reason}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="text-right shrink-0">
+              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {holder.percent != null
+                  ? `${Number(holder.percent).toFixed(2)}%`
+                  : "—"}
+              </div>
+
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {holder.amount != null
+                  ? Number(holder.amount).toLocaleString()
+                  : "—"}
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    ) : (
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        No top holders available.
+      </div>
+    )}
+  </div>
+</Section>
 
             <Section title="Social / Presence">
               <LinkRow
