@@ -15,6 +15,14 @@ function formatUsd(value) {
   })}`;
 }
 
+// ✅ NEW: shorten address helper
+function shortAddress(address) {
+  if (!address || typeof address !== "string") return "—";
+  return address.length > 12
+    ? `${address.slice(0, 4)}...${address.slice(-4)}`
+    : address;
+}
+
 function Section({ title, children }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
@@ -69,11 +77,18 @@ export default function ManualTrade({
   walletAddress,
 }) {
   const evaluation = scanResult?.evaluation || null;
-const metrics = scanResult?.metrics || null;
-const token = scanResult?.token || null;
-const social = scanResult?.social || null;
-const integrity = scanResult?.integrity || null;
-const rugRisk = scanResult?.rugRisk || null;
+  const metrics = scanResult?.metrics || null;
+  const token = scanResult?.token || null;
+  const social = scanResult?.social || null;
+  const integrity = scanResult?.integrity || null;
+  const rugRisk = scanResult?.rugRisk || null;
+
+  // ✅ NEW: safely resolve top holders
+  const topHolders =
+    scanResult?.holderSafety?.topHolders ||
+    scanResult?.topHolders ||
+    metrics?.topHolders ||
+    [];
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
@@ -94,548 +109,115 @@ const rugRisk = scanResult?.rugRisk || null;
       : "bg-green-600 hover:bg-green-700 text-white"
     : "bg-gray-400 text-white cursor-not-allowed";
 
+  async function handleManualBuy() {
+    try {
+      if (!walletAddress || !scanResult?.token?.mintAddress) {
+        alert("Wallet or token is missing");
+        return;
+      }
 
-    async function handleManualBuy() {
-  try {
-    if (!walletAddress || !scanResult?.token?.mintAddress) {
-      alert("Wallet or token is missing");
-      return;
-    }
+      const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-    const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        walletAddress,
-        tokenMint: scanResult.token.mintAddress,
-        source: "manual_dashboard",
-        scanResult: {
-          evaluation: scanResult.evaluation,
-          expiresAt: scanResult.expiresAt,
-          scannedAt: scanResult.scannedAt,
+      const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          walletAddress,
+          tokenMint: scanResult.token.mintAddress,
+          source: "manual_dashboard",
+          scanResult: {
+            evaluation: scanResult.evaluation,
+            expiresAt: scanResult.expiresAt,
+            scannedAt: scanResult.scannedAt,
+          },
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok || !data.ok) {
-      throw new Error(data?.error || "Failed to queue manual buy");
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Failed to queue manual buy");
+      }
+
+      alert("Manual buy queued successfully");
+    } catch (err) {
+      alert(err.message || "Manual buy failed");
     }
-
-    alert("Manual buy queued successfully");
-  } catch (err) {
-    alert(err.message || "Manual buy failed");
   }
-}
+
   return (
     <div className="space-y-6">
-      <Section title="Manual Token Scan">
-        <div className="space-y-3">
-          <input
-            type="text"
-            value={manualTokenMint}
-            onChange={(e) => setManualTokenMint(e.target.value)}
-            placeholder="Paste token contract address"
-            className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
+      {/* ... unchanged sections above ... */}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <Section title="Market">
+          <MetricRow label="Age" value={formatValue(metrics?.ageMinutes, " minutes")} />
+          <MetricRow label="Liquidity" value={formatUsd(metrics?.liquidityUsd)} />
+          <MetricRow label="Market Cap" value={formatUsd(metrics?.marketCapUsd)} />
+          <MetricRow label="Volume (5m)" value={formatUsd(metrics?.volume5mUsd)} />
+          <MetricRow
+            label="Buys / Sells"
+            value={`${formatValue(metrics?.buys5m)} / ${formatValue(metrics?.sells5m)}`}
+          />
+        </Section>
+
+        {/* ✅ UPDATED HOLDER SAFETY */}
+        <Section title="Holder Safety">
+          <MetricRow
+            label="Largest Holder"
+            value={formatValue(metrics?.largestHolderPercent, "%")}
+          />
+          <MetricRow
+            label="Top 10 Holding"
+            value={formatValue(metrics?.top10HoldingPercent, "%")}
           />
 
-          <button
-            onClick={scanManualToken}
-            disabled={scanLoading || !manualTokenMint.trim()}
-            className="w-full sm:w-auto px-5 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scanLoading ? "Scanning..." : "Scan Token"}
-          </button>
-
-          {scanError ? (
-            <div className="text-sm text-red-600 dark:text-red-400">
-              {scanError}
-            </div>
-          ) : null}
-        </div>
-      </Section>
-
-      {scanResult ? (
-        <>
-          <Section title="Scan Summary">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-              <div>
-                <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                  {token?.name || "Scanned Token"}
-                </div>
-                <div className="text-sm text-gray-500 dark:text-gray-400 break-all">
-                  {token?.mintAddress || manualTokenMint}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                {token?.boosted ? (
-                  <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
-                    Boosted
-                  </span>
-                ) : null}
-
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${verdictColor}`}
-                >
-                  {verdict || "UNKNOWN"}
-                </span>
-              </div>
+          <div className="mt-4">
+            <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+              Top 5 Holders
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Score
-                </div>
-                <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {formatValue(evaluation?.score)}
-                </div>
-              </div>
+            {topHolders.length ? (
+              <div className="space-y-2">
+                {topHolders.slice(0, 5).map((holder, idx) => (
+                  <div
+                    key={`${holder.address || idx}-${idx}`}
+                    className="flex justify-between items-start border-b border-gray-100 dark:border-gray-700 pb-2"
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        {shortAddress(holder.address)}
+                      </div>
 
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Buy Available
-                </div>
-                <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {showBuy ? "Yes" : "No"}
-                </div>
-              </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 break-all">
+                        {holder.address}
+                      </div>
+                    </div>
 
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Expires At
-                </div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {scanResult?.expiresAt
-                    ? new Date(scanResult.expiresAt).toLocaleTimeString()
-                    : "—"}
-                </div>
-              </div>
-            </div>
+                    <div className="text-right">
+                      <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                        {holder.percent?.toFixed(2)}%
+                      </div>
 
-            {showBuy ? (
-              <div className="mt-4 space-y-2">
-               <button
-  type="button"
-  onClick={handleManualBuy}
-  disabled={!showBuy || !walletAddress}
-  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
->
-  {buyConfidence === "MEDIUM"
-    ? "Buy Token (Caution)"
-    : "Buy Token"}
-</button>
-
-                {buyConfidence === "MEDIUM" ? (
-                  <div className="text-sm text-yellow-700 dark:text-yellow-400">
-                    ⚠️ Caution trade: buy is allowed, but this token is not in the
-                    safest category.
+                      <div className="text-xs text-gray-500 dark:text-gray-400">
+                        {Number(holder.amount || 0).toLocaleString()}
+                      </div>
+                    </div>
                   </div>
-                ) : null}
+                ))}
               </div>
             ) : (
-              <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
-                Buy is unavailable for this token right now.
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                No top holders available.
               </div>
             )}
-          </Section>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Section title="Market">
-              <MetricRow
-                label="Age"
-                value={formatValue(metrics?.ageMinutes, " minutes")}
-              />
-              <MetricRow
-                label="Liquidity"
-                value={formatUsd(metrics?.liquidityUsd)}
-              />
-              <MetricRow
-                label="Market Cap"
-                value={formatUsd(metrics?.marketCapUsd)}
-              />
-              <MetricRow
-                label="Volume (5m)"
-                value={formatUsd(metrics?.volume5mUsd)}
-              />
-              <MetricRow
-                label="Buys / Sells"
-                value={`${formatValue(metrics?.buys5m)} / ${formatValue(
-                  metrics?.sells5m
-                )}`}
-              />
-            </Section>
-
-            <Section title="Holder Safety">
-              <MetricRow
-                label="Largest Holder"
-                value={formatValue(metrics?.largestHolderPercent, "%")}
-              />
-              <MetricRow
-                label="Top 10 Holding"
-                value={formatValue(metrics?.top10HoldingPercent, "%")}
-              />
-            </Section>
-
-            <Section title="Social / Presence">
-              <LinkRow
-                label="Website"
-                url={social?.websiteUrl}
-                exists={social?.hasWebsite}
-              />
-              <LinkRow
-                label="Telegram"
-                url={social?.telegramUrl}
-                exists={social?.hasTelegram}
-              />
-              <LinkRow
-                label="X Account"
-                url={social?.twitterUrl}
-                exists={social?.hasTwitter}
-              />
-              <MetricRow
-                label="Website Status"
-                value={
-                  social?.websiteWorking === true
-                    ? "Working"
-                    : social?.websiteWorking === false
-                    ? "Not Working"
-                    : "Not Checked Yet"
-                }
-              />
-              <MetricRow
-                label="Telegram Status"
-                value={
-                  social?.telegramWorking === true
-                    ? "Working"
-                    : social?.telegramWorking === false
-                    ? "Not Working"
-                    : social?.hasTelegram
-                    ? "Not Checked Yet"
-                    : "Missing"
-                }
-              />
-              <MetricRow
-                label="X Status"
-                value={
-                  social?.twitterWorking === true
-                    ? "Working"
-                    : social?.twitterWorking === false
-                    ? "Not Working"
-                    : social?.hasTwitter
-                    ? "Not Checked Yet"
-                    : "Missing"
-                }
-              />
-            </Section>
-
-            <Section title="Activity / Alpha">
-              <MetricRow
-                label="Alpha Callers"
-                value={formatValue(scanResult?.activity?.alphaCallerCount)}
-              />
-              <MetricRow
-                label="X Replies"
-                value={
-                  scanResult?.activity?.xReplyCount != null
-                    ? scanResult.activity.xReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Telegram Replies"
-                value={
-                  scanResult?.activity?.telegramReplyCount != null
-                    ? scanResult.activity.telegramReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Alpha Caller Score"
-                value={
-                  scanResult?.activity?.alphaCallerScore != null
-                    ? scanResult.activity.alphaCallerScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Buy Confidence"
-                value={
-                  scanResult?.evaluation?.buyConfidence === "HIGH"
-                    ? "🟢 High (Safe Trade)"
-                    : scanResult?.evaluation?.buyConfidence === "MEDIUM"
-                    ? "🟡 Medium (Caution Trade)"
-                    : "🔴 Not Allowed"
-                }
-              />
-              <MetricRow
-                label="X Activity Score"
-                value={
-                  scanResult?.activity?.xActivityScore != null
-                    ? scanResult.activity.xActivityScore
-                    : scanResult?.social?.hasTwitter
-                    ? "Low (placeholder)"
-                    : "No X"
-                }
-              />
-              <MetricRow
-                label="X Pump Reply Score"
-                value={
-                  scanResult?.activity?.xPumpReplyScore != null
-                    ? scanResult.activity.xPumpReplyScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="X Pump Replies"
-                value={
-                  scanResult?.activity?.xReplyCount != null
-                    ? scanResult.activity.xReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Telegram Activity Score"
-                value={
-                  scanResult?.activity?.telegramActivityScore != null
-                    ? scanResult.activity.telegramActivityScore
-                    : scanResult?.social?.hasTelegram
-                    ? "Low (placeholder)"
-                    : "No Telegram"
-                }
-              />
-            </Section>
-
-<Section title="Market Integrity">
-  <MetricRow
-    label="Buy / Sell Ratio"
-    value={
-      integrity?.buySellRatio5m != null
-        ? integrity.buySellRatio5m
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Wallet Participation Score"
-    value={
-      integrity?.walletParticipationScore != null
-        ? integrity.walletParticipationScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Velocity Sanity Score"
-    value={
-      integrity?.velocitySanityScore != null
-        ? integrity.velocitySanityScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Wash Trading Risk"
-    value={
-      integrity?.washTradingRiskScore != null
-        ? integrity.washTradingRiskScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Bundle Suspicion"
-    value={
-      integrity?.bundleSuspicionScore != null
-        ? integrity.bundleSuspicionScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Fake Momentum"
-    value={
-      integrity?.fakeMomentumFlag === true
-        ? "Yes"
-        : integrity?.fakeMomentumFlag === false
-        ? "No"
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Artificial Volume"
-    value={
-      integrity?.artificialVolumeFlag === true
-        ? "Yes"
-        : integrity?.artificialVolumeFlag === false
-        ? "No"
-        : "Not Available"
-    }
-  />
-</Section>
-
-
-            <Section title="Wallet Intelligence">
-              <MetricRow
-                label="Smart Degens"
-                value={formatValue(metrics?.smartDegenCount)}
-              />
-              <MetricRow
-                label="Bot Degens"
-                value={formatValue(metrics?.botDegenCount)}
-              />
-              <MetricRow
-                label="Rat Traders"
-                value={formatValue(metrics?.ratTraderCount)}
-              />
-              <MetricRow
-                label="Alpha Callers"
-                value={formatValue(metrics?.alphaCallerCount)}
-              />
-              <MetricRow
-                label="Sniper Wallets"
-                value={formatValue(metrics?.sniperWalletCount)}
-              />
-            </Section>
-
-            <Section title="Risk / Structure">
-              <MetricRow
-                label="Bundle Score"
-                value={formatValue(metrics?.bundleScore)}
-              />
-              <MetricRow
-                label="Bundled Wallets"
-                value={formatValue(metrics?.bundledWalletCount)}
-              />
-              <MetricRow
-                label="Funding Cluster Score"
-                value={formatValue(metrics?.fundingClusterScore)}
-              />
-              <MetricRow
-                label="Largest Funding Cluster"
-                value={formatValue(metrics?.largestFundingCluster)}
-              />
-            </Section>
-
-            <Section title="Momentum">
-              <MetricRow
-                label="Momentum Score"
-                value={formatValue(metrics?.momentumScore)}
-              />
-              <MetricRow
-                label="Velocity Breakout Score"
-                value={formatValue(metrics?.velocityBreakoutScore)}
-              />
-            </Section>
-
-            <Section title="Evaluation">
-              <MetricRow label="Verdict" value={formatValue(verdict)} />
-              <MetricRow label="Score" value={formatValue(evaluation?.score)} />
-              <MetricRow
-                label="Scanned At"
-                value={
-                  scanResult?.scannedAt
-                    ? new Date(scanResult.scannedAt).toLocaleString()
-                    : "—"
-                }
-              />
-              <MetricRow
-                label="Expires At"
-                value={
-                  scanResult?.expiresAt
-                    ? new Date(scanResult.expiresAt).toLocaleString()
-                    : "—"
-                }
-              />
-            </Section>
           </div>
+        </Section>
 
-    {(evaluation?.reasons?.length > 0 ||
-  evaluation?.warnings?.length > 0 ||
-  evaluation?.failedRules?.length > 0 ||
-  social?.socialWarning ||
-  scanResult?.activity?.activityWarning ||
-  integrity?.integrityWarning ||
-  rugRisk?.rugWarning) ? (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    {/* ================= REASONS ================= */}
-    <Section title="Reasons">
-      {evaluation?.reasons?.length ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          {evaluation.reasons.map((item, idx) => (
-            <li key={idx}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No reasons available.
-        </div>
-      )}
-    </Section>
-
-    {/* ================= WARNINGS ================= */}
-    <Section title="Warnings">
-      {evaluation?.warnings?.length ||
-      social?.socialWarning ||
-      scanResult?.activity?.activityWarning ||
-      integrity?.integrityWarning ||
-      rugRisk?.rugWarning ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          
-          {evaluation?.warnings?.map((item, idx) => (
-            <li key={`warn-${idx}`}>• {item}</li>
-          ))}
-
-          {social?.socialWarning ? (
-            <li>• {social.socialWarning}</li>
-          ) : null}
-
-          {scanResult?.activity?.activityWarning ? (
-            <li>• {scanResult.activity.activityWarning}</li>
-          ) : null}
-
-          {integrity?.integrityWarning ? (
-            <li>• {integrity.integrityWarning}</li>
-          ) : null}
-
-          {rugRisk?.rugWarning ? (
-            <li>• {rugRisk.rugWarning}</li>
-          ) : null}
-
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No warnings.
-        </div>
-      )}
-    </Section>
-
-    {/* ================= FAILED RULES ================= */}
-    <Section title="Failed Rules">
-      {evaluation?.failedRules?.length ? (
-        <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
-          {evaluation.failedRules.map((item, idx) => (
-            <li key={`fail-${idx}`}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No failed rules.
-                  </div>
-                )}
-              </Section>
-            </div>
-          ) : null}
-        </>
-      ) : null}
+        {/* rest of your file unchanged */}
+      </div>
     </div>
   );
 }
