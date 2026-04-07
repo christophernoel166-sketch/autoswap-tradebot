@@ -19,6 +19,7 @@ import { getAlphaCallers } from "../../scanner/alphaCallers.js";
 import { acquireBuyLock, enqueueBuyJob } from "../../queue/tradeQueue.js";
 import { fetchMarketIntegrityData } from "../../scanner/fetchMarketIntegrityData.js";
 import { fetchRugRiskData } from "../../scanner/fetchRugRiskData.js";
+import { fetchWalletIntelligenceData } from "../../scanner/fetchWalletIntelligenceData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
