@@ -2,6 +2,27 @@
 
 import { Connection, PublicKey } from "@solana/web3.js";
 
+const KNOWN_BURN_WALLETS = new Set([
+  "11111111111111111111111111111111",
+  "So11111111111111111111111111111111111111112",
+]);
+
+const KNOWN_SYSTEM_OR_PROGRAM_OWNERS = new Set([
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+  "11111111111111111111111111111111",
+]);
+
+/**
+ * Add known protocol / LP / AMM / exchange owner wallets here.
+ * Key = owner wallet address
+ * Value = label for debug / exclusion reason
+ */
+const EXCLUDED_OWNER_LABELS = {
+  // Example:
+  // "Fzb8RBE1QyJqTvGZUFM4RuKMQ9DLojj15Q9bK8iB61bc": "Pump.fun AMM",
+  // "AnotherWalletHere": "Raydium LP",
+};
+
 function safeNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -16,115 +37,145 @@ function round(value, decimals = 6) {
   return Math.round((safeNumber(value, 0) + Number.EPSILON) * factor) / factor;
 }
 
-function isValidAddress(value) {
+function isExcludedAddress(address, excludeSet) {
+  const addr = normalizeAddress(address);
+  return !!addr && excludeSet.has(addr);
+}
+
+function isLikelyBurnWallet(owner) {
+  const addr = normalizeAddress(owner);
+  return !!addr && KNOWN_BURN_WALLETS.has(addr);
+}
+
+function getExcludedOwnerLabel(owner) {
+  const addr = normalizeAddress(owner);
+  if (!addr) return null;
+  return EXCLUDED_OWNER_LABELS[addr] || null;
+}
+
+function isLikelyNonUserOwner(owner) {
+  const addr = normalizeAddress(owner);
+  if (!addr) return true;
+  if (KNOWN_SYSTEM_OR_PROGRAM_OWNERS.has(addr)) return true;
+  if (getExcludedOwnerLabel(addr)) return true;
+  return false;
+}
+
+function detectNonUserSignals({
+  owner,
+  tokenAccountAddress,
+  parsed,
+  amount,
+  totalSupply,
+  marketContext,
+}) {
+  const reasons = [];
+  const sharePercent = totalSupply > 0 ? (amount / totalSupply) * 100 : 0;
+
+  const dexId = marketContext?.dexId?.toLowerCase?.() || "";
+  const labels = (marketContext?.labels || []).map((x) =>
+    String(x).toLowerCase()
+  );
+
+  const isPumpFunMarket = dexId.includes("pump");
+  const isLikelyAmmMarket =
+    isPumpFunMarket ||
+    dexId.includes("raydium") ||
+    dexId.includes("orca") ||
+    dexId.includes("meteora") ||
+    labels.some((label) => label.includes("amm")) ||
+    labels.some((label) => label.includes("lp")) ||
+    labels.some((label) => label.includes("pool"));
+
+  if (!parsed) {
+    reasons.push("missing_parsed_data");
+  }
+
+  if (parsed?.state && parsed.state !== "initialized") {
+    reasons.push("non_initialized_state");
+  }
+
+  if (parsed?.isNative === true) {
+    reasons.push("native_account");
+  }
+
+  if (parsed?.delegate) {
+    reasons.push("delegated_account");
+  }
+
+  if (!parsed?.tokenAmount) {
+    reasons.push("missing_token_amount");
+  }
+
+  if (owner === tokenAccountAddress) {
+    reasons.push("self_owned_token_account");
+  }
+
+  if (typeof owner === "string" && owner.length < 32) {
+    reasons.push("invalid_owner_shape");
+  }
+
+  if (sharePercent >= 15) {
+    reasons.push("very_large_share");
+  }
+
+  if (sharePercent >= 20) {
+    reasons.push("extreme_share");
+  }
+
+  const hasStructuralOddity =
+    !!parsed?.delegate ||
+    !parsed?.tokenAmount ||
+    (parsed?.state && parsed.state !== "initialized") ||
+    owner === tokenAccountAddress;
+
+  if (sharePercent >= 10 && hasStructuralOddity) {
+    reasons.push("large_share_with_structural_oddity");
+  }
+
+  if (isLikelyAmmMarket && sharePercent >= 15) {
+    reasons.push("amm_large_share_candidate");
+  }
+
+  if (isPumpFunMarket && sharePercent >= 12) {
+    reasons.push("pumpfun_pool_candidate");
+  }
+
+  const isLikelyNonUser =
+    reasons.includes("extreme_share") ||
+    reasons.includes("large_share_with_structural_oddity") ||
+    reasons.includes("amm_large_share_candidate") ||
+    reasons.includes("pumpfun_pool_candidate") ||
+    reasons.length >= 2;
+
+  return {
+    isLikelyNonUser,
+    reasons,
+  };
+}
+
+async function getParsedAccountOwner(connection, tokenAccountAddress) {
   try {
-    const v = normalizeAddress(value);
-    if (!v) return false;
-    new PublicKey(v);
-    return true;
-  } catch {
-    return false;
+    const info = await connection.getParsedAccountInfo(
+      new PublicKey(tokenAccountAddress),
+      "confirmed"
+    );
+
+    const parsed = info?.value?.data?.parsed?.info || null;
+    const owner = normalizeAddress(parsed?.owner || tokenAccountAddress);
+
+    return { owner, parsed };
+  } catch (error) {
+    console.error(`Error resolving owner for ${tokenAccountAddress}:`, error);
+    return {
+      owner: normalizeAddress(tokenAccountAddress),
+      parsed: null,
+    };
   }
 }
 
-function uniqueAddresses(values = []) {
-  return [...new Set(values.map(normalizeAddress).filter(Boolean))];
-}
-
-async function getParsedTokenAccountOwners(connection, tokenAccountAddresses = []) {
-  const ownerMap = new Map();
-
-  const validAddresses = uniqueAddresses(tokenAccountAddresses).filter(isValidAddress);
-  if (!validAddresses.length) return ownerMap;
-
-  const pubkeys = validAddresses.map((addr) => new PublicKey(addr));
-  const infos = await connection.getParsedMultipleAccountsInfo(pubkeys, "confirmed");
-
-  for (let i = 0; i < validAddresses.length; i++) {
-    const tokenAccountAddress = validAddresses[i];
-    const info = infos?.value?.[i];
-
-    let owner = "";
-
-    try {
-      const parsed = info?.data?.parsed;
-      if (parsed?.type === "account") {
-        owner = normalizeAddress(parsed?.info?.owner);
-      }
-    } catch {
-      owner = "";
-    }
-
-    ownerMap.set(tokenAccountAddress, owner);
-  }
-
-  return ownerMap;
-}
-
-/**
- * Resolve token accounts for this mint owned by known market/pool/AMM owner addresses.
- *
- * Example inputs:
- * - pump.fun pair address
- * - AMM authority PDA
- * - pool owner / market owner
- *
- * For each owner, we ask Solana for token accounts owned by that address for THIS mint.
- * Those token accounts are the ones we want excluded from holder concentration.
- */
-async function resolveExcludedTokenAccountsByOwners(connection, mintPubkey, ownerAddresses = []) {
-  const resolved = new Set();
-  const owners = uniqueAddresses(ownerAddresses).filter(isValidAddress);
-
-  for (const ownerAddress of owners) {
-    try {
-      const ownerPubkey = new PublicKey(ownerAddress);
-
-      const resp = await connection.getParsedTokenAccountsByOwner(
-        ownerPubkey,
-        { mint: mintPubkey },
-        "confirmed"
-      );
-
-      const accounts = resp?.value || [];
-
-      for (const item of accounts) {
-        const tokenAccountAddress = normalizeAddress(item?.pubkey?.toBase58?.());
-        if (tokenAccountAddress) {
-          resolved.add(tokenAccountAddress);
-        }
-      }
-    } catch (err) {
-      console.warn(
-        `[fetchTokenHolderData] failed resolving token accounts for owner ${ownerAddress}:`,
-        err?.message || err
-      );
-    }
-  }
-
-  return resolved;
-}
-
-function exclusionReason({ address, owner, excludeAddressSet, excludeOwnerSet }) {
-  if (excludeAddressSet.has(address)) return "excluded_token_account";
-  if (owner && excludeOwnerSet.has(owner)) return "excluded_owner";
-  return null;
-}
-
-/**
- * fetchTokenHolderData(tokenMint, options)
- *
- * options:
- * - rpcUrl: optional override
- * - excludeAddresses: [tokenAccountAddress, ...]
- * - excludeOwnerAddresses: [ownerAddressOrPda, ...]
- * - marketOwnerAddresses: [pairAddress / poolOwner / marketAuthority, ...]
- * - debug: boolean
- *
- * Returns concentration metrics after exclusions.
- */
 export async function fetchTokenHolderData(tokenMint, options = {}) {
-  const rpcUrl = options.rpcUrl || process.env.ALCHEMY_RPC_URL;
+  const rpcUrl = process.env.ALCHEMY_RPC_URL;
 
   if (!rpcUrl) {
     throw new Error("ALCHEMY_RPC_URL not set");
@@ -138,28 +189,11 @@ export async function fetchTokenHolderData(tokenMint, options = {}) {
   const mintPubkey = new PublicKey(mint);
   const connection = new Connection(rpcUrl, "confirmed");
 
-  // 1) exact token-account exclusions
-  const excludeAddressSet = new Set(
-    uniqueAddresses(options.excludeAddresses || []).filter(isValidAddress)
+  const excludeSet = new Set(
+    (options.excludeAddresses || [])
+      .map((x) => normalizeAddress(x))
+      .filter(Boolean)
   );
-
-  // 2) owner-level exclusions (authority / PDA / pool owner)
-  const excludeOwnerSet = new Set(
-    uniqueAddresses(options.excludeOwnerAddresses || []).filter(isValidAddress)
-  );
-
-  // 3) market/pair addresses -> derive real token accounts for this mint and exclude them
-  const marketOwnerAddresses = uniqueAddresses(options.marketOwnerAddresses || []).filter(isValidAddress);
-
-  const derivedExcludedTokenAccounts = await resolveExcludedTokenAccountsByOwners(
-    connection,
-    mintPubkey,
-    marketOwnerAddresses
-  );
-
-  for (const addr of derivedExcludedTokenAccounts) {
-    excludeAddressSet.add(addr);
-  }
 
   const supplyInfo = await connection.getTokenSupply(mintPubkey);
   const totalSupply = safeNumber(supplyInfo?.value?.uiAmount, 0);
@@ -175,66 +209,143 @@ export async function fetchTokenHolderData(tokenMint, options = {}) {
     throw new Error("No token accounts found");
   }
 
-  // Resolve token-account owner for each largest account
-  const largestAccountAddresses = accounts
-    .map((acc) => normalizeAddress(acc?.address?.toBase58?.() || acc?.address))
-    .filter(Boolean);
+  // keep roughly same pattern as the stronger file:
+  // inspect only the largest few accounts, resolve owner, then exclude heuristically
+  const topAccounts = accounts.slice(0, 12);
 
-  const ownerMap = await getParsedTokenAccountOwners(connection, largestAccountAddresses);
+  const resolvedAccounts = [];
 
-  const holders = accounts
-    .map((acc) => {
-      const address = normalizeAddress(acc?.address?.toBase58?.() || acc?.address);
-      const amount = safeNumber(acc?.uiAmount, 0);
-      const percent = totalSupply > 0 ? (amount / totalSupply) * 100 : 0;
-      const owner = normalizeAddress(ownerMap.get(address) || "");
+  for (const acc of topAccounts) {
+    const tokenAccountAddress = normalizeAddress(
+      acc?.address?.toBase58?.() || acc?.address
+    );
 
-      const reason = exclusionReason({
-        address,
+    if (!tokenAccountAddress) continue;
+
+    const amount = safeNumber(acc?.uiAmount, 0);
+    if (amount <= 0) continue;
+
+    const { owner, parsed } = await getParsedAccountOwner(
+      connection,
+      tokenAccountAddress
+    );
+
+    const autoDetection = detectNonUserSignals({
+      owner,
+      tokenAccountAddress,
+      parsed,
+      amount,
+      totalSupply,
+      marketContext: options.marketContext,
+    });
+
+    resolvedAccounts.push({
+      tokenAccountAddress,
+      owner,
+      amount: round(amount),
+      percent: round((amount / totalSupply) * 100),
+      isDirectlyExcluded: isExcludedAddress(tokenAccountAddress, excludeSet),
+      isLikelyLpOrProtocol: autoDetection.isLikelyNonUser,
+      autoDetectionReasons: autoDetection.reasons,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  const groupedByOwner = new Map();
+  const excludedAccounts = [];
+
+  for (const item of resolvedAccounts) {
+    const owner = normalizeAddress(item.owner);
+    const percent = totalSupply > 0 ? (item.amount / totalSupply) * 100 : 0;
+
+    if (item.isDirectlyExcluded) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
         owner,
-        excludeAddressSet,
-        excludeOwnerSet,
-      });
-
-      return {
-        address,
-        owner,
-        amount: round(amount),
+        amount: item.amount,
         percent: round(percent),
-        excluded: !!reason,
-        exclusionReason: reason,
-      };
-    })
-    .filter((h) => h.amount > 0);
+        reason: "excludeAddresses",
+      });
+      continue;
+    }
 
-  const includedHolders = holders
-    .filter((h) => !h.excluded)
-    .sort((a, b) => b.percent - a.percent);
+    if (isLikelyBurnWallet(owner)) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: "burn_wallet",
+      });
+      continue;
+    }
 
-  const excludedAccounts = holders
-    .filter((h) => h.excluded)
-    .sort((a, b) => b.percent - a.percent);
+    const excludedLabel = getExcludedOwnerLabel(owner);
+    if (excludedLabel) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: excludedLabel,
+      });
+      continue;
+    }
 
-  const result = {
-    holderCount: null, // still intentionally not full-chain holder count
-    largestHolderPercent: round(includedHolders[0]?.percent || 0),
-    top10HoldingPercent: round(
-      includedHolders.slice(0, 10).reduce((sum, h) => sum + safeNumber(h.percent, 0), 0)
-    ),
+    if (item.isLikelyLpOrProtocol) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: item.autoDetectionReasons.join(", "),
+      });
+      continue;
+    }
+
+    if (isLikelyNonUserOwner(owner)) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: "non_user_owner",
+      });
+      continue;
+    }
+
+    const current = groupedByOwner.get(owner) || 0;
+    groupedByOwner.set(owner, current + item.amount);
+  }
+
+  const groupedWallets = Array.from(groupedByOwner.entries())
+    .map(([owner, amount]) => ({
+      address: owner,
+      amount: round(amount),
+      percent: round(totalSupply > 0 ? (amount / totalSupply) * 100 : 0),
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  const includedHolders = groupedWallets;
+  const largestHolderPercent = round(includedHolders[0]?.percent || 0);
+  const top10HoldingPercent = round(
+    includedHolders
+      .slice(0, 10)
+      .reduce((sum, h) => sum + safeNumber(h.percent, 0), 0)
+  );
+
+  if (largestHolderPercent > 25) {
+    console.log(
+      `[HOLDER WARNING] Large holder detected (${largestHolderPercent}%) — likely LP/AMM/exchange not excluded for ${mint}`
+    );
+  }
+
+  return {
+    holderCount: includedHolders.length,
+    largestHolderPercent,
+    top10HoldingPercent,
     topHolders: includedHolders.slice(0, 10),
     excludedAccounts,
-
-    // useful for debugging / verifying Pump.fun AMM exclusion
-    debug: options.debug
-      ? {
-          totalSupply: round(totalSupply),
-          exactExcludedTokenAccounts: [...excludeAddressSet],
-          excludedOwnerAddresses: [...excludeOwnerSet],
-          marketOwnerAddresses,
-          derivedExcludedTokenAccounts: [...derivedExcludedTokenAccounts],
-        }
-      : undefined,
   };
-
-  return result;
 }
