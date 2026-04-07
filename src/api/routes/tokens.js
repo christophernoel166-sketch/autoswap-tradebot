@@ -264,11 +264,7 @@ const walletIntel = await fetchWalletIntelligenceData({
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
 
-      const walletIntel = await fetchWalletIntelligenceData({
-  tokenMint: tokenMint.trim(),
-  holderData,
-  market,
-});
+   
 
 smartDegenCount: walletIntel.smartDegenCount,
 botDegenCount: walletIntel.botDegenCount,
