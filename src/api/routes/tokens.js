@@ -234,6 +234,13 @@ router.post("/scan", async (req, res) => {
       },
     });
 
+// ================= WALLET INTELLIGENCE =================
+const walletIntel = await fetchWalletIntelligenceData({
+  tokenMint: tokenMint.trim(),
+  holderData,
+  market,
+});
+
     // ================= RUG RISK =================
     const rugRiskData = await fetchRugRiskData({
       tokenMint: tokenMint.trim(),
