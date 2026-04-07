@@ -81,6 +81,11 @@ const token = scanResult?.token || null;
 const social = scanResult?.social || null;
 const integrity = scanResult?.integrity || null;
 const rugRisk = scanResult?.rugRisk || null;
+const topHolders =
+  scanResult?.holderSafety?.topHolders ||
+  scanResult?.topHolders ||
+  metrics?.topHolders ||
+  [];
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
