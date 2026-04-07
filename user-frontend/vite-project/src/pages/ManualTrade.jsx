@@ -15,6 +15,13 @@ function formatUsd(value) {
   })}`;
 }
 
+function shortAddress(address) {
+  if (!address || typeof address !== "string") return "—";
+  return address.length > 12
+    ? `${address.slice(0, 4)}...${address.slice(-4)}`
+    : address;
+}
+
 function Section({ title, children }) {
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm p-4">
