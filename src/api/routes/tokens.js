@@ -256,11 +256,16 @@ router.post("/scan", async (req, res) => {
       largestHolderPercent: holderData.largestHolderPercent,
       top10HoldingPercent: holderData.top10HoldingPercent,
 
-      smartDegenCount: 0,
-      botDegenCount: 0,
-      ratTraderCount: 0,
-      alphaCallerCount: activityData.alphaCallerCount,
-      sniperWalletCount: 5,
+      const walletIntel = await fetchWalletIntelligenceData({
+  tokenMint: tokenMint.trim(),
+  holderData,
+  market,
+});
+
+smartDegenCount: walletIntel.smartDegenCount,
+botDegenCount: walletIntel.botDegenCount,
+ratTraderCount: walletIntel.ratTraderCount,
+sniperWalletCount: walletIntel.sniperWalletCount,
 
       bundleScore: 4,
       bundledWalletCount: 1,
