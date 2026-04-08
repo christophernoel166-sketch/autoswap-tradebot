@@ -19,17 +19,22 @@ export const ALPHA_CALLERS = [
     source: "telegram",
     handle: "signalsolanaby4am",
     weight: 3,
-},
-{
-  id: "tg-solhouse-signal",
-  name: "SolHouse Signal",
-  source: "telegram",
-  handle: "solhousesignal",
-  weight: 2,
-},
+  },
+  {
+    id: "tg-solhouse-signal",
+    name: "SolHouse Signal",
+    source: "telegram",
+    handle: "solhousesignal",
+    weight: 2,
+  },
+  {
+    id: "kingdom-of-degen-calls",
+    name: "Kingdom of Degen CALLS",
+    source: "telegram",
+    handle: "KingdomOfDegenCalls",
+    weight: 3,
+  },
 ];
-
-
 
 export function getAlphaCallers() {
   return ALPHA_CALLERS;

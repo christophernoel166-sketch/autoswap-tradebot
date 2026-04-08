@@ -13,6 +13,12 @@ export const TELEGRAM_ALPHA_SOURCES = [
     handle: "solhousesignal",
     weight: 2,
   },
+  {
+    id: "kingdom-of-degen-calls",
+    name: "Kingdom of Degen CALLS",
+    handle: "KingdomOfDegenCalls",
+    weight: 3,
+  },
 ];
 
 export function getTelegramAlphaSources() {
