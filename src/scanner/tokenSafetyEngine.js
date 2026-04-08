@@ -15,8 +15,8 @@ export const HARD_FAIL_RULES = {
   minMarketCapUsd: 30_000,
 
   // stricter holder concentration rules
-  maxLargestHolderPercent: 5,
-  maxTop10HoldingPercent: 30,
+  maxLargestHolderPercent: 10,
+  maxTop10HoldingPercent: 20,
 
   maxBundleScore: 7,
   maxBundledWallets: 5,
@@ -216,17 +216,19 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  // Largest holder now treated much more strictly
-  if (m.largestHolderPercent <= 2) {
+    // Largest holder rule:
+  // 0 - 5% = safe
+  // 6 - 9% = partially safe
+  // 10%+ = red flag
+  if (m.largestHolderPercent <= 5) {
     score += 15;
-    reasons.push("Largest holder concentration is very healthy");
-  } else if (m.largestHolderPercent <= 3) {
-    score += 11;
-  } else if (m.largestHolderPercent <= 4) {
-    score += 7;
-  } else if (m.largestHolderPercent <= 5) {
-    score += 3;
-    warnings.push("Largest holder concentration is approaching risk zone");
+    reasons.push("Largest holder concentration is safe");
+  } else if (m.largestHolderPercent <= 7) {
+    score += 8;
+    warnings.push("Largest holder concentration is partially safe");
+  } else if (m.largestHolderPercent <= 9) {
+    score += 4;
+    warnings.push("Largest holder concentration is elevated");
   } else {
     warnings.push("Largest holder concentration is too high");
   }
