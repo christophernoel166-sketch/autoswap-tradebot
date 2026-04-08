@@ -20,6 +20,8 @@ import { acquireBuyLock, enqueueBuyJob } from "../../queue/tradeQueue.js";
 import { fetchMarketIntegrityData } from "../../scanner/fetchMarketIntegrityData.js";
 import { fetchRugRiskData } from "../../scanner/fetchRugRiskData.js";
 import { fetchWalletIntelligenceData } from "../../scanner/fetchWalletIntelligenceData.js";
+import { fetchMomentumData } from "../../scanner/fetchMomentumData.js";
+import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -145,6 +147,22 @@ router.post("/scan", async (req, res) => {
             rugRiskLevel: null,
             rugWarning: "No market pair found, so rug checks could not run",
           },
+          
+      momentum: {
+  momentumScore: null,
+  velocityBreakoutScore: null,
+  momentumWarning:
+    "No market pair found, so momentum checks could not run",
+},
+     
+riskStructure: {
+  bundleScore: null,
+  bundledWalletCount: null,
+  fundingClusterScore: null,
+  largestFundingCluster: null,
+  riskStructureWarning:
+    "No market pair found, so risk structure checks could not run",
+},      
           ...response,
         });
       }
@@ -250,6 +268,18 @@ const walletIntel = await fetchWalletIntelligenceData({
       context: {},
     });
 
+const momentumData = await fetchMomentumData({
+  tokenMint: tokenMint.trim(),
+  market,
+  context: {},
+});
+
+const riskStructureData = await fetchRiskStructureData({
+  tokenMint: tokenMint.trim(),
+  market,
+  holderData,
+  context: {},
+});
     // ================= METRICS =================
     const rawMetrics = {
       ageMinutes: market.metrics.ageMinutes,
@@ -271,13 +301,13 @@ botDegenCount: walletIntel.botDegenCount,
 ratTraderCount: walletIntel.ratTraderCount,
 sniperWalletCount: walletIntel.sniperWalletCount,
 
-      bundleScore: 4,
-      bundledWalletCount: 1,
-      fundingClusterScore: 0,
-      largestFundingCluster: 0,
+      bundleScore: riskStructureData.bundleScore,
+bundledWalletCount: riskStructureData.bundledWalletCount,
+fundingClusterScore: riskStructureData.fundingClusterScore,
+largestFundingCluster: riskStructureData.largestFundingCluster,
 
-      momentumScore: 50,
-      velocityBreakoutScore: 50,
+      momentumScore: momentumData.momentumScore,
+velocityBreakoutScore: momentumData.velocityBreakoutScore,
 
       // market integrity / anti-fake-pump metrics
       walletParticipationScore: integrityData.walletParticipationScore,
@@ -309,6 +339,13 @@ sniperWalletCount: walletIntel.sniperWalletCount,
       ...(activityData.activityWarning ? [activityData.activityWarning] : []),
       ...(integrityData.integrityWarning ? [integrityData.integrityWarning] : []),
       ...(rugRiskData.rugWarning ? [rugRiskData.rugWarning] : []),
+...(walletIntel.walletIntelligenceWarning
+  ? [walletIntel.walletIntelligenceWarning]
+  : []),
+...(momentumData.momentumWarning ? [momentumData.momentumWarning] : []),
+...(riskStructureData.riskStructureWarning
+  ? [riskStructureData.riskStructureWarning]
+  : []),
     ]
       .filter(Boolean)
       .filter((warning, index, arr) => arr.indexOf(warning) === index);
@@ -327,6 +364,8 @@ sniperWalletCount: walletIntel.sniperWalletCount,
       activity: activityData,
       integrity: integrityData,
       rugRisk: rugRiskData,
+      momentum: momentumData,
+riskStructure: riskStructureData,
       ...response,
       evaluation: {
         ...response.evaluation,
