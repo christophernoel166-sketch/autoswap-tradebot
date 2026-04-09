@@ -22,6 +22,7 @@ import { fetchRugRiskData } from "../../scanner/fetchRugRiskData.js";
 import { fetchWalletIntelligenceData } from "../../scanner/fetchWalletIntelligenceData.js";
 import { fetchMomentumData } from "../../scanner/fetchMomentumData.js";
 import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js";
+import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -162,7 +163,16 @@ riskStructure: {
   largestFundingCluster: null,
   riskStructureWarning:
     "No market pair found, so risk structure checks could not run",
-},      
+},   
+
+profitWallets: {
+  profitableWalletCount: null,
+  walletQualityScore: null,
+  profitWalletConfidence: null,
+  profitWalletWarning:
+    "No market pair found, so profit wallet checks could not run",
+},
+   
           ...response,
         });
       }
@@ -268,6 +278,7 @@ const walletIntel = await fetchWalletIntelligenceData({
       context: {},
     });
 
+
 const momentumData = await fetchMomentumData({
   tokenMint: tokenMint.trim(),
   market,
@@ -278,6 +289,14 @@ const riskStructureData = await fetchRiskStructureData({
   tokenMint: tokenMint.trim(),
   market,
   holderData,
+  context: {},
+});
+
+const profitWalletData = await fetchProfitWalletData({
+  tokenMint: tokenMint.trim(),
+  holderData,
+  walletIntel,
+  market,
   context: {},
 });
     // ================= METRICS =================
@@ -324,6 +343,10 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
       rugRiskScore: rugRiskData.rugRiskScore,
     };
 
+profitableWalletCount: profitWalletData.profitableWalletCount,
+walletQualityScore: profitWalletData.walletQualityScore,
+profitWalletConfidence: profitWalletData.profitWalletConfidence,
+
     const response = formatScanResponse({
       token: market.token,
       rawMetrics,
@@ -346,6 +369,10 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
 ...(riskStructureData.riskStructureWarning
   ? [riskStructureData.riskStructureWarning]
   : []),
+...(profitWalletData.profitWalletWarning
+  ? [profitWalletData.profitWalletWarning]
+  : []),
+
     ]
       .filter(Boolean)
       .filter((warning, index, arr) => arr.indexOf(warning) === index);
@@ -366,6 +393,7 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
       rugRisk: rugRiskData,
       momentum: momentumData,
 riskStructure: riskStructureData,
+profitWallets: profitWalletData,
       ...response,
       evaluation: {
         ...response.evaluation,
