@@ -76,16 +76,18 @@ export default function ManualTrade({
   walletAddress,
 }) {
   const evaluation = scanResult?.evaluation || null;
-const metrics = scanResult?.metrics || null;
-const token = scanResult?.token || null;
-const social = scanResult?.social || null;
-const integrity = scanResult?.integrity || null;
-const rugRisk = scanResult?.rugRisk || null;
-const topHolders =
-  scanResult?.holderSafety?.topHolders ||
-  scanResult?.topHolders ||
-  metrics?.topHolders ||
-  [];
+  const metrics = scanResult?.metrics || null;
+  const token = scanResult?.token || null;
+  const social = scanResult?.social || null;
+  const integrity = scanResult?.integrity || null;
+  const rugRisk = scanResult?.rugRisk || null;
+  const profitWallets = scanResult?.profitWallets || null;
+
+  const topHolders =
+    scanResult?.holderSafety?.topHolders ||
+    scanResult?.topHolders ||
+    metrics?.topHolders ||
+    [];
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
@@ -106,44 +108,44 @@ const topHolders =
       : "bg-green-600 hover:bg-green-700 text-white"
     : "bg-gray-400 text-white cursor-not-allowed";
 
+  async function handleManualBuy() {
+    try {
+      if (!walletAddress || !scanResult?.token?.mintAddress) {
+        alert("Wallet or token is missing");
+        return;
+      }
 
-    async function handleManualBuy() {
-  try {
-    if (!walletAddress || !scanResult?.token?.mintAddress) {
-      alert("Wallet or token is missing");
-      return;
-    }
+      const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-    const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        walletAddress,
-        tokenMint: scanResult.token.mintAddress,
-        source: "manual_dashboard",
-        scanResult: {
-          evaluation: scanResult.evaluation,
-          expiresAt: scanResult.expiresAt,
-          scannedAt: scanResult.scannedAt,
+      const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      }),
-    });
+        body: JSON.stringify({
+          walletAddress,
+          tokenMint: scanResult.token.mintAddress,
+          source: "manual_dashboard",
+          scanResult: {
+            evaluation: scanResult.evaluation,
+            expiresAt: scanResult.expiresAt,
+            scannedAt: scanResult.scannedAt,
+          },
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!res.ok || !data.ok) {
-      throw new Error(data?.error || "Failed to queue manual buy");
+      if (!res.ok || !data.ok) {
+        throw new Error(data?.error || "Failed to queue manual buy");
+      }
+
+      alert("Manual buy queued successfully");
+    } catch (err) {
+      alert(err.message || "Manual buy failed");
     }
-
-    alert("Manual buy queued successfully");
-  } catch (err) {
-    alert(err.message || "Manual buy failed");
   }
-}
+
   return (
     <div className="space-y-6">
       <Section title="Manual Token Scan">
@@ -233,21 +235,21 @@ const topHolders =
 
             {showBuy ? (
               <div className="mt-4 space-y-2">
-               <button
-  type="button"
-  onClick={handleManualBuy}
-  disabled={!showBuy || !walletAddress}
-  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
->
-  {buyConfidence === "MEDIUM"
-    ? "Buy Token (Caution)"
-    : "Buy Token"}
-</button>
+                <button
+                  type="button"
+                  onClick={handleManualBuy}
+                  disabled={!showBuy || !walletAddress}
+                  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  {buyConfidence === "MEDIUM"
+                    ? "Buy Token (Caution)"
+                    : "Buy Token"}
+                </button>
 
                 {buyConfidence === "MEDIUM" ? (
                   <div className="text-sm text-yellow-700 dark:text-yellow-400">
-                    ⚠️ Caution trade: buy is allowed, but this token is not in the
-                    safest category.
+                    ⚠️ Caution trade: buy is allowed, but this token is not in
+                    the safest category.
                   </div>
                 ) : null}
               </div>
@@ -284,67 +286,67 @@ const topHolders =
               />
             </Section>
 
-           <Section title="Holder Safety">
-  <MetricRow
-    label="Largest Holder"
-    value={formatValue(metrics?.largestHolderPercent, "%")}
-  />
-  <MetricRow
-    label="Top 10 Holding"
-    value={formatValue(metrics?.top10HoldingPercent, "%")}
-  />
+            <Section title="Holder Safety">
+              <MetricRow
+                label="Largest Holder"
+                value={formatValue(metrics?.largestHolderPercent, "%")}
+              />
+              <MetricRow
+                label="Top 10 Holding"
+                value={formatValue(metrics?.top10HoldingPercent, "%")}
+              />
 
-  <div className="mt-4">
-    <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-      Top 5 Holders
-    </div>
-
-    {topHolders.length ? (
-      <div className="space-y-2">
-        {topHolders.slice(0, 5).map((holder, idx) => (
-          <div
-            key={`${holder.address || holder.owner || idx}-${idx}`}
-            className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
-                {shortAddress(holder.address || holder.owner)}
-              </div>
-
-              <div className="text-xs text-gray-500 dark:text-gray-400 break-all mt-1">
-                {holder.address || holder.owner || "Unknown"}
-              </div>
-
-              {holder.reason ? (
-                <div className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                  {holder.reason}
+              <div className="mt-4">
+                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
+                  Top 5 Holders
                 </div>
-              ) : null}
-            </div>
 
-            <div className="text-right shrink-0">
-              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                {holder.percent != null
-                  ? `${Number(holder.percent).toFixed(2)}%`
-                  : "—"}
-              </div>
+                {topHolders.length ? (
+                  <div className="space-y-2">
+                    {topHolders.slice(0, 5).map((holder, idx) => (
+                      <div
+                        key={`${holder.address || holder.owner || idx}-${idx}`}
+                        className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
+                            {shortAddress(holder.address || holder.owner)}
+                          </div>
 
-              <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {holder.amount != null
-                  ? Number(holder.amount).toLocaleString()
-                  : "—"}
+                          <div className="text-xs text-gray-500 dark:text-gray-400 break-all mt-1">
+                            {holder.address || holder.owner || "Unknown"}
+                          </div>
+
+                          {holder.reason ? (
+                            <div className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
+                              {holder.reason}
+                            </div>
+                          ) : null}
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                            {holder.percent != null
+                              ? `${Number(holder.percent).toFixed(2)}%`
+                              : "—"}
+                          </div>
+
+                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            {holder.amount != null
+                              ? Number(holder.amount).toLocaleString()
+                              : "—"}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No top holders available.
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    ) : (
-      <div className="text-sm text-gray-500 dark:text-gray-400">
-        No top holders available.
-      </div>
-    )}
-  </div>
-</Section>
+            </Section>
 
             <Section title="Social / Presence">
               <LinkRow
@@ -475,75 +477,68 @@ const topHolders =
               />
             </Section>
 
-<Section title="Market Integrity">
-  <MetricRow
-    label="Buy / Sell Ratio"
-    value={
-      integrity?.buySellRatio5m != null
-        ? integrity.buySellRatio5m
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Wallet Participation Score"
-    value={
-      integrity?.walletParticipationScore != null
-        ? integrity.walletParticipationScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Velocity Sanity Score"
-    value={
-      integrity?.velocitySanityScore != null
-        ? integrity.velocitySanityScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Wash Trading Risk"
-    value={
-      integrity?.washTradingRiskScore != null
-        ? integrity.washTradingRiskScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Bundle Suspicion"
-    value={
-      integrity?.bundleSuspicionScore != null
-        ? integrity.bundleSuspicionScore
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Fake Momentum"
-    value={
-      integrity?.fakeMomentumFlag === true
-        ? "Yes"
-        : integrity?.fakeMomentumFlag === false
-        ? "No"
-        : "Not Available"
-    }
-  />
-
-  <MetricRow
-    label="Artificial Volume"
-    value={
-      integrity?.artificialVolumeFlag === true
-        ? "Yes"
-        : integrity?.artificialVolumeFlag === false
-        ? "No"
-        : "Not Available"
-    }
-  />
-</Section>
-
+            <Section title="Market Integrity">
+              <MetricRow
+                label="Buy / Sell Ratio"
+                value={
+                  integrity?.buySellRatio5m != null
+                    ? integrity.buySellRatio5m
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Wallet Participation Score"
+                value={
+                  integrity?.walletParticipationScore != null
+                    ? integrity.walletParticipationScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Velocity Sanity Score"
+                value={
+                  integrity?.velocitySanityScore != null
+                    ? integrity.velocitySanityScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Wash Trading Risk"
+                value={
+                  integrity?.washTradingRiskScore != null
+                    ? integrity.washTradingRiskScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Bundle Suspicion"
+                value={
+                  integrity?.bundleSuspicionScore != null
+                    ? integrity.bundleSuspicionScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Fake Momentum"
+                value={
+                  integrity?.fakeMomentumFlag === true
+                    ? "Yes"
+                    : integrity?.fakeMomentumFlag === false
+                    ? "No"
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Artificial Volume"
+                value={
+                  integrity?.artificialVolumeFlag === true
+                    ? "Yes"
+                    : integrity?.artificialVolumeFlag === false
+                    ? "No"
+                    : "Not Available"
+                }
+              />
+            </Section>
 
             <Section title="Wallet Intelligence">
               <MetricRow
@@ -565,6 +560,33 @@ const topHolders =
               <MetricRow
                 label="Sniper Wallets"
                 value={formatValue(metrics?.sniperWalletCount)}
+              />
+            </Section>
+
+            <Section title="Profit Wallet Intelligence">
+              <MetricRow
+                label="Profitable Wallet Count"
+                value={
+                  profitWallets?.profitableWalletCount != null
+                    ? profitWallets.profitableWalletCount
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Wallet Quality Score"
+                value={
+                  profitWallets?.walletQualityScore != null
+                    ? profitWallets.walletQualityScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Profit Wallet Confidence"
+                value={
+                  profitWallets?.profitWalletConfidence != null
+                    ? profitWallets.profitWalletConfidence
+                    : "Not Available"
+                }
               />
             </Section>
 
@@ -598,6 +620,49 @@ const topHolders =
               />
             </Section>
 
+            <Section title="Rug Risk Analysis">
+              <MetricRow
+                label="Rug Risk Score"
+                value={
+                  rugRisk?.rugRiskScore != null
+                    ? rugRisk.rugRiskScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Risk Level"
+                value={
+                  rugRisk?.rugRiskLevel != null
+                    ? rugRisk.rugRiskLevel
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Dev Dump Risk"
+                value={
+                  rugRisk?.devDumpRiskScore != null
+                    ? rugRisk.devDumpRiskScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Liquidity Pull Risk"
+                value={
+                  rugRisk?.liquidityPullRiskScore != null
+                    ? rugRisk.liquidityPullRiskScore
+                    : "Not Available"
+                }
+              />
+              <MetricRow
+                label="Insider Control Risk"
+                value={
+                  rugRisk?.insiderRiskScore != null
+                    ? rugRisk.insiderRiskScore
+                    : "Not Available"
+                }
+              />
+            </Section>
+
             <Section title="Evaluation">
               <MetricRow label="Verdict" value={formatValue(verdict)} />
               <MetricRow label="Score" value={formatValue(evaluation?.score)} />
@@ -620,78 +685,78 @@ const topHolders =
             </Section>
           </div>
 
-    {(evaluation?.reasons?.length > 0 ||
-  evaluation?.warnings?.length > 0 ||
-  evaluation?.failedRules?.length > 0 ||
-  social?.socialWarning ||
-  scanResult?.activity?.activityWarning ||
-  integrity?.integrityWarning ||
-  rugRisk?.rugWarning) ? (
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-    
-    {/* ================= REASONS ================= */}
-    <Section title="Reasons">
-      {evaluation?.reasons?.length ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          {evaluation.reasons.map((item, idx) => (
-            <li key={idx}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No reasons available.
-        </div>
-      )}
-    </Section>
+          {(evaluation?.reasons?.length > 0 ||
+            evaluation?.warnings?.length > 0 ||
+            evaluation?.failedRules?.length > 0 ||
+            social?.socialWarning ||
+            scanResult?.activity?.activityWarning ||
+            integrity?.integrityWarning ||
+            rugRisk?.rugWarning ||
+            profitWallets?.profitWalletWarning) ? (
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <Section title="Reasons">
+                {evaluation?.reasons?.length ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation.reasons.map((item, idx) => (
+                      <li key={idx}>• {item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No reasons available.
+                  </div>
+                )}
+              </Section>
 
-    {/* ================= WARNINGS ================= */}
-    <Section title="Warnings">
-      {evaluation?.warnings?.length ||
-      social?.socialWarning ||
-      scanResult?.activity?.activityWarning ||
-      integrity?.integrityWarning ||
-      rugRisk?.rugWarning ? (
-        <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-          
-          {evaluation?.warnings?.map((item, idx) => (
-            <li key={`warn-${idx}`}>• {item}</li>
-          ))}
+              <Section title="Warnings">
+                {evaluation?.warnings?.length ||
+                social?.socialWarning ||
+                scanResult?.activity?.activityWarning ||
+                integrity?.integrityWarning ||
+                rugRisk?.rugWarning ||
+                profitWallets?.profitWalletWarning ? (
+                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
+                    {evaluation?.warnings?.map((item, idx) => (
+                      <li key={`warn-${idx}`}>• {item}</li>
+                    ))}
 
-          {social?.socialWarning ? (
-            <li>• {social.socialWarning}</li>
-          ) : null}
+                    {social?.socialWarning ? (
+                      <li>• {social.socialWarning}</li>
+                    ) : null}
 
-          {scanResult?.activity?.activityWarning ? (
-            <li>• {scanResult.activity.activityWarning}</li>
-          ) : null}
+                    {scanResult?.activity?.activityWarning ? (
+                      <li>• {scanResult.activity.activityWarning}</li>
+                    ) : null}
 
-          {integrity?.integrityWarning ? (
-            <li>• {integrity.integrityWarning}</li>
-          ) : null}
+                    {integrity?.integrityWarning ? (
+                      <li>• {integrity.integrityWarning}</li>
+                    ) : null}
 
-          {rugRisk?.rugWarning ? (
-            <li>• {rugRisk.rugWarning}</li>
-          ) : null}
+                    {rugRisk?.rugWarning ? (
+                      <li>• {rugRisk.rugWarning}</li>
+                    ) : null}
 
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No warnings.
-        </div>
-      )}
-    </Section>
+                    {profitWallets?.profitWalletWarning ? (
+                      <li>• {profitWallets.profitWalletWarning}</li>
+                    ) : null}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No warnings.
+                  </div>
+                )}
+              </Section>
 
-    {/* ================= FAILED RULES ================= */}
-    <Section title="Failed Rules">
-      {evaluation?.failedRules?.length ? (
-        <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
-          {evaluation.failedRules.map((item, idx) => (
-            <li key={`fail-${idx}`}>• {item}</li>
-          ))}
-        </ul>
-      ) : (
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          No failed rules.
+              <Section title="Failed Rules">
+                {evaluation?.failedRules?.length ? (
+                  <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
+                    {evaluation.failedRules.map((item, idx) => (
+                      <li key={`fail-${idx}`}>• {item}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="text-sm text-gray-500 dark:text-gray-400">
+                    No failed rules.
                   </div>
                 )}
               </Section>
