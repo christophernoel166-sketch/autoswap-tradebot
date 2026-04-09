@@ -224,7 +224,7 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-    // Largest holder rule:
+  // Largest holder rule:
   // 0 - 5% = safe
   // 6 - 9% = partially safe
   // 10%+ = red flag
@@ -253,9 +253,12 @@ function scoreHolderSafety(m) {
     warnings.push("Top 10 concentration is elevated");
   }
 
+  if (m.largestHolderPercent <= 5 && m.top10HoldingPercent <= 25) {
+    reasons.push("Healthy distribution");
+  }
+
   return { score, reasons, warnings };
 }
-
 function scoreWalletIntelligence(m) {
   let score = 0;
   const reasons = [];
