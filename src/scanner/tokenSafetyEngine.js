@@ -15,7 +15,7 @@ export const HARD_FAIL_RULES = {
   minMarketCapUsd: 30_000,
 
   // stricter holder concentration rules
-  maxLargestHolderPercent: 5,
+  maxLargestHolderPercent: 10,
   maxTop10HoldingPercent: 30,
 
   maxBundleScore: 7,
@@ -216,21 +216,27 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  // largest holder now much stricter
+  // Largest holder
   if (m.largestHolderPercent <= 2) {
     score += 15;
     reasons.push("Largest holder concentration is very healthy");
   } else if (m.largestHolderPercent <= 3) {
-    score += 11;
-  } else if (m.largestHolderPercent <= 4) {
-    score += 7;
+    score += 13;
+    reasons.push("Largest holder concentration is healthy");
   } else if (m.largestHolderPercent <= 5) {
-    score += 3;
-    warnings.push("Largest holder concentration is approaching risk zone");
+    score += 10;
+    reasons.push("Largest holder concentration is acceptable");
+  } else if (m.largestHolderPercent <= 7) {
+    score += 5;
+    warnings.push("Largest holder concentration is elevated");
+  } else if (m.largestHolderPercent <= 10) {
+    score += 2;
+    warnings.push("Largest holder concentration is in caution zone");
   } else {
     warnings.push("Largest holder concentration is too high");
   }
 
+  // Top 10 holding
   if (m.top10HoldingPercent <= 20) {
     score += 15;
     reasons.push("Top 10 concentration is healthy");
@@ -241,11 +247,12 @@ function scoreHolderSafety(m) {
   } else if (m.top10HoldingPercent <= 35) {
     score += 3;
     warnings.push("Top 10 concentration is elevated");
+  } else {
+    warnings.push("Top 10 concentration is too high");
   }
 
   return { score, reasons, warnings };
 }
-
 function scoreWalletIntelligence(m) {
   let score = 0;
   const reasons = [];
