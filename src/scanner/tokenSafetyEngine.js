@@ -14,7 +14,10 @@ export const HARD_FAIL_RULES = {
   minLiquidityUsd: 15_000,
   minMarketCapUsd: 30_000,
 
-  // stricter holder concentration rules
+  // holder concentration logic
+  // 0–5 => can be SAFE
+  // 6–10 => CAUTION
+  // >10 => red flag
   maxLargestHolderPercent: 10,
   maxTop10HoldingPercent: 30,
 
@@ -74,6 +77,11 @@ export const REQUIRED_FIELDS = [
   "liquidityPullRiskScore",
   "insiderRiskScore",
   "rugRiskScore",
+
+  // profit wallet
+  "profitableWalletCount",
+  "walletQualityScore",
+  "profitWalletConfidence",
 ];
 
 function isNil(value) {
@@ -103,7 +111,6 @@ function normalizeMetrics(raw = {}) {
     buys5m: toNumber(raw.buys5m),
     sells5m: toNumber(raw.sells5m),
 
-    // holderCount intentionally kept optional / unused for scoring
     holderCount: toNumber(raw.holderCount),
     largestHolderPercent: toNumber(raw.largestHolderPercent),
     top10HoldingPercent: toNumber(raw.top10HoldingPercent),
@@ -114,6 +121,10 @@ function normalizeMetrics(raw = {}) {
     alphaCallerCount: toNumber(raw.alphaCallerCount, 0),
     sniperWalletCount: toNumber(raw.sniperWalletCount),
 
+    profitableWalletCount: toNumber(raw.profitableWalletCount, 0),
+    walletQualityScore: toNumber(raw.walletQualityScore, 0),
+    profitWalletConfidence: toNumber(raw.profitWalletConfidence, 0),
+
     bundleScore: toNumber(raw.bundleScore),
     bundledWalletCount: toNumber(raw.bundledWalletCount),
     fundingClusterScore: toNumber(raw.fundingClusterScore),
@@ -122,7 +133,6 @@ function normalizeMetrics(raw = {}) {
     momentumScore: toNumber(raw.momentumScore),
     velocityBreakoutScore: toNumber(raw.velocityBreakoutScore),
 
-    // market integrity
     walletParticipationScore: toNumber(raw.walletParticipationScore),
     velocitySanityScore: toNumber(raw.velocitySanityScore),
     washTradingRiskScore: toNumber(raw.washTradingRiskScore),
@@ -130,7 +140,6 @@ function normalizeMetrics(raw = {}) {
     artificialVolumeFlag: Boolean(raw.artificialVolumeFlag),
     fakeMomentumFlag: Boolean(raw.fakeMomentumFlag),
 
-    // rug risk
     devDumpRiskScore: toNumber(raw.devDumpRiskScore),
     liquidityPullRiskScore: toNumber(raw.liquidityPullRiskScore),
     insiderRiskScore: toNumber(raw.insiderRiskScore),
@@ -151,6 +160,9 @@ function scoreMarket(m) {
   let score = 0;
   const reasons = [];
   const warnings = [];
+
+  const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
+  const buyRatio = totalTx > 0 ? (m.buys5m || 0) / totalTx : 0;
 
   if (m.ageMinutes >= 5 && m.ageMinutes <= 180) {
     score += 5;
@@ -194,15 +206,20 @@ function scoreMarket(m) {
     score += 1;
   }
 
-  const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
   if (totalTx >= 50) {
-    if (m.buys5m > m.sells5m) {
+    if (buyRatio >= 0.7 && m.buys5m >= 50) {
+      score += 5;
+      reasons.push("Heavy buy pressure detected");
+    } else if (buyRatio >= 0.58) {
       score += 3;
-    } else if (m.buys5m === m.sells5m) {
-      score += 2;
-    } else {
-      score += 1;
+      reasons.push("Healthy buy participation");
+    } else if (buyRatio <= 0.35 && m.sells5m >= 40) {
+      warnings.push("Heavy sell pressure detected");
+    } else if (m.buys5m < m.sells5m) {
       warnings.push("Sell pressure slightly exceeds buy pressure");
+      score += 1;
+    } else {
+      score += 2;
     }
   } else {
     warnings.push("Very light recent transaction activity");
@@ -216,30 +233,29 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  // Largest holder
+  // largest holder:
+  // 0-5 => SAFE zone
+  // 6-10 => CAUTION zone
+  // >10 => red flag/hard fail
   if (m.largestHolderPercent <= 2) {
     score += 15;
-    reasons.push("Largest holder concentration is very healthy");
-  } else if (m.largestHolderPercent <= 3) {
-    score += 13;
-    reasons.push("Largest holder concentration is healthy");
+    reasons.push("Excellent holder distribution");
   } else if (m.largestHolderPercent <= 5) {
     score += 10;
-    reasons.push("Largest holder concentration is acceptable");
+    reasons.push("Healthy distribution");
   } else if (m.largestHolderPercent <= 7) {
     score += 5;
-    warnings.push("Largest holder concentration is elevated");
+    warnings.push("Holder concentration slightly elevated");
   } else if (m.largestHolderPercent <= 10) {
     score += 2;
-    warnings.push("Largest holder concentration is in caution zone");
+    warnings.push("Holder concentration in caution zone");
   } else {
-    warnings.push("Largest holder concentration is too high");
+    warnings.push("Single wallet dominance too high");
   }
 
-  // Top 10 holding
   if (m.top10HoldingPercent <= 20) {
     score += 15;
-    reasons.push("Top 10 concentration is healthy");
+    reasons.push("Top 10 distribution is healthy");
   } else if (m.top10HoldingPercent <= 25) {
     score += 11;
   } else if (m.top10HoldingPercent <= 30) {
@@ -253,6 +269,7 @@ function scoreHolderSafety(m) {
 
   return { score, reasons, warnings };
 }
+
 function scoreWalletIntelligence(m) {
   let score = 0;
   const reasons = [];
@@ -298,6 +315,45 @@ function scoreWalletIntelligence(m) {
   } else if (m.sniperWalletCount <= 15) {
     score += 1;
     warnings.push("Sniper wallet count is elevated");
+  }
+
+  return { score, reasons, warnings };
+}
+
+function scoreProfitWallets(m) {
+  let score = 0;
+  const reasons = [];
+  const warnings = [];
+
+  if (m.profitableWalletCount >= 8) {
+    score += 8;
+    reasons.push("Strong profit-wallet participation");
+  } else if (m.profitableWalletCount >= 5) {
+    score += 6;
+  } else if (m.profitableWalletCount >= 2) {
+    score += 3;
+  }
+
+  if (m.walletQualityScore >= 80) {
+    score += 8;
+    reasons.push("Wallet quality is strong");
+  } else if (m.walletQualityScore >= 65) {
+    score += 5;
+  } else if (m.walletQualityScore >= 50) {
+    score += 2;
+  } else if (m.walletQualityScore > 0) {
+    warnings.push("Wallet quality is only moderate");
+  }
+
+  if (m.profitWalletConfidence >= 80) {
+    score += 6;
+    reasons.push("High confidence in wallet quality");
+  } else if (m.profitWalletConfidence >= 65) {
+    score += 4;
+  } else if (m.profitWalletConfidence >= 50) {
+    score += 2;
+  } else if (m.profitWalletConfidence > 0) {
+    warnings.push("Profit-wallet confidence is limited");
   }
 
   return { score, reasons, warnings };
@@ -393,16 +449,17 @@ function scoreMarketIntegrity(m) {
 
   if (m.walletParticipationScore >= 85) {
     score += 10;
-    reasons.push("Strong wallet participation quality");
+    reasons.push("Healthy participation");
   } else if (m.walletParticipationScore >= 70) {
     score += 8;
+    reasons.push("Healthy wallet participation");
   } else if (m.walletParticipationScore >= 55) {
     score += 5;
   } else if (m.walletParticipationScore >= 40) {
     score += 2;
     warnings.push("Wallet participation is only moderate");
   } else {
-    warnings.push("Wallet participation is weak");
+    warnings.push("Weak wallet participation");
   }
 
   if (m.velocitySanityScore >= 85) {
@@ -527,7 +584,7 @@ function runHardFailChecks(m) {
     failedRules.push("Market cap is below minimum");
   }
   if (m.largestHolderPercent > HARD_FAIL_RULES.maxLargestHolderPercent) {
-    failedRules.push("Largest holder concentration too high");
+    failedRules.push("Largest holder exceeds 10%");
   }
   if (m.top10HoldingPercent > HARD_FAIL_RULES.maxTop10HoldingPercent) {
     failedRules.push("Top 10 concentration too high");
@@ -611,6 +668,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         market: 0,
         holderSafety: 0,
         walletIntelligence: 0,
+        profitWallets: 0,
         riskStructure: 0,
         momentum: 0,
         marketIntegrity: 0,
@@ -638,6 +696,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
         market: 0,
         holderSafety: 0,
         walletIntelligence: 0,
+        profitWallets: 0,
         riskStructure: 0,
         momentum: 0,
         marketIntegrity: 0,
@@ -651,6 +710,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
   const market = scoreMarket(metrics);
   const holderSafety = scoreHolderSafety(metrics);
   const walletIntelligence = scoreWalletIntelligence(metrics);
+  const profitWallets = scoreProfitWallets(metrics);
   const riskStructure = scoreRiskStructure(metrics);
   const momentum = scoreMomentum(metrics);
   const marketIntegrity = scoreMarketIntegrity(metrics);
@@ -660,6 +720,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     market.score +
     holderSafety.score +
     walletIntelligence.score +
+    profitWallets.score +
     riskStructure.score +
     momentum.score +
     marketIntegrity.score +
@@ -676,6 +737,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...market.reasons,
     ...holderSafety.reasons,
     ...walletIntelligence.reasons,
+    ...profitWallets.reasons,
     ...riskStructure.reasons,
     ...momentum.reasons,
     ...marketIntegrity.reasons,
@@ -687,6 +749,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
     ...market.warnings,
     ...holderSafety.warnings,
     ...walletIntelligence.warnings,
+    ...profitWallets.warnings,
     ...riskStructure.warnings,
     ...momentum.warnings,
     ...marketIntegrity.warnings,
@@ -717,6 +780,7 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
       market: market.score,
       holderSafety: holderSafety.score,
       walletIntelligence: walletIntelligence.score,
+      profitWallets: profitWallets.score,
       riskStructure: riskStructure.score,
       momentum: momentum.score,
       marketIntegrity: marketIntegrity.score,
@@ -751,11 +815,11 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
     return { ok: false, reason: "Token is not approved for trading" };
   }
 
-  if (verdict === "SAFE") {
+  if (verdict === VERDICTS.SAFE) {
     return { ok: true };
   }
 
-  if (verdict === "CAUTION") {
+  if (verdict === VERDICTS.CAUTION) {
     return { ok: true };
   }
 
