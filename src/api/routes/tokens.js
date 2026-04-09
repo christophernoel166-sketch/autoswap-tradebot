@@ -320,7 +320,11 @@ botDegenCount: walletIntel.botDegenCount,
 ratTraderCount: walletIntel.ratTraderCount,
 sniperWalletCount: walletIntel.sniperWalletCount,
 
-      bundleScore: riskStructureData.bundleScore,
+profitableWalletCount: profitWalletData.profitableWalletCount,
+walletQualityScore: profitWalletData.walletQualityScore,
+profitWalletConfidence: profitWalletData.profitWalletConfidence,
+
+bundleScore: riskStructureData.bundleScore,
 bundledWalletCount: riskStructureData.bundledWalletCount,
 fundingClusterScore: riskStructureData.fundingClusterScore,
 largestFundingCluster: riskStructureData.largestFundingCluster,
@@ -343,9 +347,6 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
       rugRiskScore: rugRiskData.rugRiskScore,
     };
 
-profitableWalletCount: profitWalletData.profitableWalletCount,
-walletQualityScore: profitWalletData.walletQualityScore,
-profitWalletConfidence: profitWalletData.profitWalletConfidence,
 
     const response = formatScanResponse({
       token: market.token,
