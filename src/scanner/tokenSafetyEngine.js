@@ -251,6 +251,15 @@ function scoreHolderSafety(m) {
     warnings.push("Top 10 concentration is too high");
   }
 
+  if (m.largestHolderPercent <= 5 && m.top10HoldingPercent <= 25) {
+    reasons.push("Healthy distribution");
+  } else if (
+    m.largestHolderPercent > 10 ||
+    m.top10HoldingPercent > 40
+  ) {
+    warnings.push("Poor distribution");
+  }
+
   return { score, reasons, warnings };
 }
 function scoreWalletIntelligence(m) {
