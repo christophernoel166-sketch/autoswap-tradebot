@@ -7,6 +7,17 @@ const KNOWN_BURN_WALLETS = new Set([
   "So11111111111111111111111111111111111111112",
 ]);
 
+const KNOWN_PROGRAM_OWNERS = new Set([
+  "11111111111111111111111111111111",
+  "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA",
+]);
+
+const EXCLUDED_OWNER_LABELS = {
+  // Add known LP / AMM / treasury / exchange owners here when confirmed
+  // "wallet_here": "Pump.fun AMM",
+  // "wallet_here": "Raydium LP",
+};
+
 function safeNumber(value, fallback = 0) {
   const n = Number(value);
   return Number.isFinite(n) ? n : fallback;
@@ -21,6 +32,121 @@ function round(value, decimals = 4) {
   return Math.round((safeNumber(value, 0) + Number.EPSILON) * factor) / factor;
 }
 
+function getExcludedOwnerLabel(owner) {
+  const addr = normalizeAddress(owner);
+  if (!addr) return null;
+  return EXCLUDED_OWNER_LABELS[addr] || null;
+}
+
+function isBurnWallet(owner) {
+  const addr = normalizeAddress(owner);
+  return !!addr && KNOWN_BURN_WALLETS.has(addr);
+}
+
+function isProgramOwner(owner) {
+  const addr = normalizeAddress(owner);
+  return !!addr && KNOWN_PROGRAM_OWNERS.has(addr);
+}
+
+function detectSmartLpSignals({
+  owner,
+  tokenAccountAddress,
+  parsed,
+  amount,
+  totalSupply,
+  marketContext,
+}) {
+  const reasons = [];
+  const sharePercent = totalSupply > 0 ? (amount / totalSupply) * 100 : 0;
+
+  const dexId = String(marketContext?.dexId || "").toLowerCase();
+  const labels = Array.isArray(marketContext?.labels)
+    ? marketContext.labels.map((x) => String(x).toLowerCase())
+    : [];
+
+  const isPumpFunMarket = dexId.includes("pump");
+  const isRaydiumMarket = dexId.includes("raydium");
+  const isOrcaMarket = dexId.includes("orca");
+  const isMeteoraMarket = dexId.includes("meteora");
+
+  const marketLooksLikeAmm =
+    isPumpFunMarket ||
+    isRaydiumMarket ||
+    isOrcaMarket ||
+    isMeteoraMarket ||
+    labels.some((label) => label.includes("amm")) ||
+    labels.some((label) => label.includes("lp")) ||
+    labels.some((label) => label.includes("pool"));
+
+  if (!parsed) {
+    reasons.push("missing_parsed_data");
+  }
+
+  if (parsed?.state && parsed.state !== "initialized") {
+    reasons.push("non_initialized_state");
+  }
+
+  if (parsed?.isNative === true) {
+    reasons.push("native_account");
+  }
+
+  if (parsed?.delegate) {
+    reasons.push("delegated_account");
+  }
+
+  if (!parsed?.tokenAmount) {
+    reasons.push("missing_token_amount");
+  }
+
+  if (owner === tokenAccountAddress) {
+    reasons.push("self_owned_token_account");
+  }
+
+  if (typeof owner === "string" && owner.length < 32) {
+    reasons.push("invalid_owner_shape");
+  }
+
+  // conservative share-based flags
+  if (sharePercent >= 25) {
+    reasons.push("extreme_share");
+  } else if (sharePercent >= 15) {
+    reasons.push("very_large_share");
+  }
+
+  const structuralOddity =
+    !!parsed?.delegate ||
+    !parsed?.tokenAmount ||
+    (parsed?.state && parsed.state !== "initialized") ||
+    owner === tokenAccountAddress ||
+    parsed?.isNative === true;
+
+  if (sharePercent >= 15 && structuralOddity) {
+    reasons.push("large_share_with_structural_oddity");
+  }
+
+  if (marketLooksLikeAmm && sharePercent >= 20) {
+    reasons.push("amm_pool_candidate");
+  }
+
+  if (isPumpFunMarket && sharePercent >= 18) {
+    reasons.push("pumpfun_pool_candidate");
+  }
+
+  // smart filtering rule:
+  // only exclude when signals are strong enough, not merely because holder is large
+  const excludeAsLpOrProtocol =
+    reasons.includes("extreme_share") ||
+    reasons.includes("large_share_with_structural_oddity") ||
+    reasons.includes("amm_pool_candidate") ||
+    reasons.includes("pumpfun_pool_candidate") ||
+    (marketLooksLikeAmm && structuralOddity && sharePercent >= 10);
+
+  return {
+    excludeAsLpOrProtocol,
+    reasons,
+  };
+}
+
 async function getParsedAccountOwner(connection, tokenAccountAddress) {
   try {
     const info = await connection.getParsedAccountInfo(
@@ -32,7 +158,8 @@ async function getParsedAccountOwner(connection, tokenAccountAddress) {
     const owner = normalizeAddress(parsed?.owner || tokenAccountAddress);
 
     return { owner, parsed };
-  } catch {
+  } catch (error) {
+    console.error(`Error resolving owner for ${tokenAccountAddress}:`, error);
     return {
       owner: normalizeAddress(tokenAccountAddress),
       parsed: null,
@@ -40,82 +167,200 @@ async function getParsedAccountOwner(connection, tokenAccountAddress) {
   }
 }
 
-export async function fetchTokenHolderData(tokenMint) {
+export async function fetchTokenHolderData(tokenMint, options = {}) {
   const rpcUrl = process.env.ALCHEMY_RPC_URL;
 
-  if (!rpcUrl) throw new Error("ALCHEMY_RPC_URL not set");
+  if (!rpcUrl) {
+    throw new Error("ALCHEMY_RPC_URL not set");
+  }
 
+  if (!tokenMint || typeof tokenMint !== "string") {
+    throw new Error("tokenMint is required");
+  }
+
+  const mint = tokenMint.trim();
+  const mintPubkey = new PublicKey(mint);
   const connection = new Connection(rpcUrl, "confirmed");
-  const mintPubkey = new PublicKey(tokenMint);
 
   const supplyInfo = await connection.getTokenSupply(mintPubkey);
   const totalSupply = safeNumber(supplyInfo?.value?.uiAmount, 0);
 
+  if (totalSupply <= 0) {
+    throw new Error("Invalid token supply");
+  }
+
   const largestAccounts = await connection.getTokenLargestAccounts(mintPubkey);
   const accounts = largestAccounts?.value || [];
 
-  const topAccounts = accounts.slice(0, 15);
+  if (!accounts.length) {
+    throw new Error("No token accounts found");
+  }
 
-  const resolved = [];
+  const topAccounts = accounts.slice(0, 15);
+  const resolvedAccounts = [];
 
   for (const acc of topAccounts) {
-    const tokenAccountAddress = acc.address.toBase58();
-    const amount = safeNumber(acc.uiAmount, 0);
+    const tokenAccountAddress = normalizeAddress(
+      acc?.address?.toBase58?.() || acc?.address
+    );
 
+    if (!tokenAccountAddress) continue;
+
+    const amount = safeNumber(acc?.uiAmount, 0);
     if (amount <= 0) continue;
 
-    const { owner } = await getParsedAccountOwner(
+    const { owner, parsed } = await getParsedAccountOwner(
       connection,
       tokenAccountAddress
     );
 
-    const percent = (amount / totalSupply) * 100;
-
-    resolved.push({
-      address: tokenAccountAddress,
+    const autoDetection = detectSmartLpSignals({
       owner,
-      amount: round(amount),
-      percent: round(percent),
+      tokenAccountAddress,
+      parsed,
+      amount,
+      totalSupply,
+      marketContext: options.marketContext,
     });
 
-    await new Promise((r) => setTimeout(r, 80));
+    resolvedAccounts.push({
+      tokenAccountAddress,
+      owner,
+      amount: round(amount),
+      percent: round((amount / totalSupply) * 100),
+      parsed,
+      excludeAsLpOrProtocol: autoDetection.excludeAsLpOrProtocol,
+      autoDetectionReasons: autoDetection.reasons,
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 80));
   }
 
-  // 🔥 GROUP BY OWNER
-  const grouped = new Map();
+  const groupedByOwner = new Map();
+  const excludedAccounts = [];
 
-  for (const item of resolved) {
+  for (const item of resolvedAccounts) {
     const owner = normalizeAddress(item.owner);
+    const percent = totalSupply > 0 ? (item.amount / totalSupply) * 100 : 0;
 
-    if (!owner) continue;
+    if (!owner) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner: null,
+        amount: item.amount,
+        percent: round(percent),
+        reason: "missing_owner",
+      });
+      continue;
+    }
 
-    // only exclude obvious burn wallets
-    if (KNOWN_BURN_WALLETS.has(owner)) continue;
+    if (isBurnWallet(owner)) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: "burn_wallet",
+      });
+      continue;
+    }
 
-    const current = grouped.get(owner) || 0;
-    grouped.set(owner, current + item.amount);
+    const excludedLabel = getExcludedOwnerLabel(owner);
+    if (excludedLabel) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: excludedLabel,
+      });
+      continue;
+    }
+
+    if (isProgramOwner(owner)) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason: "program_owner",
+      });
+      continue;
+    }
+
+    if (item.excludeAsLpOrProtocol) {
+      excludedAccounts.push({
+        address: item.tokenAccountAddress,
+        owner,
+        amount: item.amount,
+        percent: round(percent),
+        reason:
+          item.autoDetectionReasons?.join(", ") || "lp_or_protocol_candidate",
+      });
+      continue;
+    }
+
+    const current = groupedByOwner.get(owner) || 0;
+    groupedByOwner.set(owner, current + item.amount);
   }
 
-  const holders = Array.from(grouped.entries())
+  let groupedWallets = Array.from(groupedByOwner.entries())
     .map(([owner, amount]) => ({
       address: owner,
       owner,
       amount: round(amount),
-      percent: round((amount / totalSupply) * 100),
+      percent: round(totalSupply > 0 ? (amount / totalSupply) * 100 : 0),
     }))
     .sort((a, b) => b.amount - a.amount);
 
-  const largestHolderPercent = holders[0]?.percent || 0;
+  // fallback safety:
+  // if filtering was too aggressive and removed everything, use resolved owners except obvious burn/program owners
+  if (!groupedWallets.length) {
+    const fallbackGrouped = new Map();
 
-  const top10HoldingPercent = holders
-    .slice(0, 10)
-    .reduce((sum, h) => sum + safeNumber(h.percent), 0);
+    for (const item of resolvedAccounts) {
+      const owner = normalizeAddress(item.owner);
+      if (!owner) continue;
+      if (isBurnWallet(owner)) continue;
+      if (isProgramOwner(owner)) continue;
+
+      const current = fallbackGrouped.get(owner) || 0;
+      fallbackGrouped.set(owner, current + item.amount);
+    }
+
+    groupedWallets = Array.from(fallbackGrouped.entries())
+      .map(([owner, amount]) => ({
+        address: owner,
+        owner,
+        amount: round(amount),
+        percent: round(totalSupply > 0 ? (amount / totalSupply) * 100 : 0),
+      }))
+      .sort((a, b) => b.amount - a.amount);
+  }
+
+  const includedHolders = groupedWallets;
+  const largestHolderPercent = round(includedHolders[0]?.percent || 0);
+  const top10HoldingPercent = round(
+    includedHolders
+      .slice(0, 10)
+      .reduce((sum, h) => sum + safeNumber(h.percent, 0), 0)
+  );
+
+  let holderWarning = null;
+
+  if (!includedHolders.length) {
+    holderWarning = "No valid holders could be resolved";
+  } else if (largestHolderPercent > 25) {
+    holderWarning =
+      "Very large holder detected — possible LP/AMM/exchange wallet still present";
+  }
 
   return {
-    holderCount: holders.length,
-    largestHolderPercent: round(largestHolderPercent),
-    top10HoldingPercent: round(top10HoldingPercent),
-    topHolders: holders.slice(0, 10),
-    excludedAccounts: [], // optional
+    holderCount: includedHolders.length,
+    largestHolderPercent,
+    top10HoldingPercent,
+    topHolders: includedHolders.slice(0, 10),
+    excludedAccounts,
+    holderWarning,
   };
 }
