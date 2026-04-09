@@ -398,18 +398,20 @@ function scoreMarketIntegrity(m) {
   const warnings = [];
 
   if (m.walletParticipationScore >= 85) {
-    score += 10;
-    reasons.push("Strong wallet participation quality");
-  } else if (m.walletParticipationScore >= 70) {
-    score += 8;
-  } else if (m.walletParticipationScore >= 55) {
-    score += 5;
-  } else if (m.walletParticipationScore >= 40) {
-    score += 2;
-    warnings.push("Wallet participation is only moderate");
-  } else {
-    warnings.push("Wallet participation is weak");
-  }
+  score += 10;
+  reasons.push("Strong wallet participation quality");
+  reasons.push("Healthy participation");
+} else if (m.walletParticipationScore >= 70) {
+  score += 8;
+  reasons.push("Healthy participation");
+} else if (m.walletParticipationScore >= 55) {
+  score += 5;
+} else if (m.walletParticipationScore >= 40) {
+  score += 2;
+  warnings.push("Wallet participation is only moderate");
+} else {
+  warnings.push("Wallet participation is weak");
+}
 
   if (m.velocitySanityScore >= 85) {
     score += 8;
