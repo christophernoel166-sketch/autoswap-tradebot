@@ -14,8 +14,8 @@ export const HARD_FAIL_RULES = {
   minLiquidityUsd: 15_000,
   minMarketCapUsd: 30_000,
 
-  // holder count removed for now
-  maxLargestHolderPercent: 15,
+  // stricter holder concentration rules
+  maxLargestHolderPercent: 5,
   maxTop10HoldingPercent: 30,
 
   maxBundleScore: 7,
@@ -216,18 +216,19 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  if (m.largestHolderPercent <= 8) {
+  // largest holder now much stricter
+  if (m.largestHolderPercent <= 2) {
     score += 15;
-    reasons.push("Largest holder concentration is low");
-  } else if (m.largestHolderPercent <= 10) {
-    score += 12;
-  } else if (m.largestHolderPercent <= 12) {
-    score += 9;
-  } else if (m.largestHolderPercent <= 15) {
-    score += 6;
-  } else if (m.largestHolderPercent <= 18) {
+    reasons.push("Largest holder concentration is very healthy");
+  } else if (m.largestHolderPercent <= 3) {
+    score += 11;
+  } else if (m.largestHolderPercent <= 4) {
+    score += 7;
+  } else if (m.largestHolderPercent <= 5) {
     score += 3;
-    warnings.push("Largest holder concentration is elevated");
+    warnings.push("Largest holder concentration is approaching risk zone");
+  } else {
+    warnings.push("Largest holder concentration is too high");
   }
 
   if (m.top10HoldingPercent <= 20) {
