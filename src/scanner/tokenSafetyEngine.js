@@ -14,9 +14,9 @@ export const HARD_FAIL_RULES = {
   minLiquidityUsd: 15_000,
   minMarketCapUsd: 30_000,
 
-  // stricter holder concentration rules
-  maxLargestHolderPercent: 10,
-  maxTop10HoldingPercent: 20,
+  // holder count removed for now
+  maxLargestHolderPercent: 15,
+  maxTop10HoldingPercent: 30,
 
   maxBundleScore: 7,
   maxBundledWallets: 5,
@@ -194,27 +194,19 @@ function scoreMarket(m) {
     score += 1;
   }
 
- const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
-
-if (totalTx >= 50) {
-  if (m.buys5m >= m.sells5m * 1.5) {
-    score += 5;
-    reasons.push("Heavy buy pressure");
-  } else if (m.sells5m >= m.buys5m * 1.5) {
-    score += 0;
-    warnings.push("Heavy sell pressure");
-  } else if (m.buys5m > m.sells5m) {
-    score += 3;
-    reasons.push("Buy pressure is positive");
-  } else if (m.buys5m === m.sells5m) {
-    score += 2;
+  const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
+  if (totalTx >= 50) {
+    if (m.buys5m > m.sells5m) {
+      score += 3;
+    } else if (m.buys5m === m.sells5m) {
+      score += 2;
+    } else {
+      score += 1;
+      warnings.push("Sell pressure slightly exceeds buy pressure");
+    }
   } else {
-    score += 1;
-    warnings.push("Sell pressure slightly exceeds buy pressure");
+    warnings.push("Very light recent transaction activity");
   }
-} else {
-  warnings.push("Very light recent transaction activity");
-}
 
   return { score, reasons, warnings };
 }
@@ -224,21 +216,18 @@ function scoreHolderSafety(m) {
   const reasons = [];
   const warnings = [];
 
-  // Largest holder rule:
-  // 0 - 5% = safe
-  // 6 - 9% = partially safe
-  // 10%+ = red flag
-  if (m.largestHolderPercent <= 5) {
+  if (m.largestHolderPercent <= 8) {
     score += 15;
-    reasons.push("Largest holder concentration is safe");
-  } else if (m.largestHolderPercent <= 7) {
-    score += 8;
-    warnings.push("Largest holder concentration is partially safe");
-  } else if (m.largestHolderPercent <= 9) {
-    score += 4;
+    reasons.push("Largest holder concentration is low");
+  } else if (m.largestHolderPercent <= 10) {
+    score += 12;
+  } else if (m.largestHolderPercent <= 12) {
+    score += 9;
+  } else if (m.largestHolderPercent <= 15) {
+    score += 6;
+  } else if (m.largestHolderPercent <= 18) {
+    score += 3;
     warnings.push("Largest holder concentration is elevated");
-  } else {
-    warnings.push("Largest holder concentration is too high");
   }
 
   if (m.top10HoldingPercent <= 20) {
@@ -253,12 +242,9 @@ function scoreHolderSafety(m) {
     warnings.push("Top 10 concentration is elevated");
   }
 
-  if (m.largestHolderPercent <= 5 && m.top10HoldingPercent <= 25) {
-    reasons.push("Healthy distribution");
-  }
-
   return { score, reasons, warnings };
 }
+
 function scoreWalletIntelligence(m) {
   let score = 0;
   const reasons = [];
@@ -398,20 +384,18 @@ function scoreMarketIntegrity(m) {
   const warnings = [];
 
   if (m.walletParticipationScore >= 85) {
-  score += 10;
-  reasons.push("Strong wallet participation quality");
-  reasons.push("Healthy participation");
-} else if (m.walletParticipationScore >= 70) {
-  score += 8;
-  reasons.push("Healthy participation");
-} else if (m.walletParticipationScore >= 55) {
-  score += 5;
-} else if (m.walletParticipationScore >= 40) {
-  score += 2;
-  warnings.push("Wallet participation is only moderate");
-} else {
-  warnings.push("Wallet participation is weak");
-}
+    score += 10;
+    reasons.push("Strong wallet participation quality");
+  } else if (m.walletParticipationScore >= 70) {
+    score += 8;
+  } else if (m.walletParticipationScore >= 55) {
+    score += 5;
+  } else if (m.walletParticipationScore >= 40) {
+    score += 2;
+    warnings.push("Wallet participation is only moderate");
+  } else {
+    warnings.push("Wallet participation is weak");
+  }
 
   if (m.velocitySanityScore >= 85) {
     score += 8;
