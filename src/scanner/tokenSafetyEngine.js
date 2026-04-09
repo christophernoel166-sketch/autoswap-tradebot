@@ -194,19 +194,27 @@ function scoreMarket(m) {
     score += 1;
   }
 
-  const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
-  if (totalTx >= 50) {
-    if (m.buys5m > m.sells5m) {
-      score += 3;
-    } else if (m.buys5m === m.sells5m) {
-      score += 2;
-    } else {
-      score += 1;
-      warnings.push("Sell pressure slightly exceeds buy pressure");
-    }
+ const totalTx = (m.buys5m || 0) + (m.sells5m || 0);
+
+if (totalTx >= 50) {
+  if (m.buys5m >= m.sells5m * 1.5) {
+    score += 5;
+    reasons.push("Heavy buy pressure");
+  } else if (m.sells5m >= m.buys5m * 1.5) {
+    score += 0;
+    warnings.push("Heavy sell pressure");
+  } else if (m.buys5m > m.sells5m) {
+    score += 3;
+    reasons.push("Buy pressure is positive");
+  } else if (m.buys5m === m.sells5m) {
+    score += 2;
   } else {
-    warnings.push("Very light recent transaction activity");
+    score += 1;
+    warnings.push("Sell pressure slightly exceeds buy pressure");
   }
+} else {
+  warnings.push("Very light recent transaction activity");
+}
 
   return { score, reasons, warnings };
 }
