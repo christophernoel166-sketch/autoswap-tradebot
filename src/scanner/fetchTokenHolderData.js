@@ -170,10 +170,10 @@ async function getParsedAccountOwner(connection, tokenAccountAddress) {
 }
 
 export async function fetchTokenHolderData(tokenMint, options = {}) {
-  const rpcUrl = process.env.ALCHEMY_RPC_URL;
+  const rpcUrl = process.env.QUICKNODE_RPC_URL || process.env.RPC_URL;
 
   if (!rpcUrl) {
-    throw new Error("ALCHEMY_RPC_URL not set");
+    throw new Error("QUICKNODE_RPC_URL or RPC_URL not set");
   }
 
   if (!tokenMint || typeof tokenMint !== "string") {
