@@ -237,22 +237,26 @@ profitWallets: {
     activityData.xPumpReplyScore = xPumpReplyData.xPumpReplyScore;
 
     // ================= HOLDERS =================
-    let holderData = {
-      largestHolderPercent: null,
-      top10HoldingPercent: null,
-      topHolders: [],
-      excludedAccounts: [],
-      holderWarning: null,
-    };
+let holderData = {
+  largestHolderPercent: null,
+  top10HoldingPercent: null,
+  topHolders: [],
+  excludedAccounts: [],
+  holderWarning: null,
+};
 
-    try {
-      holderData = await fetchTokenHolderData(tokenMint, {
-        excludeAddresses: getExcludedHolderAddressesForMint(tokenMint),
-      });
-    } catch (err) {
-      console.warn("Holder scan failed:", err?.message);
-      holderData.holderWarning = "Holder scan temporarily unavailable";
-    }
+try {
+  holderData = await fetchTokenHolderData(tokenMint, {
+    excludeAddresses: getExcludedHolderAddressesForMint(tokenMint),
+    marketContext: {
+      dexId: market?.token?.dexId || market?.rawPair?.dexId || "",
+      labels: market?.rawPair?.labels || [],
+    },
+  });
+} catch (err) {
+  console.warn("Holder scan failed:", err?.message);
+  holderData.holderWarning = "Holder scan temporarily unavailable";
+}
 
     // ================= INTEGRITY =================
     const integrityData = await fetchMarketIntegrityData({

@@ -128,18 +128,20 @@ function detectSmartLpSignals({
     reasons.push("amm_pool_candidate");
   }
 
-  if (isPumpFunMarket && sharePercent >= 18) {
-    reasons.push("pumpfun_pool_candidate");
-  }
+  if (marketLooksLikeAmm && sharePercent >= 25) {
+  reasons.push("amm_pool_candidate");
+}
 
-  // smart filtering rule:
-  // only exclude when signals are strong enough, not merely because holder is large
-  const excludeAsLpOrProtocol =
-    reasons.includes("extreme_share") ||
-    reasons.includes("large_share_with_structural_oddity") ||
-    reasons.includes("amm_pool_candidate") ||
-    reasons.includes("pumpfun_pool_candidate") ||
-    (marketLooksLikeAmm && structuralOddity && sharePercent >= 10);
+if (isPumpFunMarket && sharePercent >= 30) {
+  reasons.push("pumpfun_pool_candidate");
+}
+
+const excludeAsLpOrProtocol =
+  reasons.includes("extreme_share") ||
+  reasons.includes("large_share_with_structural_oddity") ||
+  reasons.includes("amm_pool_candidate") ||
+  reasons.includes("pumpfun_pool_candidate") ||
+  (marketLooksLikeAmm && structuralOddity && sharePercent >= 20);
 
   return {
     excludeAsLpOrProtocol,
