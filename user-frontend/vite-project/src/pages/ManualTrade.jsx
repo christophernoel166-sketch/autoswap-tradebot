@@ -176,6 +176,26 @@ export default function ManualTrade({
 
       {scanResult ? (
         <>
+          {scanResult?.pairAddress ? (
+            <Section title="Live Chart">
+              <div className="w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+                <iframe
+                  title="Token Chart"
+                  src={`https://dexscreener.com/solana/${scanResult.pairAddress}?embed=1&theme=dark`}
+                  className="w-full h-[420px] bg-white dark:bg-gray-900"
+                  frameBorder="0"
+                  allowFullScreen
+                />
+              </div>
+            </Section>
+          ) : (
+            <Section title="Live Chart">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
+                Chart not available for this token.
+              </div>
+            </Section>
+          )}
+
           <Section title="Scan Summary">
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
               <div>
