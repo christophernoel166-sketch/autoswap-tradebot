@@ -23,7 +23,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-import { PublicKey, Connection, LAMPORTS_PER_SOL } from "@solana/web3.js";
+
 
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
@@ -255,37 +255,7 @@ useEffect(() => {
   return () => clearInterval(interval);
 }, [walletAddress]);
 
-
-// ===================================================
-// 🔗 Fetch On-Chain SOL Balance (Per-User Wallet)
-// ===================================================
-useEffect(() => {
-  async function fetchOnChainBalance() {
-    try {
-      if (!user?.tradingWalletPublicKey) {
-        setOnChainBalance(0);
-        return;
-      }
-
-      const pubkey = new PublicKey(user.tradingWalletPublicKey);
-      const lamports = await connection.getBalance(pubkey);
-
-      // ✅ FIXED: correct setter name
-      setOnChainBalance(lamports / LAMPORTS_PER_SOL);
-
-    } catch (err) {
-      console.warn("Failed to fetch on-chain balance", err);
-      setOnChainBalance(0); // fallback
-    }
-  }
-
-  fetchOnChainBalance();
-
-  const interval = setInterval(fetchOnChainBalance, 10000);
-
-  return () => clearInterval(interval);
-
-}, [user?.tradingWalletPublicKey]);
+// fetch on-chain balance
 
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
