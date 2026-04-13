@@ -1994,35 +1994,32 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
       return;
     }
 
-    if (percent === 100) {
+        if (percent === 100) {
       const key = positionKey(walletAddress, mint);
 
       await redis.hset(key, "status", "closed");
       await redis.srem(walletPositionsKey(walletAddress), mint);
-    }
 
-    try {
-  exitPrice = await getDexScreenerPrice(mint);
-} catch {}
+      try {
+        exitPrice = await getDexScreenerPrice(mint);
+      } catch {}
 
-    await saveTradeToBackend({
-      walletAddress,
-      mint,
-      solAmount,
-      entryPrice: entry,
-      exitPrice,
-      buyTxid,
-      sellTxid,
-      sourceChannel,
-      reason,
-    });
+      await saveTradeToBackend({
+        walletAddress,
+        mint,
+        solAmount,
+        entryPrice: entry,
+        exitPrice,
+        buyTxid,
+        sellTxid,
+        sourceChannel,
+        reason,
+      });
 
-    if (percent === 100) {
       state.users.delete(walletAddress);
       state.entryPrices.delete(walletAddress);
       state.highestPrices.delete(walletAddress);
     }
-
     LOG.info(
       {
         walletAddress,
