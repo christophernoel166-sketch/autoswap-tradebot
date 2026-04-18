@@ -45,6 +45,7 @@ const [onChainBalance, setOnChainBalance] = useState(0);
 const [showTradingSettings, setShowTradingSettings] = useState(true);
 const [showCustomConditions, setShowCustomConditions] = useState(false);
 const [withdrawLoading, setWithdrawLoading] = useState(false);
+const [showWithdrawStatus, setShowWithdrawStatus] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
 const [withdrawals, setWithdrawals] = useState([]);
 const [withdrawalsLoading, setWithdrawalsLoading] = useState(false);
@@ -1340,11 +1341,29 @@ async function reRequestChannel(channelId) {
 
 
 
-{/* 📤 WITHDRAW STATUS */}
-<WithdrawStatusList
-  withdrawals={withdrawals}
-  loading={withdrawalsLoading}
-/>
+<div className="bg-gray-800 rounded-xl p-4">
+  <button
+    type="button"
+    onClick={() => setShowWithdrawStatus((prev) => !prev)}
+    className="w-full flex items-center justify-between text-left"
+  >
+    <h3 className="text-lg font-semibold text-white">
+      Withdraw Status ({withdrawals.length})
+    </h3>
+    <span className="text-white text-xl">
+      {showWithdrawStatus ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {showWithdrawStatus ? (
+    <div className="mt-4">
+      <WithdrawStatusList
+        withdrawals={withdrawals}
+        loading={withdrawalsLoading}
+      />
+    </div>
+  ) : null}
+</div>
 
 {/* 📜 WALLET HISTORY */}
 <WalletHistoryTable records={walletHistory} />
