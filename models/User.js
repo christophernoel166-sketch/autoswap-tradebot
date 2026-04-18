@@ -8,7 +8,7 @@ const userSchema = new mongoose.Schema(
     walletAddress: {
       type: String,
       required: true,
-       unique: true,
+      unique: true,
       index: true,
     },
 
@@ -134,6 +134,60 @@ const userSchema = new mongoose.Schema(
       type: Map,
       of: Number,
     },
+
+    // ===================================================
+    // 🧪 CUSTOM CONDITION MODE
+    // ===================================================
+    customConditionMode: {
+  type: Boolean,
+  default: false,
+},
+
+tokenConditions: {
+  market: {
+    minLiquidityUsd: { type: Number, default: null },
+    minMarketCapUsd: { type: Number, default: null },
+    maxMarketCapUsd: { type: Number, default: null },
+    minBuys5m: { type: Number, default: null },
+    maxSells5m: { type: Number, default: null },
+    minAgeMinutes: { type: Number, default: null },
+    maxAgeMinutes: { type: Number, default: null },
+  },
+
+  holderSafety: {
+    maxLargestHolderPercent: { type: Number, default: null },
+    maxTop10HoldingPercent: { type: Number, default: null },
+  },
+
+  socials: {
+    requireWebsite: { type: Boolean, default: false },
+    requireTelegram: { type: Boolean, default: false },
+    requireTwitter: { type: Boolean, default: false },
+  },
+
+  marketIntegrity: {
+    minBuySellRatio5m: { type: Number, default: null },
+    minWalletParticipationScore: { type: Number, default: null },
+    minVelocitySanityScore: { type: Number, default: null },
+    maxBundleSuspicionScore: { type: Number, default: null },
+    maxBundledWalletCount: { type: Number, default: null },
+    maxFundingClusterScore: { type: Number, default: null },
+    allowFakeMomentum: { type: Boolean, default: true },
+    allowArtificialVolume: { type: Boolean, default: true },
+  },
+
+  walletIntelligence: {
+    minSmartDegenCount: { type: Number, default: null },
+    maxBotDegenCount: { type: Number, default: null },
+    maxRatTraderCount: { type: Number, default: null },
+    minAlphaCallerCount: { type: Number, default: null },
+    maxSniperWalletCount: { type: Number, default: null },
+  },
+
+  rugRisk: {
+    maxRugRiskScore: { type: Number, default: null },
+  },
+},
 
     createdAt: {
       type: Date,
