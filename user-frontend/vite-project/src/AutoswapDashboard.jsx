@@ -50,6 +50,54 @@ const [manualTokenMint, setManualTokenMint] = useState("");
 const [scanLoading, setScanLoading] = useState(false);
 const [scanResult, setScanResult] = useState(null);
 const [scanError, setScanError] = useState("");
+// ================================
+// CUSTOM CONDITION MODE STATE
+// ================================
+const [customConditionMode, setCustomConditionMode] = useState(false);
+
+const [tokenConditions, setTokenConditions] = useState({
+  market: {
+    minLiquidityUsd: "",
+    minMarketCapUsd: "",
+    maxMarketCapUsd: "",
+    minBuys5m: "",
+    maxSells5m: "",
+    minAgeMinutes: "",
+    maxAgeMinutes: "",
+  },
+  holderSafety: {
+    maxLargestHolderPercent: "",
+    maxTop10HoldingPercent: "",
+  },
+  socials: {
+    requireWebsite: false,
+    requireTelegram: false,
+    requireTwitter: false,
+  },
+  marketIntegrity: {
+    minBuySellRatio5m: "",
+    minWalletParticipationScore: "",
+    minVelocitySanityScore: "",
+    maxBundleSuspicionScore: "",
+    allowFakeMomentum: true,
+    allowArtificialVolume: true,
+  },
+  walletIntelligence: {
+    minSmartDegenCount: "",
+    maxBotDegenCount: "",
+    maxRatTraderCount: "",
+    minAlphaCallerCount: "",
+    maxSniperWalletCount: "",
+  },
+  riskStructure: {
+    maxBundledWalletCount: "",
+    maxFundingClusterScore: "",
+    maxLargestFundingCluster: "",
+  },
+  rugRisk: {
+    maxRugRiskScore: "",
+  },
+});
 
 
 
@@ -433,9 +481,9 @@ async function scanManualToken() {
       throw new Error("Token contract address is required");
     }
 
-    const endpoint = user?.customConditionMode
-      ? `${API_BASE}/api/tokens/scan-custom-mode`
-      : `${API_BASE}/api/tokens/scan`;
+    const endpoint = customConditionMode
+  ? `${API_BASE}/api/tokens/scan-custom-mode`
+  : `${API_BASE}/api/tokens/scan`;
 
     const res = await fetch(endpoint, {
       method: "POST",
