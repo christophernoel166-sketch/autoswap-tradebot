@@ -166,15 +166,19 @@ tokenConditions: {
   },
 
   marketIntegrity: {
-    minBuySellRatio5m: { type: Number, default: null },
-    minWalletParticipationScore: { type: Number, default: null },
-    minVelocitySanityScore: { type: Number, default: null },
-    maxBundleSuspicionScore: { type: Number, default: null },
-    maxBundledWalletCount: { type: Number, default: null },
-    maxFundingClusterScore: { type: Number, default: null },
-    allowFakeMomentum: { type: Boolean, default: true },
-    allowArtificialVolume: { type: Boolean, default: true },
-  },
+  minBuySellRatio5m: { type: Number, default: null },
+  minWalletParticipationScore: { type: Number, default: null },
+  minVelocitySanityScore: { type: Number, default: null },
+  maxBundleSuspicionScore: { type: Number, default: null },
+  allowFakeMomentum: { type: Boolean, default: true },
+  allowArtificialVolume: { type: Boolean, default: true },
+},
+
+riskStructure: {
+  maxBundledWalletCount: { type: Number, default: null },
+  maxFundingClusterScore: { type: Number, default: null },
+  maxLargestFundingCluster: { type: Number, default: null },
+},
 
   walletIntelligence: {
     minSmartDegenCount: { type: Number, default: null },
