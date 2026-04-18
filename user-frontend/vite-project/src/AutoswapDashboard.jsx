@@ -329,29 +329,95 @@ useEffect(() => {
 
 
   /* --- FETCH SETTINGS --- */
-  async function fetchUserSettings() {
-    try {
-      const r = await fetch(`${API_BASE}/api/users?walletAddress=${encodeURIComponent(walletAddress)}`);
-      if (!r.ok) return;
-      const data = await r.json();
-      const u = data.user || data;
+async function fetchUserSettings() {
+  try {
+    const r = await fetch(
+      `${API_BASE}/api/users?walletAddress=${encodeURIComponent(walletAddress)}`
+    );
+    if (!r.ok) return;
 
-      setSolPerTrade(u.solPerTrade ?? solPerTrade);
-      setStopLoss(u.stopLoss ?? stopLoss);
-      setTrailingTrigger(u.trailingTrigger ?? trailingTrigger);
-      setTrailingDistance(u.trailingDistance ?? trailingDistance);
-      setTp1(u.tp1 ?? tp1);
-      setTp1Sell(u.tp1SellPercent ?? tp1Sell);
-      setTp2(u.tp2 ?? tp2);
-      setTp2Sell(u.tp2SellPercent ?? tp2Sell);
-      setTp3(u.tp3 ?? tp3);
-      setTp3Sell(u.tp3SellPercent ?? tp3Sell);
-      setMaxSlippagePercent(u.maxSlippagePercent ?? 2);
-      setMevProtection(u.mevProtection ?? true);
-    } catch (err) {
-      console.warn("fetchUserSettings error:", err);
-    }
+    const data = await r.json();
+    const u = data.user || data;
+
+    setSolPerTrade(u.solPerTrade ?? solPerTrade);
+    setStopLoss(u.stopLoss ?? stopLoss);
+    setTrailingTrigger(u.trailingTrigger ?? trailingTrigger);
+    setTrailingDistance(u.trailingDistance ?? trailingDistance);
+    setTp1(u.tp1 ?? tp1);
+    setTp1Sell(u.tp1SellPercent ?? tp1Sell);
+    setTp2(u.tp2 ?? tp2);
+    setTp2Sell(u.tp2SellPercent ?? tp2Sell);
+    setTp3(u.tp3 ?? tp3);
+    setTp3Sell(u.tp3SellPercent ?? tp3Sell);
+    setMaxSlippagePercent(u.maxSlippagePercent ?? 2);
+    setMevProtection(u.mevProtection ?? true);
+
+    // ✅ NEW
+    setCustomConditionMode(Boolean(u.customConditionMode));
+
+    setTokenConditions({
+      market: {
+        minLiquidityUsd: u.tokenConditions?.market?.minLiquidityUsd ?? "",
+        minMarketCapUsd: u.tokenConditions?.market?.minMarketCapUsd ?? "",
+        maxMarketCapUsd: u.tokenConditions?.market?.maxMarketCapUsd ?? "",
+        minBuys5m: u.tokenConditions?.market?.minBuys5m ?? "",
+        maxSells5m: u.tokenConditions?.market?.maxSells5m ?? "",
+        minAgeMinutes: u.tokenConditions?.market?.minAgeMinutes ?? "",
+        maxAgeMinutes: u.tokenConditions?.market?.maxAgeMinutes ?? "",
+      },
+      holderSafety: {
+        maxLargestHolderPercent:
+          u.tokenConditions?.holderSafety?.maxLargestHolderPercent ?? "",
+        maxTop10HoldingPercent:
+          u.tokenConditions?.holderSafety?.maxTop10HoldingPercent ?? "",
+      },
+      socials: {
+        requireWebsite: Boolean(u.tokenConditions?.socials?.requireWebsite),
+        requireTelegram: Boolean(u.tokenConditions?.socials?.requireTelegram),
+        requireTwitter: Boolean(u.tokenConditions?.socials?.requireTwitter),
+      },
+      marketIntegrity: {
+        minBuySellRatio5m:
+          u.tokenConditions?.marketIntegrity?.minBuySellRatio5m ?? "",
+        minWalletParticipationScore:
+          u.tokenConditions?.marketIntegrity?.minWalletParticipationScore ?? "",
+        minVelocitySanityScore:
+          u.tokenConditions?.marketIntegrity?.minVelocitySanityScore ?? "",
+        maxBundleSuspicionScore:
+          u.tokenConditions?.marketIntegrity?.maxBundleSuspicionScore ?? "",
+        allowFakeMomentum:
+          u.tokenConditions?.marketIntegrity?.allowFakeMomentum ?? true,
+        allowArtificialVolume:
+          u.tokenConditions?.marketIntegrity?.allowArtificialVolume ?? true,
+      },
+      walletIntelligence: {
+        minSmartDegenCount:
+          u.tokenConditions?.walletIntelligence?.minSmartDegenCount ?? "",
+        maxBotDegenCount:
+          u.tokenConditions?.walletIntelligence?.maxBotDegenCount ?? "",
+        maxRatTraderCount:
+          u.tokenConditions?.walletIntelligence?.maxRatTraderCount ?? "",
+        minAlphaCallerCount:
+          u.tokenConditions?.walletIntelligence?.minAlphaCallerCount ?? "",
+        maxSniperWalletCount:
+          u.tokenConditions?.walletIntelligence?.maxSniperWalletCount ?? "",
+      },
+      riskStructure: {
+        maxBundledWalletCount:
+          u.tokenConditions?.riskStructure?.maxBundledWalletCount ?? "",
+        maxFundingClusterScore:
+          u.tokenConditions?.riskStructure?.maxFundingClusterScore ?? "",
+        maxLargestFundingCluster:
+          u.tokenConditions?.riskStructure?.maxLargestFundingCluster ?? "",
+      },
+      rugRisk: {
+        maxRugRiskScore: u.tokenConditions?.rugRisk?.maxRugRiskScore ?? "",
+      },
+    });
+  } catch (err) {
+    console.warn("fetchUserSettings error:", err);
   }
+}
 
 // SCANNING MANUAL TOKEN
 async function scanManualToken() {
@@ -360,13 +426,25 @@ async function scanManualToken() {
     setScanError("");
     setScanResult(null);
 
-    const res = await fetch(`${API_BASE}/api/tokens/scan`, {
+    if (!walletAddress) {
+      throw new Error("Connect wallet first");
+    }
+
+    if (!manualTokenMint.trim()) {
+      throw new Error("Token contract address is required");
+    }
+
+    const endpoint = user?.customConditionMode
+      ? `${API_BASE}/api/tokens/scan-custom-mode`
+      : `${API_BASE}/api/tokens/scan`;
+
+    const res = await fetch(endpoint, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        walletAddress: walletAddress,
+        walletAddress,
         tokenMint: manualTokenMint.trim(),
       }),
     });
@@ -384,7 +462,6 @@ async function scanManualToken() {
     setScanLoading(false);
   }
 }
-
 /* --- FETCH USER CHANNEL SUBSCRIPTIONS (STEP 5.5) --- */
 async function fetchUserChannels() {
   try {
@@ -634,37 +711,41 @@ async function fetchWithdrawals() {
 }
 
 
-  /* --- SAVE SETTINGS --- */
-  async function saveSettings() {
-    try {
-      await fetch(`${API_BASE}/api/users/update-settings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          walletAddress,
-          solPerTrade,
-          stopLoss,
-          trailingTrigger,
-          trailingDistance,
-          tp1,
-          tp1SellPercent: tp1Sell,
-          tp2,
-          tp2SellPercent: tp2Sell,
-          tp3,
-          tp3SellPercent: tp3Sell,
-          maxSlippagePercent,
-          mevProtection,
+ /* --- SAVE SETTINGS --- */
+async function saveSettings() {
+  try {
+    await fetch(`${API_BASE}/api/users/update-settings`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        walletAddress,
+        solPerTrade,
+        stopLoss,
+        trailingTrigger,
+        trailingDistance,
+        tp1,
+        tp1SellPercent: tp1Sell,
+        tp2,
+        tp2SellPercent: tp2Sell,
+        tp3,
+        tp3SellPercent: tp3Sell,
+        maxSlippagePercent,
+        mevProtection,
 
-        }),
-      });
-      setMessage({ type: "success", text: "Settings saved" });
-      fetchUserSettings();
-    } catch (err) {
-      console.warn("saveSettings error:", err);
-      setMessage({ type: "error", text: "Failed to save settings" });
-    }
+        // ✅ NEW
+        customConditionMode,
+        tokenConditions,
+      }),
+    });
+
+    setMessage({ type: "success", text: "Settings saved" });
+    fetchUserSettings();
+    refreshUser();
+  } catch (err) {
+    console.warn("saveSettings error:", err);
+    setMessage({ type: "error", text: "Failed to save settings" });
   }
-
+}
 
   /* --- Manual sells --- */
 async function manualSell(mint, percent = 100) {
