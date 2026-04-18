@@ -23,6 +23,7 @@ import { fetchWalletIntelligenceData } from "../../scanner/fetchWalletIntelligen
 import { fetchMomentumData } from "../../scanner/fetchMomentumData.js";
 import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js";
 import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
+import User from "../../../models/User.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -411,6 +412,320 @@ profitWallets: profitWalletData,
     return res.status(500).json({
       ok: false,
       error: "Failed to scan token",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+// =====================================================
+// CUSTOM MODE SCAN ROUTE
+// Layer 2 + Layer 3 only
+// =====================================================
+router.post("/scan-custom-mode", async (req, res) => {
+  try {
+    const { tokenMint, walletAddress } = req.body || {};
+
+    if (!walletAddress || typeof walletAddress !== "string") {
+      return res.status(400).json({
+        ok: false,
+        error: "walletAddress is required",
+      });
+    }
+
+    if (!tokenMint || typeof tokenMint !== "string") {
+      return res.status(400).json({
+        ok: false,
+        error: "tokenMint is required",
+      });
+    }
+
+    const cleanWalletAddress = walletAddress.trim();
+    const cleanTokenMint = tokenMint.trim();
+
+    const user = await User.findOne({ walletAddress: cleanWalletAddress });
+    if (!user) {
+      return res.status(404).json({
+        ok: false,
+        error: "user_not_found",
+      });
+    }
+
+    // This route is only for custom mode ON
+    if (!user.customConditionMode) {
+      return res.status(400).json({
+        ok: false,
+        error: "custom_condition_mode_is_off",
+      });
+    }
+
+    const conditions = user.tokenConditions || {};
+    const hasConditions = hasAnyTokenCondition(conditions);
+
+    // ===================================================
+    // LAYER 2
+    // Toggle ON, no condition set
+    // Existing scanner must NOT be used
+    // Buy should be allowed with warning
+    // ===================================================
+    if (!hasConditions) {
+      return res.status(200).json({
+        ok: true,
+        mode: "custom",
+        walletAddress: cleanWalletAddress,
+        tokenMint: cleanTokenMint,
+        pairAddress: null,
+        dexId: null,
+        chainId: "solana",
+        token: {
+          mintAddress: cleanTokenMint,
+          symbol: "UNKNOWN",
+          name: "Custom Mode Token",
+          boosted: false,
+        },
+        metrics: {
+          ageMinutes: null,
+          liquidityUsd: null,
+          marketCapUsd: null,
+          volume5mUsd: null,
+          buys5m: null,
+          sells5m: null,
+          largestHolderPercent: null,
+          top10HoldingPercent: null,
+          smartDegenCount: null,
+          botDegenCount: null,
+          ratTraderCount: null,
+          alphaCallerCount: null,
+          sniperWalletCount: null,
+          bundledWalletCount: null,
+          fundingClusterScore: null,
+          largestFundingCluster: null,
+          walletParticipationScore: null,
+          velocitySanityScore: null,
+          bundleSuspicionScore: null,
+        },
+        social: {
+          websiteUrl: null,
+          telegramUrl: null,
+          twitterUrl: null,
+          hasWebsite: false,
+          hasTelegram: false,
+          hasTwitter: false,
+          websiteWorking: null,
+          telegramWorking: null,
+          twitterWorking: null,
+        },
+        integrity: {
+          buySellRatio5m: null,
+          uniqueBuyerCount5m: null,
+          uniqueSellerCount5m: null,
+          walletParticipationRatio: null,
+          walletParticipationScore: null,
+          volumePerTx5m: null,
+          volumePerUniqueBuyer5m: null,
+          velocitySanityScore: null,
+          washTradingRiskScore: null,
+          bundleSuspicionScore: null,
+          artificialVolumeFlag: null,
+          fakeMomentumFlag: null,
+        },
+        rugRisk: {
+          devDumpRiskScore: null,
+          liquidityPullRiskScore: null,
+          insiderRiskScore: null,
+          rugRiskScore: null,
+          rugRiskLevel: null,
+        },
+        riskStructure: {
+          bundleScore: null,
+          bundledWalletCount: null,
+          fundingClusterScore: null,
+          largestFundingCluster: null,
+        },
+        topHolders: [],
+        excludedAccounts: [],
+        holderWarning: null,
+        evaluation: {
+          verdict: "NO_CONDITION_SET",
+          score: null,
+          showBuy: true,
+          buyConfidence: "MEDIUM",
+          reasons: [],
+          warnings: [
+            "Custom condition mode is ON",
+            "No condition has been set",
+            "Default scanner was not used",
+            "This token might not be safe for trade",
+          ],
+          failedRules: [],
+        },
+        scannedAt: new Date(),
+        expiresAt: null,
+        customMode: {
+          enabled: true,
+          hasConditions: false,
+          bypassedDefaultScanner: true,
+        },
+      });
+    }
+
+    // ===================================================
+    // LAYER 3
+    // Toggle ON, condition exists
+    // Existing scanner must NOT be used
+    // Only fetch data needed for condition matching
+    // ===================================================
+    const market = await fetchTokenMarketData(cleanTokenMint);
+
+    const socialData = fetchTokenSocialData(market.rawPair);
+    let enrichedSocialData = { ...socialData };
+
+    if (socialData.websiteUrl) {
+      const websiteCheck = await checkWebsiteStatus(socialData.websiteUrl);
+
+      enrichedSocialData = {
+        ...enrichedSocialData,
+        websiteWorking: websiteCheck.websiteWorking,
+      };
+
+      if (websiteCheck.websiteWarning) {
+        enrichedSocialData.socialWarning = websiteCheck.websiteWarning;
+      }
+    }
+
+    enrichedSocialData = await checkSocialStatus(enrichedSocialData);
+
+    let holderData = {
+      largestHolderPercent: null,
+      top10HoldingPercent: null,
+      topHolders: [],
+      excludedAccounts: [],
+      holderWarning: null,
+    };
+
+    try {
+      holderData = await fetchTokenHolderData(cleanTokenMint, {
+        excludeAddresses: getExcludedHolderAddressesForMint(cleanTokenMint),
+        marketContext: {
+          dexId: market?.token?.dexId || market?.rawPair?.dexId || "",
+          labels: market?.rawPair?.labels || [],
+        },
+      });
+    } catch (err) {
+      console.warn("Custom mode holder scan failed:", err?.message);
+      holderData.holderWarning = "Holder scan temporarily unavailable";
+    }
+
+    const integrityData = await fetchMarketIntegrityData({
+      tokenMint: cleanTokenMint,
+      market,
+      context: {
+        recentTrades: [],
+      },
+    });
+
+    const walletIntel = await fetchWalletIntelligenceData({
+      tokenMint: cleanTokenMint,
+      holderData,
+      market,
+    });
+
+    const rugRiskData = await fetchRugRiskData({
+      tokenMint: cleanTokenMint,
+      market,
+      holderData,
+      context: {},
+    });
+
+    const riskStructureData = await fetchRiskStructureData({
+      tokenMint: cleanTokenMint,
+      market,
+      holderData,
+      context: {},
+    });
+
+    const conditionCheck = matchTokenConditions({
+      market,
+      holderData,
+      social: enrichedSocialData,
+      integrity: integrityData,
+      walletIntel,
+      riskStructure: riskStructureData,
+      rugRisk: rugRiskData,
+      conditions,
+    });
+
+    return res.status(200).json({
+      ok: true,
+      mode: "custom",
+      walletAddress: cleanWalletAddress,
+      tokenMint: cleanTokenMint,
+      pairAddress: market.token?.pairAddress || null,
+      dexId: market.token?.dexId || null,
+      chainId: market.token?.chainId || "solana",
+      token: {
+        mintAddress: cleanTokenMint,
+        symbol: market.token?.symbol || "UNKNOWN",
+        name: market.token?.name || "Custom Mode Token",
+        boosted: market.metrics?.boosted || false,
+      },
+      metrics: {
+        ageMinutes: market.metrics?.ageMinutes ?? null,
+        liquidityUsd: market.metrics?.liquidityUsd ?? null,
+        marketCapUsd: market.metrics?.marketCapUsd ?? null,
+        volume5mUsd: market.metrics?.volume5mUsd ?? null,
+        buys5m: market.metrics?.buys5m ?? null,
+        sells5m: market.metrics?.sells5m ?? null,
+        largestHolderPercent: holderData?.largestHolderPercent ?? null,
+        top10HoldingPercent: holderData?.top10HoldingPercent ?? null,
+        smartDegenCount: walletIntel?.smartDegenCount ?? null,
+        botDegenCount: walletIntel?.botDegenCount ?? null,
+        ratTraderCount: walletIntel?.ratTraderCount ?? null,
+        alphaCallerCount: walletIntel?.alphaCallerCount ?? null,
+        sniperWalletCount: walletIntel?.sniperWalletCount ?? null,
+        bundledWalletCount: riskStructureData?.bundledWalletCount ?? null,
+        fundingClusterScore: riskStructureData?.fundingClusterScore ?? null,
+        largestFundingCluster: riskStructureData?.largestFundingCluster ?? null,
+        walletParticipationScore: integrityData?.walletParticipationScore ?? null,
+        velocitySanityScore: integrityData?.velocitySanityScore ?? null,
+        bundleSuspicionScore: integrityData?.bundleSuspicionScore ?? null,
+      },
+      social: enrichedSocialData,
+      integrity: integrityData,
+      rugRisk: rugRiskData,
+      riskStructure: riskStructureData,
+      topHolders: holderData?.topHolders || [],
+      excludedAccounts: holderData?.excludedAccounts || [],
+      holderWarning: holderData?.holderWarning || null,
+      evaluation: {
+        verdict: conditionCheck.passed
+          ? "CONDITION_MATCHED"
+          : "CONDITION_NOT_MET",
+        score: null,
+        showBuy: conditionCheck.passed,
+        buyConfidence: conditionCheck.passed ? "HIGH" : "NONE",
+        reasons: conditionCheck.passed
+          ? ["Token matched your saved custom conditions"]
+          : [],
+        warnings: [
+          "Custom condition mode is ON",
+          "Default scanner was not used",
+        ],
+        failedRules: conditionCheck.failedRules,
+      },
+      scannedAt: new Date(),
+      expiresAt: null,
+      customMode: {
+        enabled: true,
+        hasConditions: true,
+        bypassedDefaultScanner: true,
+      },
+    });
+  } catch (error) {
+    console.error("POST /api/tokens/scan-custom-mode error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to scan token in custom mode",
       details: error?.message || String(error),
     });
   }
