@@ -1406,13 +1406,33 @@ async function reRequestChannel(channelId) {
     </div>
   ) : null}
 </div>
-<CustomTokenConditions
-  customConditionMode={customConditionMode}
-  setCustomConditionMode={setCustomConditionMode}
-  tokenConditions={tokenConditions}
-  setTokenConditions={setTokenConditions}
-  saveSettings={saveSettings}
-/>
+
+<div className="bg-gray-800 rounded-xl p-4">
+  <button
+    type="button"
+    onClick={() => setShowCustomConditions((prev) => !prev)}
+    className="w-full flex items-center justify-between text-left"
+  >
+    <h3 className="text-lg font-semibold text-white">
+      Custom Token Conditions
+    </h3>
+    <span className="text-white text-xl">
+      {showCustomConditions ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {showCustomConditions ? (
+    <div className="mt-4">
+      <CustomTokenConditions
+        customConditionMode={customConditionMode}
+        setCustomConditionMode={setCustomConditionMode}
+        tokenConditions={tokenConditions}
+        setTokenConditions={setTokenConditions}
+        saveSettings={saveSettings}
+      />
+    </div>
+  ) : null}
+</div>
 
 </div>
 </div>
