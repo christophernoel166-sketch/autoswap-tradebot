@@ -42,7 +42,8 @@ const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
 const [mevProtection, setMevProtection] = useState(true);
 const [onChainBalance, setOnChainBalance] = useState(0);
-
+const [showTradingSettings, setShowTradingSettings] = useState(true);
+const [showCustomConditions, setShowCustomConditions] = useState(false);
 const [withdrawLoading, setWithdrawLoading] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
 const [withdrawals, setWithdrawals] = useState([]);
@@ -1363,29 +1364,48 @@ async function reRequestChannel(channelId) {
   setMevProtection={setMevProtection}
 />
 
-  <TradingSettings
-    solPerTrade={solPerTrade}
-    setSolPerTrade={setSolPerTrade}
-    stopLoss={stopLoss}
-    setStopLoss={setStopLoss}
-    trailingTrigger={trailingTrigger}
-    setTrailingTrigger={setTrailingTrigger}
-    trailingDistance={trailingDistance}
-    setTrailingDistance={setTrailingDistance}
-    tp1={tp1}
-    setTp1={setTp1}
-    tp1Sell={tp1Sell}
-    setTp1Sell={setTp1Sell}
-    tp2={tp2}
-    setTp2={setTp2}
-    tp2Sell={tp2Sell}
-    setTp2Sell={setTp2Sell}
-    tp3={tp3}
-    setTp3={setTp3}
-    tp3Sell={tp3Sell}
-    setTp3Sell={setTp3Sell}
-    saveSettings={saveSettings}
-  />
+  <div className="bg-gray-800 rounded-xl p-4">
+  <button
+    type="button"
+    onClick={() => setShowTradingSettings((prev) => !prev)}
+    className="w-full flex items-center justify-between text-left"
+  >
+    <h3 className="text-lg font-semibold text-white">
+      Trading Settings
+    </h3>
+    <span className="text-white text-xl">
+      {showTradingSettings ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {showTradingSettings ? (
+    <div className="mt-4">
+      <TradingSettings
+        solPerTrade={solPerTrade}
+        setSolPerTrade={setSolPerTrade}
+        stopLoss={stopLoss}
+        setStopLoss={setStopLoss}
+        trailingTrigger={trailingTrigger}
+        setTrailingTrigger={setTrailingTrigger}
+        trailingDistance={trailingDistance}
+        setTrailingDistance={setTrailingDistance}
+        tp1={tp1}
+        setTp1={setTp1}
+        tp1Sell={tp1Sell}
+        setTp1Sell={setTp1Sell}
+        tp2={tp2}
+        setTp2={setTp2}
+        tp2Sell={tp2Sell}
+        setTp2Sell={setTp2Sell}
+        tp3={tp3}
+        setTp3={setTp3}
+        tp3Sell={tp3Sell}
+        setTp3Sell={setTp3Sell}
+        saveSettings={saveSettings}
+      />
+    </div>
+  ) : null}
+</div>
 <CustomTokenConditions
   customConditionMode={customConditionMode}
   setCustomConditionMode={setCustomConditionMode}
