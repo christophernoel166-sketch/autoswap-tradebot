@@ -18,11 +18,10 @@ import DepositModal from "./wallet/DepositModal";
 import WalletWithdrawModal from "./components/wallet/WalletWithdrawModal";
 import WalletBalanceCard from "./WalletBalanceCard";
 import Toggle from "./ui/Toggle";
-
-
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
+import CustomTokenConditions from "./settings/CustomTokenConditions";
 
 
 
@@ -1319,6 +1318,14 @@ async function reRequestChannel(channelId) {
     setTp3Sell={setTp3Sell}
     saveSettings={saveSettings}
   />
+<CustomTokenConditions
+  customConditionMode={customConditionMode}
+  setCustomConditionMode={setCustomConditionMode}
+  tokenConditions={tokenConditions}
+  setTokenConditions={setTokenConditions}
+  saveSettings={saveSettings}
+/>
+
 </div>
 </div>
 </div>     
