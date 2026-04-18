@@ -33,6 +33,7 @@ export default function AutoswapDashboard() {
   const [walletAddress, setWalletAddress] = useState("");
   const [positions, setPositions] = useState([]);
   const [history, setHistory] = useState([]);
+const [showTradeHistory, setShowTradeHistory] = useState(false);
   const [availableChannels, setAvailableChannels] = useState([]);
   const [userChannels, setUserChannels] = useState([]);
   const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
@@ -1271,7 +1272,26 @@ async function reRequestChannel(channelId) {
       fmt={fmt}
     />
 
-    <TradeHistory filteredHistory={filteredHistory} />
+   <div className="bg-gray-800 rounded-xl p-4">
+  <button
+    type="button"
+    onClick={() => setShowTradeHistory((prev) => !prev)}
+    className="w-full flex items-center justify-between text-left"
+  >
+    <h3 className="text-lg font-semibold text-white">
+      Trade History ({filteredHistory.length})
+    </h3>
+    <span className="text-white text-xl">
+      {showTradeHistory ? "▲" : "▼"}
+    </span>
+  </button>
+
+  {showTradeHistory ? (
+    <div className="mt-4">
+      <TradeHistory filteredHistory={filteredHistory} />
+    </div>
+  ) : null}
+</div>
 
     <ActivePositions
       positions={positions}
