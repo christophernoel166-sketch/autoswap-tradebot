@@ -1,5 +1,5 @@
 import React from "react";
-import ChartEntrySection from "../../components/ChartEntrySection";
+import ChartEntrySection from "../components/ChartEntrySection";
 
 function formatValue(value, suffix = "") {
   if (value === null || value === undefined || value === "") return "—";
