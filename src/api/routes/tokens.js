@@ -24,6 +24,8 @@ import { fetchMomentumData } from "../../scanner/fetchMomentumData.js";
 import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js";
 import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
 import User from "../../../models/User.js";
+import { analyzeChartEntry } from "../../services/chartEntryService.js";
+
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -383,29 +385,41 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
       .filter(Boolean)
       .filter((warning, index, arr) => arr.indexOf(warning) === index);
 
-    return res.status(200).json({
-      ok: true,
-      walletAddress: walletAddress || null,
-      tokenMint: tokenMint.trim(),
-      pairAddress: market.token.pairAddress,
-      dexId: market.token.dexId,
-      chainId: market.token.chainId,
-      topHolders: holderData.topHolders || [],
-      excludedAccounts: holderData.excludedAccounts || [],
-      holderWarning: holderData.holderWarning || null,
-      social: enrichedSocialData,
-      activity: activityData,
-      integrity: integrityData,
-      rugRisk: rugRiskData,
-      momentum: momentumData,
-riskStructure: riskStructureData,
-profitWallets: profitWalletData,
-      ...response,
-      evaluation: {
-        ...response.evaluation,
-        warnings: mergedWarnings,
-      },
-    });
+    // ================= CHART ENTRY =================
+let chartEntry = null;
+
+try {
+  if (response?.evaluation?.showBuy) {
+    chartEntry = await analyzeChartEntry(tokenMint.trim());
+  }
+} catch (err) {
+  console.warn("Chart analysis failed:", err?.message);
+}
+
+return res.status(200).json({
+  ok: true,
+  walletAddress: walletAddress || null,
+  tokenMint: tokenMint.trim(),
+  pairAddress: market.token.pairAddress,
+  dexId: market.token.dexId,
+  chainId: market.token.chainId,
+  topHolders: holderData.topHolders || [],
+  excludedAccounts: holderData.excludedAccounts || [],
+  holderWarning: holderData.holderWarning || null,
+  social: enrichedSocialData,
+  activity: activityData,
+  integrity: integrityData,
+  rugRisk: rugRiskData,
+  momentum: momentumData,
+  riskStructure: riskStructureData,
+  profitWallets: profitWalletData,
+  ...response,
+  evaluation: {
+    ...response.evaluation,
+    warnings: mergedWarnings,
+  },
+  chartEntry,
+});
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
 
@@ -462,111 +476,120 @@ router.post("/scan-custom-mode", async (req, res) => {
     const hasConditions = hasAnyTokenCondition(conditions);
 
     // ===================================================
-    // LAYER 2
-    // Toggle ON, no condition set
-    // Existing scanner must NOT be used
-    // Buy should be allowed with warning
-    // ===================================================
-    if (!hasConditions) {
-      return res.status(200).json({
-        ok: true,
-        mode: "custom",
-        walletAddress: cleanWalletAddress,
-        tokenMint: cleanTokenMint,
-        pairAddress: null,
-        dexId: null,
-        chainId: "solana",
-        token: {
-          mintAddress: cleanTokenMint,
-          symbol: "UNKNOWN",
-          name: "Custom Mode Token",
-          boosted: false,
-        },
-        metrics: {
-          ageMinutes: null,
-          liquidityUsd: null,
-          marketCapUsd: null,
-          volume5mUsd: null,
-          buys5m: null,
-          sells5m: null,
-          largestHolderPercent: null,
-          top10HoldingPercent: null,
-          smartDegenCount: null,
-          botDegenCount: null,
-          ratTraderCount: null,
-          alphaCallerCount: null,
-          sniperWalletCount: null,
-          bundledWalletCount: null,
-          fundingClusterScore: null,
-          largestFundingCluster: null,
-          walletParticipationScore: null,
-          velocitySanityScore: null,
-          bundleSuspicionScore: null,
-        },
-        social: {
-          websiteUrl: null,
-          telegramUrl: null,
-          twitterUrl: null,
-          hasWebsite: false,
-          hasTelegram: false,
-          hasTwitter: false,
-          websiteWorking: null,
-          telegramWorking: null,
-          twitterWorking: null,
-        },
-        integrity: {
-          buySellRatio5m: null,
-          uniqueBuyerCount5m: null,
-          uniqueSellerCount5m: null,
-          walletParticipationRatio: null,
-          walletParticipationScore: null,
-          volumePerTx5m: null,
-          volumePerUniqueBuyer5m: null,
-          velocitySanityScore: null,
-          washTradingRiskScore: null,
-          bundleSuspicionScore: null,
-          artificialVolumeFlag: null,
-          fakeMomentumFlag: null,
-        },
-        rugRisk: {
-          devDumpRiskScore: null,
-          liquidityPullRiskScore: null,
-          insiderRiskScore: null,
-          rugRiskScore: null,
-          rugRiskLevel: null,
-        },
-        riskStructure: {
-          bundleScore: null,
-          bundledWalletCount: null,
-          fundingClusterScore: null,
-          largestFundingCluster: null,
-        },
-        topHolders: [],
-        excludedAccounts: [],
-        holderWarning: null,
-        evaluation: {
-          verdict: "NO_CONDITION_SET",
-          score: null,
-          showBuy: true,
-          buyConfidence: "MEDIUM",
-          reasons: [],
-          warnings: [
-            "Custom condition mode is ON",
-            "No condition has been set",
-            "Default scanner was not used",
-            "This token might not be safe for trade",
-          ],
-          failedRules: [],
-        },
-        scannedAt: new Date(),
-        expiresAt: null,
-        customMode: {
-          enabled: true,
-          hasConditions: false,
-          bypassedDefaultScanner: true,
-        },
-      });
-    }
+// LAYER 2
+// Toggle ON, no condition set
+// Existing scanner must NOT be used
+// Buy should be allowed with warning
+// ===================================================
+if (!hasConditions) {
+  let chartEntry = null;
+
+  try {
+    chartEntry = await analyzeChartEntry(cleanTokenMint);
+  } catch (err) {
+    console.warn("Chart analysis failed:", err?.message);
+  }
+
+  return res.status(200).json({
+    ok: true,
+    mode: "custom",
+    walletAddress: cleanWalletAddress,
+    tokenMint: cleanTokenMint,
+    pairAddress: null,
+    dexId: null,
+    chainId: "solana",
+    token: {
+      mintAddress: cleanTokenMint,
+      symbol: "UNKNOWN",
+      name: "Custom Mode Token",
+      boosted: false,
+    },
+    metrics: {
+      ageMinutes: null,
+      liquidityUsd: null,
+      marketCapUsd: null,
+      volume5mUsd: null,
+      buys5m: null,
+      sells5m: null,
+      largestHolderPercent: null,
+      top10HoldingPercent: null,
+      smartDegenCount: null,
+      botDegenCount: null,
+      ratTraderCount: null,
+      alphaCallerCount: null,
+      sniperWalletCount: null,
+      bundledWalletCount: null,
+      fundingClusterScore: null,
+      largestFundingCluster: null,
+      walletParticipationScore: null,
+      velocitySanityScore: null,
+      bundleSuspicionScore: null,
+    },
+    social: {
+      websiteUrl: null,
+      telegramUrl: null,
+      twitterUrl: null,
+      hasWebsite: false,
+      hasTelegram: false,
+      hasTwitter: false,
+      websiteWorking: null,
+      telegramWorking: null,
+      twitterWorking: null,
+    },
+    integrity: {
+      buySellRatio5m: null,
+      uniqueBuyerCount5m: null,
+      uniqueSellerCount5m: null,
+      walletParticipationRatio: null,
+      walletParticipationScore: null,
+      volumePerTx5m: null,
+      volumePerUniqueBuyer5m: null,
+      velocitySanityScore: null,
+      washTradingRiskScore: null,
+      bundleSuspicionScore: null,
+      artificialVolumeFlag: null,
+      fakeMomentumFlag: null,
+    },
+    rugRisk: {
+      devDumpRiskScore: null,
+      liquidityPullRiskScore: null,
+      insiderRiskScore: null,
+      rugRiskScore: null,
+      rugRiskLevel: null,
+    },
+    riskStructure: {
+      bundleScore: null,
+      bundledWalletCount: null,
+      fundingClusterScore: null,
+      largestFundingCluster: null,
+    },
+    topHolders: [],
+    excludedAccounts: [],
+    holderWarning: null,
+    evaluation: {
+      verdict: "NO_CONDITION_SET",
+      score: null,
+      showBuy: true,
+      buyConfidence: "MEDIUM",
+      reasons: [],
+      warnings: [
+        "Custom condition mode is ON",
+        "No condition has been set",
+        "Default scanner was not used",
+        "This token might not be safe for trade",
+      ],
+      failedRules: [],
+    },
+    scannedAt: new Date(),
+    expiresAt: null,
+    customMode: {
+      enabled: true,
+      hasConditions: false,
+      bypassedDefaultScanner: true,
+    },
+    chartEntry,
+  });
+}
 
     // ===================================================
     // LAYER 3
@@ -654,6 +677,16 @@ router.post("/scan-custom-mode", async (req, res) => {
       conditions,
     });
 
+let chartEntry = null;
+
+try {
+  if (conditionCheck.passed) {
+    chartEntry = await analyzeChartEntry(cleanTokenMint);
+  }
+} catch (err) {
+  console.warn("Chart analysis failed:", err?.message);
+}
+
     return res.status(200).json({
       ok: true,
       mode: "custom",
@@ -719,6 +752,7 @@ router.post("/scan-custom-mode", async (req, res) => {
         hasConditions: true,
         bypassedDefaultScanner: true,
       },
+    chartEntry,
     });
   } catch (error) {
     console.error("POST /api/tokens/scan-custom-mode error:", error);
