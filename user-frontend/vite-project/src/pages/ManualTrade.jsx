@@ -1,4 +1,5 @@
 import React from "react";
+import ChartEntrySection from "../../components/ChartEntrySection";
 
 function formatValue(value, suffix = "") {
   if (value === null || value === undefined || value === "") return "—";
@@ -231,6 +232,8 @@ const chartActionColor =
               </div>
             </div>
 
+
+
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -289,7 +292,16 @@ const chartActionColor =
             )}
           </Section>
 
+<ChartEntrySection
+  chartEntry={chartEntry}
+  chartActionColor={chartActionColor}
+  formatValue={formatValue}
+  Section={Section}
+  MetricRow={MetricRow}
+/>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
             <Section title="Market">
               <MetricRow
                 label="Age"
