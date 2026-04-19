@@ -82,6 +82,7 @@ export default function ManualTrade({
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
+const chartEntry = scanResult?.chartEntry || null;
 
   const topHolders =
     scanResult?.holderSafety?.topHolders ||
@@ -107,6 +108,14 @@ export default function ManualTrade({
       ? "bg-yellow-500 hover:bg-yellow-600 text-white"
       : "bg-green-600 hover:bg-green-700 text-white"
     : "bg-gray-400 text-white cursor-not-allowed";
+
+const chartActionColor =
+  chartEntry?.action === "enter_now"
+    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+    : chartEntry?.action === "wait_pullback" ||
+      chartEntry?.action === "wait_breakout"
+    ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+    : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
 
   async function handleManualBuy() {
     try {
