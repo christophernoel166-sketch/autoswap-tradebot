@@ -1,4 +1,3 @@
-// models/FeeLedger.js
 import mongoose from "mongoose";
 
 const feeLedgerSchema = new mongoose.Schema(
@@ -8,7 +7,7 @@ const feeLedgerSchema = new mongoose.Schema(
     // ============================================
     type: {
       type: String,
-      enum: ["withdrawal_fee", "buy_fee", "sell_fee"],
+      enum: ["withdrawal_fee", "buy_fee", "sell_fee", "chart_analysis_fee"],
       required: true,
       index: true,
     },
@@ -25,6 +24,12 @@ const feeLedgerSchema = new mongoose.Schema(
     walletAddress: {
       type: String,
       required: true,
+      index: true,
+    },
+
+    tokenMint: {
+      type: String,
+      default: null,
       index: true,
     },
 
@@ -62,7 +67,7 @@ const feeLedgerSchema = new mongoose.Schema(
     },
   },
   {
-    timestamps: true, // adds createdAt + updatedAt
+    timestamps: true,
     strict: true,
   }
 );

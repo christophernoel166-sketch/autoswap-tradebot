@@ -39,7 +39,7 @@ const round6 = (n) => Number(Number(n).toFixed(6));
  * walletService.js uses a raw 32-char string key, not hex-decoded bytes.
  * So we must use utf8 here to match exactly.
  */
-function decryptPrivateKey(encryptedHex, ivHex) {
+export function decryptPrivateKey(encryptedHex, ivHex) {
   const decipher = crypto.createDecipheriv(
     "aes-256-cbc",
     Buffer.from(ENCRYPTION_SECRET, "utf8"),
@@ -54,13 +54,98 @@ function decryptPrivateKey(encryptedHex, ivHex) {
 /**
  * 🔁 Restore Keypair from encrypted DB fields
  */
-function restoreTradingWallet(user) {
+export function restoreTradingWallet(user) {
   const decrypted = decryptPrivateKey(
     user.tradingWalletEncryptedPrivateKey,
     user.tradingWalletIv
   );
 
   return Keypair.fromSecretKey(Buffer.from(decrypted, "hex"));
+}
+
+/**
+ * 💰 Charge a service fee from the user's trading wallet to FEE_WALLET
+ * Reusable for premium features like chart analysis.
+ *
+ * @param {Object} params
+ * @param {import("../../models/User.js").default | any} params.user
+ * @param {number} params.amountSol
+ * @param {string} params.type
+ * @param {string} [params.tokenMint]
+ *
+ * @returns {Promise<{ ok: true, txSignature: string, feeChargedSol: number }>}
+ */
+export async function chargeServiceFee({
+  user,
+  amountSol,
+  type,
+  tokenMint = null,
+}) {
+  if (!user) {
+    throw new Error("user_required");
+  }
+
+  if (!user.walletAddress) {
+    throw new Error("wallet_address_missing");
+  }
+
+  if (!user.tradingWalletEncryptedPrivateKey || !user.tradingWalletIv) {
+    throw new Error("trading_wallet_missing");
+  }
+
+  if (!Number.isFinite(Number(amountSol)) || Number(amountSol) <= 0) {
+    throw new Error("invalid_fee_amount");
+  }
+
+  const allowedTypes = ["withdrawal_fee", "buy_fee", "sell_fee", "chart_analysis_fee"];
+  if (!allowedTypes.includes(type)) {
+    throw new Error("invalid_fee_type");
+  }
+
+  const tradingWallet = restoreTradingWallet(user);
+  const feePubkey = new PublicKey(FEE_WALLET);
+  const lamportsFee = Math.floor(Number(amountSol) * LAMPORTS_PER_SOL);
+
+  if (lamportsFee <= 0) {
+    throw new Error("fee_too_small");
+  }
+
+  const currentLamports = await connection.getBalance(tradingWallet.publicKey);
+  const TX_FEE_BUFFER = 10_000; // ~0.00001 SOL
+  const requiredLamports = lamportsFee + TX_FEE_BUFFER;
+
+  if (currentLamports < requiredLamports) {
+    throw new Error("insufficient_onchain_balance");
+  }
+
+  const tx = new Transaction().add(
+    SystemProgram.transfer({
+      fromPubkey: tradingWallet.publicKey,
+      toPubkey: feePubkey,
+      lamports: lamportsFee,
+    })
+  );
+
+  const signature = await connection.sendTransaction(tx, [tradingWallet], {
+    skipPreflight: false,
+  });
+
+  await connection.confirmTransaction(signature, "confirmed");
+
+  await FeeLedger.create({
+    type,
+    amountSol: round6(amountSol),
+    walletAddress: String(user.walletAddress).trim(),
+    tokenMint: tokenMint || null,
+    status: "recorded",
+    txSignature: signature,
+  });
+
+  return {
+    ok: true,
+    txSignature: signature,
+    feeChargedSol: round6(amountSol),
+  };
 }
 
 /**
@@ -208,7 +293,6 @@ export async function processWithdrawal(withdrawalId) {
       walletAddress,
       withdrawalId: withdrawal._id,
       status: "recorded",
-      createdAt: new Date(),
       txSignature: signature,
     });
 

@@ -1,11 +1,15 @@
 import express from "express";
-import User from "../../../models/User.js";
+import User from "../../models/User.js";
 import { analyzeChartEntry } from "../../services/chartEntryService.js";
+import { chargeServiceFee } from "../../withdraw/processWithdrawal.js";
 
 const router = express.Router();
 
+const CHART_ANALYSIS_FEE_SOL = 0.001;
+
 // =====================================================
 // PAID CHART ANALYSIS ROUTE
+// POST /api/tokens/chart-analysis
 // =====================================================
 router.post("/chart-analysis", async (req, res) => {
   try {
@@ -36,25 +40,37 @@ router.post("/chart-analysis", async (req, res) => {
       });
     }
 
-    // ===================================================
-    // 💰 CHART ANALYSIS FEE (TO BE IMPLEMENTED NEXT)
-    // ===================================================
-    const chartAnalysisFeeSol = 0.001;
+    if (!user.tradingWalletEncryptedPrivateKey || !user.tradingWalletIv) {
+      return res.status(400).json({
+        ok: false,
+        error: "trading_wallet_missing",
+      });
+    }
 
-    const feeStatus = {
-      charged: false,
-      amountSol: chartAnalysisFeeSol,
-      note: "Fee logic not wired yet",
-    };
+    // ===================================================
+    // Charge premium chart-analysis fee
+    // ===================================================
+    const feeResult = await chargeServiceFee({
+      user,
+      amountSol: CHART_ANALYSIS_FEE_SOL,
+      type: "chart_analysis_fee",
+      tokenMint: cleanTokenMint,
+    });
 
-    // 🔥 Run analysis
+    // ===================================================
+    // Run chart analysis after successful fee charge
+    // ===================================================
     const chartEntry = await analyzeChartEntry(cleanTokenMint);
 
     return res.status(200).json({
       ok: true,
       walletAddress: cleanWalletAddress,
       tokenMint: cleanTokenMint,
-      chartAnalysisFee: feeStatus,
+      chartAnalysisFee: {
+        charged: true,
+        amountSol: CHART_ANALYSIS_FEE_SOL,
+        txSignature: feeResult.txSignature,
+      },
       chartEntry,
       analyzedAt: new Date(),
     });
