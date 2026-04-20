@@ -30,6 +30,242 @@ import { analyzeChartEntry } from "../../services/chartEntryService.js";
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
 
+function hasAnyTokenCondition(conditions = {}) {
+  if (!conditions || typeof conditions !== "object") return false;
+
+  const sections = Object.values(conditions);
+  for (const section of sections) {
+    if (!section || typeof section !== "object") continue;
+
+    for (const value of Object.values(section)) {
+      if (typeof value === "number" && Number.isFinite(value)) return true;
+      if (typeof value === "boolean" && value === true) return true;
+    }
+  }
+
+  return false;
+}
+
+function matchTokenConditions({
+  market,
+  holderData,
+  social,
+  integrity,
+  walletIntel,
+  riskStructure,
+  rugRisk,
+  conditions = {},
+}) {
+  const failedRules = [];
+
+  const marketCond = conditions.market || {};
+
+  if (
+    marketCond.minLiquidityUsd != null &&
+    Number(market?.metrics?.liquidityUsd || 0) < Number(marketCond.minLiquidityUsd)
+  ) {
+    failedRules.push("Liquidity is below your minimum");
+  }
+
+  if (
+    marketCond.minMarketCapUsd != null &&
+    Number(market?.metrics?.marketCapUsd || 0) < Number(marketCond.minMarketCapUsd)
+  ) {
+    failedRules.push("Market cap is below your minimum");
+  }
+
+  if (
+    marketCond.maxMarketCapUsd != null &&
+    Number(market?.metrics?.marketCapUsd || 0) > Number(marketCond.maxMarketCapUsd)
+  ) {
+    failedRules.push("Market cap is above your maximum");
+  }
+
+  if (
+    marketCond.minBuys5m != null &&
+    Number(market?.metrics?.buys5m || 0) < Number(marketCond.minBuys5m)
+  ) {
+    failedRules.push("Buys in 5m are below your minimum");
+  }
+
+  if (
+    marketCond.maxSells5m != null &&
+    Number(market?.metrics?.sells5m || 0) > Number(marketCond.maxSells5m)
+  ) {
+    failedRules.push("Sells in 5m are above your maximum");
+  }
+
+  if (
+    marketCond.minAgeMinutes != null &&
+    Number(market?.metrics?.ageMinutes || 0) < Number(marketCond.minAgeMinutes)
+  ) {
+    failedRules.push("Token age is below your minimum");
+  }
+
+  if (
+    marketCond.maxAgeMinutes != null &&
+    Number(market?.metrics?.ageMinutes || 0) > Number(marketCond.maxAgeMinutes)
+  ) {
+    failedRules.push("Token age is above your maximum");
+  }
+
+  const holderCond = conditions.holderSafety || {};
+
+  if (
+    holderCond.maxLargestHolderPercent != null &&
+    Number(holderData?.largestHolderPercent || 999) >
+      Number(holderCond.maxLargestHolderPercent)
+  ) {
+    failedRules.push("Largest holder exceeds your maximum");
+  }
+
+  if (
+    holderCond.maxTop10HoldingPercent != null &&
+    Number(holderData?.top10HoldingPercent || 999) >
+      Number(holderCond.maxTop10HoldingPercent)
+  ) {
+    failedRules.push("Top 10 holding exceeds your maximum");
+  }
+
+  const socialsCond = conditions.socials || {};
+
+  if (socialsCond.requireWebsite && !social?.hasWebsite) {
+    failedRules.push("Website is required");
+  }
+
+  if (socialsCond.requireTelegram && !social?.hasTelegram) {
+    failedRules.push("Telegram is required");
+  }
+
+  if (socialsCond.requireTwitter && !social?.hasTwitter) {
+    failedRules.push("X account is required");
+  }
+
+  const integrityCond = conditions.marketIntegrity || {};
+
+  if (
+    integrityCond.minBuySellRatio5m != null &&
+    Number(integrity?.buySellRatio5m || 0) < Number(integrityCond.minBuySellRatio5m)
+  ) {
+    failedRules.push("Buy/Sell ratio is below your minimum");
+  }
+
+  if (
+    integrityCond.minWalletParticipationScore != null &&
+    Number(integrity?.walletParticipationScore || 0) <
+      Number(integrityCond.minWalletParticipationScore)
+  ) {
+    failedRules.push("Wallet participation score is below your minimum");
+  }
+
+  if (
+    integrityCond.minVelocitySanityScore != null &&
+    Number(integrity?.velocitySanityScore || 0) <
+      Number(integrityCond.minVelocitySanityScore)
+  ) {
+    failedRules.push("Velocity sanity score is below your minimum");
+  }
+
+  if (
+    integrityCond.maxBundleSuspicionScore != null &&
+    Number(integrity?.bundleSuspicionScore || 999) >
+      Number(integrityCond.maxBundleSuspicionScore)
+  ) {
+    failedRules.push("Bundle suspicion is above your maximum");
+  }
+
+  if (
+    integrityCond.allowFakeMomentum === false &&
+    integrity?.fakeMomentumFlag === true
+  ) {
+    failedRules.push("Fake momentum is not allowed");
+  }
+
+  if (
+    integrityCond.allowArtificialVolume === false &&
+    integrity?.artificialVolumeFlag === true
+  ) {
+    failedRules.push("Artificial volume is not allowed");
+  }
+
+  const walletCond = conditions.walletIntelligence || {};
+
+  if (
+    walletCond.minSmartDegenCount != null &&
+    Number(walletIntel?.smartDegenCount || 0) < Number(walletCond.minSmartDegenCount)
+  ) {
+    failedRules.push("Smart degen count is below your minimum");
+  }
+
+  if (
+    walletCond.maxBotDegenCount != null &&
+    Number(walletIntel?.botDegenCount || 999) > Number(walletCond.maxBotDegenCount)
+  ) {
+    failedRules.push("Bot degen count is above your maximum");
+  }
+
+  if (
+    walletCond.maxRatTraderCount != null &&
+    Number(walletIntel?.ratTraderCount || 999) > Number(walletCond.maxRatTraderCount)
+  ) {
+    failedRules.push("Rat trader count is above your maximum");
+  }
+
+  if (
+    walletCond.minAlphaCallerCount != null &&
+    Number(walletIntel?.alphaCallerCount || 0) < Number(walletCond.minAlphaCallerCount)
+  ) {
+    failedRules.push("Alpha caller count is below your minimum");
+  }
+
+  if (
+    walletCond.maxSniperWalletCount != null &&
+    Number(walletIntel?.sniperWalletCount || 999) > Number(walletCond.maxSniperWalletCount)
+  ) {
+    failedRules.push("Sniper wallet count is above your maximum");
+  }
+
+  const riskCond = conditions.riskStructure || {};
+
+  if (
+    riskCond.maxBundledWalletCount != null &&
+    Number(riskStructure?.bundledWalletCount || 999) >
+      Number(riskCond.maxBundledWalletCount)
+  ) {
+    failedRules.push("Bundled wallet count is above your maximum");
+  }
+
+  if (
+    riskCond.maxFundingClusterScore != null &&
+    Number(riskStructure?.fundingClusterScore || 999) >
+      Number(riskCond.maxFundingClusterScore)
+  ) {
+    failedRules.push("Funding cluster score is above your maximum");
+  }
+
+  if (
+    riskCond.maxLargestFundingCluster != null &&
+    Number(riskStructure?.largestFundingCluster || 999) >
+      Number(riskCond.maxLargestFundingCluster)
+  ) {
+    failedRules.push("Largest funding cluster is above your maximum");
+  }
+
+  const rugCond = conditions.rugRisk || {};
+
+  if (
+    rugCond.maxRugRiskScore != null &&
+    Number(rugRisk?.rugRiskScore || 999) > Number(rugCond.maxRugRiskScore)
+  ) {
+    failedRules.push("Rug risk score is above your maximum");
+  }
+
+  return {
+    passed: failedRules.length === 0,
+    failedRules,
+  };
+}
+
 // =====================================================
 // SCAN ROUTE
 // =====================================================
