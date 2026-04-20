@@ -654,7 +654,6 @@ return res.status(200).json({
     ...response.evaluation,
     warnings: mergedWarnings,
   },
-  chartEntry,
 });
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
@@ -823,7 +822,7 @@ if (!hasConditions) {
       hasConditions: false,
       bypassedDefaultScanner: true,
     },
-    chartEntry,
+   
   });
 }
 
@@ -988,7 +987,7 @@ try {
         hasConditions: true,
         bypassedDefaultScanner: true,
       },
-    chartEntry,
+    
     });
   } catch (error) {
     console.error("POST /api/tokens/scan-custom-mode error:", error);
