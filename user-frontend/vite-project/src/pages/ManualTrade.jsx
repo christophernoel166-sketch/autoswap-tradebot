@@ -279,8 +279,8 @@ const chartActionColor =
         className="px-5 py-3 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {chartLoading
-          ? "Activating Chart Analysis..."
-          : "Activate Chart Analysis (0.001 SOL)"}
+  ? "Activating Chart Analysis..."
+  : "Activate Chart Analysis"}
       </button>
     ) : (
       <div className="text-sm text-green-700 dark:text-green-400">
