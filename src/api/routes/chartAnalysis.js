@@ -62,6 +62,8 @@ router.post("/chart-analysis", async (req, res) => {
     // ===================================================
     const chartEntry = await analyzeChartEntry(cleanTokenMint);
 
+console.log("🔥 chartEntry result:", JSON.stringify(chartEntry, null, 2));
+
     return res.status(200).json({
       ok: true,
       walletAddress: cleanWalletAddress,
