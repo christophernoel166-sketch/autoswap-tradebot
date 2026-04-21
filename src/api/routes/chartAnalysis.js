@@ -111,5 +111,6 @@ router.post("/chart-analysis", async (req, res) => {
     details: error?.message || String(error),
   });
 }
+});
 
 export default router;
