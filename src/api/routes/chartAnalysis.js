@@ -5,7 +5,7 @@ import { chargeServiceFee } from "../../withdraw/processWithdrawal.js";
 
 const router = express.Router();
 
-const CHART_ANALYSIS_FEE_SOL = 0.001;
+const CHART_ANALYSIS_FEE_SOL = 0.0001;
 
 // =====================================================
 // PAID CHART ANALYSIS ROUTE
@@ -46,6 +46,14 @@ router.post("/chart-analysis", async (req, res) => {
         error: "trading_wallet_missing",
       });
     }
+
+if (!scanResult?.pairAddress) {
+  return res.status(400).json({
+    ok: false,
+    error: "no_liquidity",
+    message: "Chart analysis is not available for tokens without liquidity",
+  });
+}
 
     // ===================================================
     // 1️⃣ Run chart analysis FIRST (NO CHARGE YET)

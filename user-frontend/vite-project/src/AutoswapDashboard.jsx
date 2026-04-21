@@ -540,9 +540,10 @@ async function handleChartAnalysis() {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        walletAddress,
-        tokenMint: scanResult.token.mintAddress,
-      }),
+  walletAddress,
+  tokenMint: scanResult.token.mintAddress,
+  pairAddress: scanResult.pairAddress,
+}),
     });
 
     const data = await res.json();

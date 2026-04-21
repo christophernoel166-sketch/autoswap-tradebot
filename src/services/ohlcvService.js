@@ -1,53 +1,135 @@
 import axios from "axios";
 
+const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
+const NETWORK = "solana";
+
+function mapTimeframe(timeframe = "5m") {
+  const tf = String(timeframe).toLowerCase();
+
+  const mapping = {
+    "1m": { timeframe: "minute", aggregate: 1 },
+    "5m": { timeframe: "minute", aggregate: 5 },
+    "15m": { timeframe: "minute", aggregate: 15 },
+    "30m": { timeframe: "minute", aggregate: 30 },
+    "1h": { timeframe: "hour", aggregate: 1 },
+    "4h": { timeframe: "hour", aggregate: 4 },
+    "1d": { timeframe: "day", aggregate: 1 },
+  };
+
+  return mapping[tf] || { timeframe: "minute", aggregate: 5 };
+}
+
+function pickBestPool(pools = []) {
+  if (!Array.isArray(pools) || pools.length === 0) return null;
+
+  const sorted = [...pools].sort((a, b) => {
+    const aReserve = Number(a?.attributes?.reserve_in_usd || 0);
+    const bReserve = Number(b?.attributes?.reserve_in_usd || 0);
+
+    if (bReserve !== aReserve) return bReserve - aReserve;
+
+    const aVol = Number(a?.attributes?.volume_usd?.h24 || 0);
+    const bVol = Number(b?.attributes?.volume_usd?.h24 || 0);
+
+    return bVol - aVol;
+  });
+
+  return sorted[0] || null;
+}
+
 /**
- * Fetch OHLC candles for a Solana token using Dexscreener
+ * Fetch OHLC candles for a Solana token using GeckoTerminal
  */
 export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
   try {
-    // Step 1: get pair from Dexscreener
-    const pairRes = await axios.get(
-      `https://api.dexscreener.com/latest/dex/tokens/${tokenMint}`
-    );
+    const { timeframe: gtTimeframe, aggregate } = mapTimeframe(timeframe);
 
-    const pair = pairRes.data?.pairs?.[0];
-    if (!pair) {
-      throw new Error("No trading pair found");
-    }
-
-    const pairAddress = pair.pairAddress;
-    const chainId = pair.chainId;
-
-    // Step 2: fetch candles
-    const candleRes = await axios.get(
-      `https://api.dexscreener.com/chart/${chainId}/${pairAddress}`,
+    // 1) Find pools for token
+    const poolsRes = await axios.get(
+      `${GECKO_BASE}/networks/${NETWORK}/tokens/${tokenMint}/pools`,
       {
-        params: {
-          interval: timeframe, // 1m, 5m, 15m
-          limit,
+        headers: {
+          Accept: "application/json",
         },
       }
     );
 
-    const raw = candleRes.data?.candles || [];
+    const pools = poolsRes.data?.data || [];
+    const bestPool = pickBestPool(pools);
 
-    if (!Array.isArray(raw) || raw.length === 0) {
-      throw new Error("No candle data returned");
+    if (!bestPool?.id) {
+      throw new Error("No GeckoTerminal pool found");
     }
 
-    // Normalize to your format
-    const candles = raw.map((c) => ({
-      time: c.t,
-      open: Number(c.o),
-      high: Number(c.h),
-      low: Number(c.l),
-      close: Number(c.c),
-      volume: Number(c.v),
-    }));
+    // GeckoTerminal pool ids are like "solana_<poolAddress>"
+    const rawPoolId = String(bestPool.id);
+    const poolAddress = rawPoolId.startsWith(`${NETWORK}_`)
+      ? rawPoolId.slice(`${NETWORK}_`.length)
+      : rawPoolId;
+
+    // 2) Fetch OHLCV
+    const ohlcvRes = await axios.get(
+      `${GECKO_BASE}/networks/${NETWORK}/pools/${poolAddress}/ohlcv/${gtTimeframe}`,
+      {
+        params: {
+          aggregate,
+          limit,
+          currency: "usd",
+        },
+        headers: {
+          Accept: "application/json",
+        },
+      }
+    );
+
+    const list =
+      ohlcvRes.data?.data?.attributes?.ohlcv_list ||
+      ohlcvRes.data?.data?.attributes?.ohlcv ||
+      [];
+
+    if (!Array.isArray(list) || list.length === 0) {
+      throw new Error("No OHLCV candle data returned");
+    }
+
+    // GeckoTerminal returns:
+    // [timestamp, open, high, low, close, volume]
+    const candles = list
+      .map((c) => ({
+        time: Number(c[0]) * 1000,
+        open: Number(c[1]),
+        high: Number(c[2]),
+        low: Number(c[3]),
+        close: Number(c[4]),
+        volume: Number(c[5] || 0),
+      }))
+      .filter(
+        (c) =>
+          Number.isFinite(c.time) &&
+          Number.isFinite(c.open) &&
+          Number.isFinite(c.high) &&
+          Number.isFinite(c.low) &&
+          Number.isFinite(c.close)
+      )
+      .sort((a, b) => a.time - b.time);
+
+    console.log(
+      "📈 GeckoTerminal candles:",
+      candles.length,
+      "token:",
+      tokenMint,
+      "pool:",
+      poolAddress,
+      "timeframe:",
+      timeframe
+    );
 
     return candles;
   } catch (error) {
-    console.error("fetchCandles error:", error.message);
+    console.error(
+      "fetchCandles error:",
+      error?.response?.status || "",
+      error?.response?.data || error?.message || String(error)
+    );
     throw error;
   }
 }
