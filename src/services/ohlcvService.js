@@ -42,11 +42,16 @@ function pickBestPool(pools = []) {
  */
 export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
   try {
+    const cleanTokenMint = String(tokenMint || "").trim();
+    if (!cleanTokenMint) {
+      throw new Error("tokenMint is required");
+    }
+
     const { timeframe: gtTimeframe, aggregate } = mapTimeframe(timeframe);
 
     // 1) Find pools for token
     const poolsRes = await axios.get(
-      `${GECKO_BASE}/networks/${NETWORK}/tokens/${tokenMint}/pools`,
+      `${GECKO_BASE}/networks/${NETWORK}/tokens/${cleanTokenMint}/pools`,
       {
         headers: {
           Accept: "application/json",
@@ -61,11 +66,15 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
       throw new Error("No GeckoTerminal pool found");
     }
 
-    // GeckoTerminal pool ids are like "solana_<poolAddress>"
+    // GeckoTerminal ids often look like: solana_<poolAddress>
     const rawPoolId = String(bestPool.id);
     const poolAddress = rawPoolId.startsWith(`${NETWORK}_`)
       ? rawPoolId.slice(`${NETWORK}_`.length)
       : rawPoolId;
+
+    if (!poolAddress) {
+      throw new Error("Invalid GeckoTerminal pool id");
+    }
 
     // 2) Fetch OHLCV
     const ohlcvRes = await axios.get(
@@ -91,8 +100,6 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
       throw new Error("No OHLCV candle data returned");
     }
 
-    // GeckoTerminal returns:
-    // [timestamp, open, high, low, close, volume]
     const candles = list
       .map((c) => ({
         time: Number(c[0]) * 1000,
@@ -112,11 +119,15 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
       )
       .sort((a, b) => a.time - b.time);
 
+    if (!candles.length) {
+      throw new Error("No valid candles after normalization");
+    }
+
     console.log(
       "📈 GeckoTerminal candles:",
       candles.length,
       "token:",
-      tokenMint,
+      cleanTokenMint,
       "pool:",
       poolAddress,
       "timeframe:",
