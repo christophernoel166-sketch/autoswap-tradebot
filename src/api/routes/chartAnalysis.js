@@ -48,7 +48,26 @@ router.post("/chart-analysis", async (req, res) => {
     }
 
     // ===================================================
-    // Charge premium chart-analysis fee
+    // 1️⃣ Run chart analysis FIRST (NO CHARGE YET)
+    // ===================================================
+    const chartEntry = await analyzeChartEntry(cleanTokenMint);
+
+    console.log("🔥 chartEntry result:", JSON.stringify(chartEntry, null, 2));
+
+    // ===================================================
+    // 2️⃣ If chart failed → DO NOT CHARGE
+    // ===================================================
+    if (!chartEntry?.ok) {
+      return res.status(400).json({
+        ok: false,
+        error: "chart_data_unavailable",
+        details:
+          chartEntry?.warnings?.[0] || "Chart analysis unavailable",
+      });
+    }
+
+    // ===================================================
+    // 3️⃣ Charge ONLY if analysis is valid
     // ===================================================
     const feeResult = await chargeServiceFee({
       user,
@@ -58,12 +77,8 @@ router.post("/chart-analysis", async (req, res) => {
     });
 
     // ===================================================
-    // Run chart analysis after successful fee charge
+    // 4️⃣ Return result
     // ===================================================
-    const chartEntry = await analyzeChartEntry(cleanTokenMint);
-
-console.log("🔥 chartEntry result:", JSON.stringify(chartEntry, null, 2));
-
     return res.status(200).json({
       ok: true,
       walletAddress: cleanWalletAddress,
@@ -76,15 +91,25 @@ console.log("🔥 chartEntry result:", JSON.stringify(chartEntry, null, 2));
       chartEntry,
       analyzedAt: new Date(),
     });
-  } catch (error) {
-    console.error("POST /api/tokens/chart-analysis error:", error);
+ } catch (error) {
+  console.error("POST /api/tokens/chart-analysis error:", error);
 
-    return res.status(500).json({
+  if (
+    error?.message?.includes("insufficient") ||
+    error?.message?.includes("balance")
+  ) {
+    return res.status(400).json({
       ok: false,
-      error: "Failed to run chart analysis",
-      details: error?.message || String(error),
+      error: "insufficient_balance",
+      message: "You do not have enough SOL to run chart analysis",
     });
   }
-});
+
+  return res.status(500).json({
+    ok: false,
+    error: "Failed to run chart analysis",
+    details: error?.message || String(error),
+  });
+}
 
 export default router;
