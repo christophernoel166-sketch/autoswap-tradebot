@@ -56,6 +56,7 @@ const [scanError, setScanError] = useState("");
 const [chartEntry, setChartEntry] = useState(null);
 const [chartLoading, setChartLoading] = useState(false);
 const [chartError, setChartError] = useState("");
+const [showChartConfirm, setShowChartConfirm] = useState(false);
 // ================================
 // CUSTOM CONDITION MODE STATE
 // ================================
@@ -1313,6 +1314,8 @@ async function reRequestChannel(channelId) {
   chartLoading={chartLoading}
   chartError={chartError}
   handleChartAnalysis={handleChartAnalysis}
+  showChartConfirm={showChartConfirm}
+  setShowChartConfirm={setShowChartConfirm}
 />
 
     <EliteAnalytics

@@ -79,6 +79,8 @@ export default function ManualTrade({
   chartLoading,
   chartError,
   handleChartAnalysis,
+showChartConfirm,
+setShowChartConfirm,
 }) {
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
@@ -236,8 +238,6 @@ const chartActionColor =
               </div>
             </div>
 
-
-
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
                 <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
@@ -274,7 +274,7 @@ const chartActionColor =
     {!chartEntry ? (
       <button
         type="button"
-        onClick={handleChartAnalysis}
+        onClick={() => setShowChartConfirm(true)}
         disabled={chartLoading || !walletAddress}
         className="px-5 py-3 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -313,6 +313,9 @@ const chartActionColor =
     ) : null}
   </div>
 ) : (
+
+
+
               <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
                 Buy is unavailable for this token right now.
               </div>
@@ -816,22 +819,53 @@ const chartActionColor =
               </Section>
 
               <Section title="Failed Rules">
-                {evaluation?.failedRules?.length ? (
-                  <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
-                    {evaluation.failedRules.map((item, idx) => (
-                      <li key={`fail-${idx}`}>• {item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No failed rules.
-                  </div>
-                )}
-              </Section>
-            </div>
-          ) : null}
-        </>
-      ) : null}
+  {evaluation?.failedRules?.length ? (
+    <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
+      {evaluation.failedRules.map((item, idx) => (
+        <li key={`fail-${idx}`}>• {item}</li>
+      ))}
+    </ul>
+  ) : (
+    <div className="text-sm text-gray-500 dark:text-gray-400">
+      No failed rules.
     </div>
-  );
-}
+  )}
+</Section>
+</div>
+) : null}
+</>
+
+{showChartConfirm && (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
+    <div className="bg-white dark:bg-gray-900 rounded-xl p-6 w-full max-w-md shadow-xl">
+      <h2 className="text-lg font-semibold mb-3 text-gray-900 dark:text-white">
+        Activate Chart Analysis
+      </h2>
+
+      <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
+        This will run advanced chart analysis to help you find the best entry.
+        <br /><br />
+        A small analysis fee will be charged from your trading wallet.
+      </p>
+
+      <div className="flex gap-3">
+        <button
+          onClick={() => setShowChartConfirm(false)}
+          className="flex-1 px-4 py-2 rounded-lg bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-white"
+        >
+          Cancel
+        </button>
+
+        <button
+          onClick={async () => {
+            setShowChartConfirm(false);
+            await handleChartAnalysis();
+          }}
+          className="flex-1 px-4 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white"
+        >
+          Continue
+        </button>
+      </div>
+    </div>
+  </div>
+)}
