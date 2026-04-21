@@ -75,6 +75,10 @@ export default function ManualTrade({
   scanResult,
   scanError,
   walletAddress,
+  chartEntry,
+  chartLoading,
+  chartError,
+  handleChartAnalysis,
 }) {
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
@@ -83,7 +87,7 @@ export default function ManualTrade({
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
-const chartEntry = scanResult?.chartEntry || null;
+
 
   const topHolders =
     scanResult?.holderSafety?.topHolders ||
@@ -266,26 +270,49 @@ const chartActionColor =
             </div>
 
             {showBuy ? (
-              <div className="mt-4 space-y-2">
-                <button
-                  type="button"
-                  onClick={handleManualBuy}
-                  disabled={!showBuy || !walletAddress}
-                  className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  {buyConfidence === "MEDIUM"
-                    ? "Buy Token (Caution)"
-                    : "Buy Token"}
-                </button>
+  <div className="mt-4 space-y-3">
+    {!chartEntry ? (
+      <button
+        type="button"
+        onClick={handleChartAnalysis}
+        disabled={chartLoading || !walletAddress}
+        className="px-5 py-3 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+      >
+        {chartLoading
+          ? "Activating Chart Analysis..."
+          : "Activate Chart Analysis (0.001 SOL)"}
+      </button>
+    ) : (
+      <div className="text-sm text-green-700 dark:text-green-400">
+        ✅ Chart analysis activated
+      </div>
+    )}
 
-                {buyConfidence === "MEDIUM" ? (
-                  <div className="text-sm text-yellow-700 dark:text-yellow-400">
-                    ⚠️ Caution trade: buy is allowed, but this token is not in
-                    the safest category.
-                  </div>
-                ) : null}
-              </div>
-            ) : (
+    {chartError ? (
+      <div className="text-sm text-red-600 dark:text-red-400">
+        {chartError}
+      </div>
+    ) : null}
+
+    <button
+      type="button"
+      onClick={handleManualBuy}
+      disabled={!showBuy || !walletAddress}
+      className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
+    >
+      {buyConfidence === "MEDIUM"
+        ? "Buy Token (Caution)"
+        : "Buy Token"}
+    </button>
+
+    {buyConfidence === "MEDIUM" ? (
+      <div className="text-sm text-yellow-700 dark:text-yellow-400">
+        ⚠️ Caution trade: buy is allowed, but this token is not in
+        the safest category.
+      </div>
+    ) : null}
+  </div>
+) : (
               <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
                 Buy is unavailable for this token right now.
               </div>

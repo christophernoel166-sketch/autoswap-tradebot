@@ -31,13 +31,13 @@ export default function AutoswapDashboard() {
   const { publicKey, connected } = useWallet();
 
   const [walletAddress, setWalletAddress] = useState("");
-  const [positions, setPositions] = useState([]);
-  const [history, setHistory] = useState([]);
+const [positions, setPositions] = useState([]);
+const [history, setHistory] = useState([]);
 const [showTradeHistory, setShowTradeHistory] = useState(false);
-  const [availableChannels, setAvailableChannels] = useState([]);
-  const [userChannels, setUserChannels] = useState([]);
-  const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
-  const [showDepositModal, setShowDepositModal] = useState(false);
+const [availableChannels, setAvailableChannels] = useState([]);
+const [userChannels, setUserChannels] = useState([]);
+const [message, setMessage] = useState(null);const [user, setUser] = useState(null);
+const [showDepositModal, setShowDepositModal] = useState(false);
 const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
 const [mevProtection, setMevProtection] = useState(true);
@@ -53,6 +53,9 @@ const [manualTokenMint, setManualTokenMint] = useState("");
 const [scanLoading, setScanLoading] = useState(false);
 const [scanResult, setScanResult] = useState(null);
 const [scanError, setScanError] = useState("");
+const [chartEntry, setChartEntry] = useState(null);
+const [chartLoading, setChartLoading] = useState(false);
+const [chartError, setChartError] = useState("");
 // ================================
 // CUSTOM CONDITION MODE STATE
 // ================================
@@ -475,6 +478,9 @@ async function scanManualToken() {
     setScanLoading(true);
     setScanError("");
     setScanResult(null);
+    setChartEntry(null);
+setChartError("");
+setChartLoading(false);
 
     if (!walletAddress) {
       throw new Error("Connect wallet first");
@@ -512,6 +518,46 @@ async function scanManualToken() {
     setScanLoading(false);
   }
 }
+
+async function handleChartAnalysis() {
+  try {
+    setChartLoading(true);
+    setChartError("");
+    setChartEntry(null);
+
+    if (!walletAddress) {
+      throw new Error("Connect wallet first");
+    }
+
+    if (!scanResult?.token?.mintAddress) {
+      throw new Error("Scan a token first");
+    }
+
+    const res = await fetch(`${API_BASE}/api/tokens/chart-analysis`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        walletAddress,
+        tokenMint: scanResult.token.mintAddress,
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Chart analysis failed");
+    }
+
+    setChartEntry(data.chartEntry || null);
+  } catch (err) {
+    setChartError(err.message || "Chart analysis failed");
+  } finally {
+    setChartLoading(false);
+  }
+}
+
 /* --- FETCH USER CHANNEL SUBSCRIPTIONS (STEP 5.5) --- */
 async function fetchUserChannels() {
   try {
@@ -1263,6 +1309,10 @@ async function reRequestChannel(channelId) {
   scanResult={scanResult}
   scanError={scanError}
   walletAddress={walletAddress}
+  chartEntry={chartEntry}
+  chartLoading={chartLoading}
+  chartError={chartError}
+  handleChartAnalysis={handleChartAnalysis}
 />
 
     <EliteAnalytics
