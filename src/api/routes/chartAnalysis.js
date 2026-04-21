@@ -5,7 +5,7 @@ import { chargeServiceFee } from "../../withdraw/processWithdrawal.js";
 
 const router = express.Router();
 
-const CHART_ANALYSIS_FEE_SOL = 0.0001;
+const CHART_ANALYSIS_FEE_SOL = Number(process.env.CHART_ANALYSIS_FEE_SOL || 0.001);
 
 // =====================================================
 // PAID CHART ANALYSIS ROUTE
