@@ -548,8 +548,10 @@ async function handleChartAnalysis() {
     const data = await res.json();
 
     if (!res.ok || !data.ok) {
-      throw new Error(data?.error || "Chart analysis failed");
-    }
+  throw new Error(
+    data?.message || data?.error || "Chart analysis failed"
+  );
+}
 
     setChartEntry(data.chartEntry || null);
   } catch (err) {
