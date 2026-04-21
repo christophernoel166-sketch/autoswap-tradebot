@@ -47,7 +47,9 @@ router.post("/chart-analysis", async (req, res) => {
       });
     }
 
-if (!scanResult?.pairAddress) {
+const { pairAddress } = req.body || {};
+
+if (!pairAddress) {
   return res.status(400).json({
     ok: false,
     error: "no_liquidity",
