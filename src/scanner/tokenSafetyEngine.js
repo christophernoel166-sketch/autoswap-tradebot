@@ -681,32 +681,10 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
 
   const failedRules = runHardFailChecks(metrics);
 
-  if (failedRules.length > 0) {
-    return {
-      verdict: VERDICTS.UNSAFE,
-      score: 0,
-      showBuy: false,
-      buyConfidence: "NONE",
-      failedRules,
-      reasons: [],
-      warnings: [],
-      missingFields: [],
-      metrics,
-      categoryScores: {
-        market: 0,
-        holderSafety: 0,
-        walletIntelligence: 0,
-        profitWallets: 0,
-        riskStructure: 0,
-        momentum: 0,
-        marketIntegrity: 0,
-        rugRisk: 0,
-      },
-      scannedAt,
-      expiresAt,
-    };
-  }
+  // Instead of killing the token, convert hard fails into score penalty
+const hardFailPenalty = Math.min(failedRules.length * 8, 32);
 
+// You can optionally surface them as warnings later
   const market = scoreMarket(metrics);
   const holderSafety = scoreHolderSafety(metrics);
   const walletIntelligence = scoreWalletIntelligence(metrics);
@@ -716,15 +694,18 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
   const marketIntegrity = scoreMarketIntegrity(metrics);
   const rugRisk = scoreRugRisk(metrics);
 
-  const totalScore =
-    market.score +
-    holderSafety.score +
-    walletIntelligence.score +
-    profitWallets.score +
-    riskStructure.score +
-    momentum.score +
-    marketIntegrity.score +
-    rugRisk.score;
+  let totalScore =
+  market.score +
+  holderSafety.score +
+  walletIntelligence.score +
+  profitWallets.score +
+  riskStructure.score +
+  momentum.score +
+  marketIntegrity.score +
+  rugRisk.score;
+
+// Apply penalty from failed rules
+totalScore = Math.max(0, totalScore - hardFailPenalty);
 
   let verdict = VERDICTS.UNSAFE;
   if (totalScore >= SCORE_THRESHOLDS.safe) {
@@ -758,38 +739,42 @@ export function evaluateTokenSafety(rawMetrics = {}, options = {}) {
 
   const roundedScore = round2(totalScore);
 
-  return {
-    verdict,
-    score: roundedScore,
-    showBuy:
-      verdict === VERDICTS.SAFE ||
-      (verdict === VERDICTS.CAUTION &&
-        roundedScore >= SCORE_THRESHOLDS.caution),
-    buyConfidence:
-      verdict === VERDICTS.SAFE
-        ? "HIGH"
-        : verdict === VERDICTS.CAUTION
-        ? "MEDIUM"
-        : "NONE",
-    failedRules: [],
-    reasons,
-    warnings,
-    missingFields: [],
-    metrics,
-    categoryScores: {
-      market: market.score,
-      holderSafety: holderSafety.score,
-      walletIntelligence: walletIntelligence.score,
-      profitWallets: profitWallets.score,
-      riskStructure: riskStructure.score,
-      momentum: momentum.score,
-      marketIntegrity: marketIntegrity.score,
-      rugRisk: rugRisk.score,
-    },
-    scannedAt,
-    expiresAt,
-  };
-}
+  const allWarnings = uniqueStrings([
+  ...warnings,
+  ...failedRules,
+]);
+
+return {
+  verdict,
+  score: roundedScore,
+  showBuy:
+    verdict === VERDICTS.SAFE ||
+    (verdict === VERDICTS.CAUTION &&
+      roundedScore >= SCORE_THRESHOLDS.caution),
+  buyConfidence:
+    verdict === VERDICTS.SAFE
+      ? "HIGH"
+      : verdict === VERDICTS.CAUTION
+      ? "MEDIUM"
+      : "NONE",
+  failedRules,
+  reasons,
+  warnings: allWarnings,
+  missingFields: [],
+  metrics,
+  categoryScores: {
+    market: market.score,
+    holderSafety: holderSafety.score,
+    walletIntelligence: walletIntelligence.score,
+    profitWallets: profitWallets.score,
+    riskStructure: riskStructure.score,
+    momentum: momentum.score,
+    marketIntegrity: marketIntegrity.score,
+    rugRisk: rugRisk.score,
+  },
+  scannedAt,
+  expiresAt,
+};
 
 export function canExecuteManualBuy(scanResult, now = new Date()) {
   if (!scanResult) {
