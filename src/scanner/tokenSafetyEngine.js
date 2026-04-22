@@ -816,18 +816,25 @@ export function canExecuteManualBuy(scanResult, now = new Date()) {
   }
 
   if (verdict === VERDICTS.SAFE) {
-    return { ok: true };
-  }
-
-  if (verdict === VERDICTS.CAUTION) {
-    return { ok: true };
-  }
-
-  return {
-    ok: false,
-    reason: "Token is unsafe",
-  };
+  return { ok: true };
 }
+
+if (verdict === VERDICTS.CAUTION) {
+  return { ok: true };
+}
+
+if (verdict === "CONDITION_MATCHED") {
+  return { ok: true };
+}
+
+if (verdict === "NO_CONDITION_SET" && showBuy) {
+  return { ok: true };
+}
+
+return {
+  ok: false,
+  reason: "Token is unsafe",
+};
 
 export function formatScanResponse({
   token = {},
