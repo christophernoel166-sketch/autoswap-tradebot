@@ -835,6 +835,7 @@ return {
   ok: false,
   reason: "Token is unsafe",
 };
+}
 
 export function formatScanResponse({
   token = {},
