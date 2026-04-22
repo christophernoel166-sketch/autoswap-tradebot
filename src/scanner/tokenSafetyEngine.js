@@ -775,7 +775,7 @@ return {
   scannedAt,
   expiresAt,
 };
-
+}
 export function canExecuteManualBuy(scanResult, now = new Date()) {
   if (!scanResult) {
     return { ok: false, reason: "No scan result found" };
