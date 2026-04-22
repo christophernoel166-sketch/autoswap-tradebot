@@ -29,6 +29,7 @@ import { analyzeChartEntry } from "../../services/chartEntryService.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
+const SCAN_EXPIRY_MS = 2 * 60 * 1000;
 
 function hasAnyTokenCondition(conditions = {}) {
   if (!conditions || typeof conditions !== "object") return false;
@@ -816,7 +817,7 @@ if (!hasConditions) {
       failedRules: [],
     },
     scannedAt: new Date(),
-    expiresAt: null,
+expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
     customMode: {
       enabled: true,
       hasConditions: false,
@@ -981,7 +982,7 @@ try {
         failedRules: conditionCheck.failedRules,
       },
       scannedAt: new Date(),
-      expiresAt: null,
+expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
       customMode: {
         enabled: true,
         hasConditions: true,
