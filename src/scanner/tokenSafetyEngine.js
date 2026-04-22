@@ -1,6 +1,6 @@
 // src/scanner/tokenSafetyEngine.js
 
-export const SCAN_RESULT_TTL_MS = 30 * 1000;
+export const SCAN_RESULT_TTL_MS = 2 * 60 * 1000;
 
 export const VERDICTS = {
   SAFE: "SAFE",
