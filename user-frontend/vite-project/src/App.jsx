@@ -34,7 +34,7 @@ const isDashboard = location.pathname === "/dashboard";
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
       {/* Top bar */}
       <div className="px-4 py-3 border-b bg-white dark:bg-gray-800 flex justify-between items-center">
-        <h1 className="text-xl font-semibold">Autoswap Trading Dashboard</h1>
+        <h1 className="text-xl font-semibold">Autoswaps Trading</h1>
 
         <div className="flex items-center gap-3">
           <button
