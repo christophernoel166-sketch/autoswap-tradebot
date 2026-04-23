@@ -22,6 +22,7 @@ function AppContent({
 }) {
   const navigate = useNavigate();
   const location = useLocation();
+const isDashboard = location.pathname === "/dashboard";
 
   useEffect(() => {
     if (connected && publicKey && location.pathname === "/") {
@@ -31,25 +32,26 @@ function AppContent({
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
-      {/* Top bar */}
-      <div className="px-4 py-3 border-b bg-white dark:bg-gray-800 flex justify-between items-center">
-        <h1 className="text-xl font-semibold">Autoswap Trading Dashboard</h1>
+      {isDashboard && (
+  <div className="px-4 py-3 border-b bg-white dark:bg-gray-800 flex justify-between items-center">
+    <h1 className="text-xl font-semibold">Autoswap Trading Dashboard</h1>
 
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="text-xs px-3 py-2 rounded border
-                       bg-gray-100 hover:bg-gray-200
-                       dark:bg-gray-700 dark:hover:bg-gray-600
-                       dark:border-gray-600 transition"
-            title="Toggle theme"
-          >
-            {theme === "dark" ? "🌞 Light" : "🌙 Dark"}
-          </button>
+    <div className="flex items-center gap-3">
+      <button
+        onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+        className="text-xs px-3 py-2 rounded border
+                   bg-gray-100 hover:bg-gray-200
+                   dark:bg-gray-700 dark:hover:bg-gray-600
+                   dark:border-gray-600 transition"
+        title="Toggle theme"
+      >
+        {theme === "dark" ? "🌞 Light" : "🌙 Dark"}
+      </button>
 
-          <WalletMultiButton />
-        </div>
-      </div>
+      <WalletMultiButton />
+    </div>
+  </div>
+)}
 
       <Routes>
         <Route path="/" element={<LandingPage />} />
