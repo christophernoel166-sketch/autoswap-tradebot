@@ -18,7 +18,7 @@ export default function LandingPage() {
             </h1>
 
             <p className="text-lg text-gray-300 mb-8 max-w-xl">
-              Autoswap helps you scan tokens, apply your own trading conditions,
+              Autoswaps helps you scan tokens, apply your own trading conditions,
               unlock chart analysis, and automate execution from one dashboard.
             </p>
 
