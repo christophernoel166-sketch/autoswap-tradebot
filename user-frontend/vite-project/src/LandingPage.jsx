@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 
 export default function LandingPage() {
   const navigate = useNavigate();
@@ -22,13 +23,15 @@ export default function LandingPage() {
               unlock chart analysis, and automate execution from one dashboard.
             </p>
 
-            <div className="flex flex-wrap gap-4">
-              <button
-                onClick={() => navigate("/dashboard")}
-                className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
-              >
-                Enter Dashboard
-              </button>
+            <div className="flex flex-wrap gap-4 items-center">
+  <WalletMultiButton />
+
+  <button
+    onClick={() => navigate("/dashboard")}
+    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
+  >
+    Enter Dashboard
+  </button>
 
               <a
                 href="#features"
