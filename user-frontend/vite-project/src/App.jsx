@@ -13,6 +13,7 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import { useWallet } from "@solana/wallet-adapter-react";
 import LandingPage from "./LandingPage";
 import BestSolanaTradingBot from "./BestSolanaTradingBot";
+import FAQPage from "./FAQPage";
 
 function AppContent({
   theme,
