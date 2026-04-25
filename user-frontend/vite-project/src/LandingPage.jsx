@@ -33,6 +33,29 @@ export default function LandingPage() {
     Enter Dashboard
   </button>
 
+  <a
+    href="/best-solana-trading-bot"
+    className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
+  >
+    Learn About the Bot
+  </a>
+
+  <a
+    href="#features"
+    className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
+  >
+    Explore Features
+  </a>
+</div>
+  <WalletMultiButton />
+
+  <button
+    onClick={() => navigate("/dashboard")}
+    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
+  >
+    Enter Dashboard
+  </button>
+
               <a
                 href="#features"
                 className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"

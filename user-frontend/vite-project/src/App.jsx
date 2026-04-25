@@ -12,6 +12,7 @@ import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import { useWallet } from "@solana/wallet-adapter-react";
 import LandingPage from "./LandingPage";
+import BestSolanaTradingBot from "./BestSolanaTradingBot";
 
 function AppContent({
   theme,
@@ -58,6 +59,7 @@ const isDashboard = location.pathname === "/dashboard";
           path="/dashboard"
           element={<AutoswapDashboard walletAddress={walletAddress} />}
         />
+      <Route path="/best-solana-trading-bot" element={<BestSolanaTradingBot />} />
       </Routes>
     </div>
   );
