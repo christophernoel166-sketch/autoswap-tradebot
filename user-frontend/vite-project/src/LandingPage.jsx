@@ -23,38 +23,24 @@ export default function LandingPage() {
               unlock chart analysis, and automate execution from one dashboard.
             </p>
 
+            {/* 🔥 BUTTON SECTION */}
             <div className="flex flex-wrap gap-4 items-center">
-  <WalletMultiButton />
+              <WalletMultiButton />
 
-  <button
-    onClick={() => navigate("/dashboard")}
-    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
-  >
-    Enter Dashboard
-  </button>
+              <button
+                onClick={() => navigate("/dashboard")}
+                className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
+              >
+                Enter Dashboard
+              </button>
 
-  <a
-    href="/best-solana-trading-bot"
-    className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
-  >
-    Learn About the Bot
-  </a>
-
-  <a
-    href="#features"
-    className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
-  >
-    Explore Features
-  </a>
-</div>
-  <WalletMultiButton />
-
-  <button
-    onClick={() => navigate("/dashboard")}
-    className="px-6 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium transition"
-  >
-    Enter Dashboard
-  </button>
+              {/* ✅ SEO LINK */}
+              <a
+                href="/best-solana-trading-bot"
+                className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
+              >
+                Learn About the Bot
+              </a>
 
               <a
                 href="#features"
@@ -64,6 +50,7 @@ export default function LandingPage() {
               </a>
             </div>
 
+            {/* FEATURES QUICK CARDS */}
             <div className="grid grid-cols-3 gap-4 mt-10">
               <div className="rounded-2xl border border-gray-800 bg-white/5 p-4">
                 <div className="text-2xl font-bold">Fast</div>
@@ -88,12 +75,15 @@ export default function LandingPage() {
             </div>
           </div>
 
+          {/* RIGHT SIDE CARD */}
           <div>
             <div className="rounded-3xl border border-gray-800 bg-white/5 p-6 shadow-2xl">
               <div className="rounded-2xl bg-gray-950 border border-gray-800 p-5">
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <div className="text-sm text-gray-400">Token Scan Preview</div>
+                    <div className="text-sm text-gray-400">
+                      Token Scan Preview
+                    </div>
                     <div className="text-xl font-semibold mt-1">
                       SCHIZO SIGNALS
                     </div>
@@ -114,7 +104,9 @@ export default function LandingPage() {
                   </div>
                   <div className="rounded-xl bg-white/5 p-4">
                     <div className="text-sm text-gray-400">Buy / Sell</div>
-                    <div className="text-lg font-semibold mt-1">181 / 127</div>
+                    <div className="text-lg font-semibold mt-1">
+                      181 / 127
+                    </div>
                   </div>
                   <div className="rounded-xl bg-white/5 p-4">
                     <div className="text-sm text-gray-400">Risk Profile</div>
@@ -136,6 +128,7 @@ export default function LandingPage() {
           </div>
         </div>
 
+        {/* FEATURES SECTION */}
         <div id="features" className="mt-20 grid md:grid-cols-3 gap-6">
           <div className="rounded-2xl border border-gray-800 bg-white/5 p-6">
             <h3 className="text-xl font-semibold mb-3">Token Scanner</h3>
@@ -146,7 +139,9 @@ export default function LandingPage() {
           </div>
 
           <div className="rounded-2xl border border-gray-800 bg-white/5 p-6">
-            <h3 className="text-xl font-semibold mb-3">Custom Conditions</h3>
+            <h3 className="text-xl font-semibold mb-3">
+              Custom Conditions
+            </h3>
             <p className="text-gray-400">
               Save your own conditions and decide how strict or flexible your
               trading filter should be.
@@ -154,12 +149,24 @@ export default function LandingPage() {
           </div>
 
           <div className="rounded-2xl border border-gray-800 bg-white/5 p-6">
-            <h3 className="text-xl font-semibold mb-3">Execution Control</h3>
+            <h3 className="text-xl font-semibold mb-3">
+              Execution Control
+            </h3>
             <p className="text-gray-400">
               Manage slippage, MEV protection, TP levels, stop loss, and manual
               execution from one place.
             </p>
           </div>
+        </div>
+
+        {/* 🔥 BOTTOM SEO LINK */}
+        <div className="mt-12 text-center">
+          <a
+            href="/best-solana-trading-bot"
+            className="text-sm text-purple-400 hover:underline"
+          >
+            Best Solana Trading Bot Guide →
+          </a>
         </div>
       </div>
     </div>
