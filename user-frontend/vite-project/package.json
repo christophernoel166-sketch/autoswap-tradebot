@@ -25,6 +25,7 @@
     "lucide-react": "^0.556.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "react-helmet-async": "^3.0.0",
     "react-hot-toast": "^2.6.0",
     "react-qr-code": "^2.0.18",
     "react-router-dom": "^7.14.2",
