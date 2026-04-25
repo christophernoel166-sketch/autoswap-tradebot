@@ -42,6 +42,13 @@ export default function LandingPage() {
                 Learn About the Bot
               </a>
 
+            <a
+  href="/faq"
+  className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
+>
+  FAQ
+</a>
+
               <a
                 href="#features"
                 className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
