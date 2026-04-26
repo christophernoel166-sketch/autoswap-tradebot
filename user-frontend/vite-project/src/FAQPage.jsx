@@ -1,5 +1,6 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 
 export default function FAQPage() {
   const navigate = useNavigate();
@@ -48,6 +49,19 @@ export default function FAQPage() {
   ];
 
   return (
+  <>
+    <Helmet>
+      <title>Autoswaps FAQ | Solana Trading Bot Questions</title>
+      <meta
+        name="description"
+        content="Frequently asked questions about Autoswaps, Telegram signal trading, Solana token scanning, custom trading conditions, and chart analysis."
+      />
+      <meta
+        name="keywords"
+        content="Autoswaps FAQ, Solana trading bot FAQ, Telegram signal trading bot, Solana token scanner, crypto trading dashboard"
+      />
+    </Helmet>
+
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-4xl mx-auto px-6 py-16">
         <button
@@ -94,5 +108,6 @@ export default function FAQPage() {
         </div>
       </div>
     </div>
+   </>
   );
 }
