@@ -1,11 +1,25 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
 import { WalletMultiButton } from "@solana/wallet-adapter-react-ui";
+import { Helmet } from "react-helmet-async";
 
 export default function LandingPage() {
   const navigate = useNavigate();
 
   return (
+  <>
+    <Helmet>
+      <title>Autoswaps | Solana Meme Coin Trading Bot</title>
+      <meta
+        name="description"
+        content="Autoswaps is a Solana meme coin trading bot for token scanning, custom trading conditions, chart analysis, and assisted execution."
+      />
+      <meta
+        name="keywords"
+        content="Solana trading bot, Solana meme coin bot, crypto trading bot, token scanner, Autoswaps"
+      />
+    </Helmet>
+
     <div className="min-h-[calc(100vh-64px)] bg-gradient-to-b from-gray-950 via-gray-900 to-black text-white">
       <div className="max-w-6xl mx-auto px-6 py-16">
         <div className="grid lg:grid-cols-2 gap-12 items-center">
@@ -166,7 +180,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* 🔥 BOTTOM SEO LINK */}
+              {/* 🔥 BOTTOM SEO LINK */}
         <div className="mt-12 text-center">
           <a
             href="/best-solana-trading-bot"
@@ -177,5 +191,6 @@ export default function LandingPage() {
         </div>
       </div>
     </div>
+  </>
   );
 }
