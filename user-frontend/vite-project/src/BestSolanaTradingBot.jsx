@@ -5,7 +5,7 @@ import { Helmet } from "react-helmet-async";
 export default function BestSolanaTradingBot() {
   const navigate = useNavigate();
 
-  return (
+ return (
   <>
     <Helmet>
       <title>Best Solana Trading Bot for Meme Coins | Autoswaps</title>
@@ -122,5 +122,6 @@ export default function BestSolanaTradingBot() {
         </div>
       </div>
     </div>
+  </>
   );
 }
