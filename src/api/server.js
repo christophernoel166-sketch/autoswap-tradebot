@@ -68,6 +68,15 @@ app.use((req, res, next) => {
   next();
 });
 
+app.get("/robots.txt", (_req, res) => {
+  res.type("text/plain");
+  res.send(`User-agent: *
+Allow: /
+
+Sitemap: http://autoswaps.online/sitemap.xml
+`);
+});
+
 app.use(express.json());
   // ============================
   // Socket.io
