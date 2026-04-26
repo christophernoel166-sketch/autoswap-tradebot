@@ -1,10 +1,24 @@
 import React from "react";
 import { useNavigate } from "react-router-dom";
+import { Helmet } from "react-helmet-async";
 
 export default function BestSolanaTradingBot() {
   const navigate = useNavigate();
 
   return (
+  <>
+    <Helmet>
+      <title>Best Solana Trading Bot for Meme Coins | Autoswaps</title>
+      <meta
+        name="description"
+        content="Discover Autoswaps, a Solana trading bot for meme coin traders with token scanning, custom conditions, chart analysis, and execution control."
+      />
+      <meta
+        name="keywords"
+        content="best Solana trading bot, Solana meme coin trading bot, automated Solana trading, Bonkbot alternative, crypto trading bot"
+      />
+    </Helmet>
+
     <div className="min-h-screen bg-gray-950 text-white">
       <div className="max-w-4xl mx-auto px-6 py-16">
         <button
