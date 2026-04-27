@@ -56,14 +56,25 @@ const isDashboard = location.pathname === "/dashboard";
       </div>
 
       <Routes>
-        <Route path="/" element={<LandingPage />} />
-        <Route
-          path="/dashboard"
-          element={<AutoswapDashboard walletAddress={walletAddress} />}
-        />
-      <Route path="/best-solana-trading-bot" element={<BestSolanaTradingBot />} />
-      <Route path="/faq" element={<FAQPage />} />
-      </Routes>
+  <Route path="/" element={<LandingPage />} />
+
+  <Route
+    path="/dashboard"
+    element={<AutoswapDashboard walletAddress={walletAddress} />}
+  />
+
+  <Route
+    path="/best-solana-trading-bot"
+    element={<BestSolanaTradingBot />}
+  />
+
+  <Route path="/faq" element={<FAQPage />} />
+
+  <Route
+    path="/auto-trade-telegram-signals"
+    element={<AutoTradeTelegramSignals />}
+  />
+</Routes>
     </div>
   );
 }
