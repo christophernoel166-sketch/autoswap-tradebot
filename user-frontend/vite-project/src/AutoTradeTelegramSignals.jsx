@@ -43,7 +43,7 @@ export default function AutoTradeTelegramSignals() {
             trading settings.
           </p>
 
-          <article className="prose prose-invert prose-purple max-w-none">
+          <article className="space-y-8 text-gray-300 leading-relaxed">
             <h2>What Autoswaps Does</h2>
             <p>
               Autoswaps is not just a basic Telegram sniper. It is a fully
