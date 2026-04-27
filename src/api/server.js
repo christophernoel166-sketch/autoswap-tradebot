@@ -73,7 +73,7 @@ app.get("/robots.txt", (_req, res) => {
   res.send(`User-agent: *
 Allow: /
 
-Sitemap: http://autoswaps.online/sitemap.xml
+Sitemap: https://www.autoswaps.online/sitemap.xml
 `);
 });
 

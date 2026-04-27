@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://autoswaps.online/sitemap.xml
+Sitemap: https://www.autoswaps.online/sitemap.xml
