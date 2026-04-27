@@ -14,6 +14,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import LandingPage from "./LandingPage";
 import BestSolanaTradingBot from "./BestSolanaTradingBot";
 import FAQPage from "./FAQPage";
+import AutoTradeTelegramSignals from "./AutoTradeTelegramSignals";
 
 function AppContent({
   theme,

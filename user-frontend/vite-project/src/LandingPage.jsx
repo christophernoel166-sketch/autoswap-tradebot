@@ -69,6 +69,12 @@ export default function LandingPage() {
               >
                 Explore Features
               </a>
+           <a
+  href="/auto-trade-telegram-signals"
+  className="px-6 py-3 rounded-xl border border-gray-700 hover:border-gray-500 text-gray-200 transition"
+>
+  Telegram Auto-Trading
+</a>
             </div>
 
             {/* FEATURES QUICK CARDS */}
