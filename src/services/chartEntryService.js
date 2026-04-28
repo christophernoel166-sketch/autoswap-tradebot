@@ -4,7 +4,7 @@ const DEFAULT_OPTIONS = {
   symbol: "",
   timeframe: "5m",
   limit: 120,
-  minCandles: 80,
+  minCandles: 10,
   breakoutLookback: 20,
   supportResistanceLookback: 30,
 };
