@@ -233,9 +233,9 @@ export async function analyzeChartEntry(mintAddress, options = {}) {
   const highs = clean.map((c) => c.high);
   const lows = clean.map((c) => c.low);
 
-  const ema20 = ema(closes, 20);
-  const ema50 = ema(closes, 50);
-  const ema200 = ema(closes, 100); // reduced from 200 for meme tokens with short history
+  const ema20 = ema(closes, Math.min(20, clean.length));
+const ema50 = ema(closes, Math.min(50, clean.length));
+const ema200 = ema(closes, Math.min(100, clean.length));
   const rsi14 = rsi(closes, 14);
   const atr14 = atr(clean, 14);
 
