@@ -25,6 +25,7 @@ import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js"
 import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
 import User from "../../../models/User.js";
 import { analyzeChartEntry } from "../../services/chartEntryService.js";
+import { fetchLiquidityLockStatus } from "../../../scanner/fetchLiquidityLockStatus.js";
 
 
 const router = express.Router();
@@ -283,6 +284,7 @@ router.post("/scan", async (req, res) => {
 
     let market;
 
+const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
     // ================= MARKET FETCH =================
     try {
       market = await fetchTokenMarketData(tokenMint);
@@ -296,12 +298,15 @@ router.post("/scan", async (req, res) => {
             boosted: false,
           },
           rawMetrics: {
-            ageMinutes: null,
-            liquidityUsd: null,
-            marketCapUsd: null,
-            volume5mUsd: null,
-            buys5m: null,
-            sells5m: null,
+  ageMinutes: null,
+  liquidityUsd: null,
+  liquidityLocked: liquidityLock.liquidityLocked,
+  liquidityLockSource: liquidityLock.liquidityLockSource,
+  liquidityLockReason: liquidityLock.liquidityLockReason,
+  marketCapUsd: null,
+  volume5mUsd: null,
+  buys5m: null,
+  sells5m: null,
             holderCount: null,
             largestHolderPercent: null,
             top10HoldingPercent: null,
