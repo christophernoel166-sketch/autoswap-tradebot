@@ -25,7 +25,7 @@ import { fetchRiskStructureData } from "../../scanner/fetchRiskStructureData.js"
 import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
 import User from "../../../models/User.js";
 import { analyzeChartEntry } from "../../services/chartEntryService.js";
-import { fetchLiquidityLockStatus } from "../../../scanner/fetchLiquidityLockStatus.js";
+import { fetchLiquidityLockStatus } from "../../scanner/fetchLiquidityLockStatus.js";
 
 
 const router = express.Router();
