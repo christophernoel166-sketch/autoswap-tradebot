@@ -433,10 +433,14 @@ const ema200 = ema(closes, Math.min(100, clean.length));
     stopLoss: round(stopLoss),
     invalidation,
     targets: {
-      tp1: round(tp1),
-      tp2: round(tp2),
-    },
-    metrics: {
+  tp1: round(tp1),
+  tp2: round(tp2),
+  profitPotentialPct:
+    entryZone.ideal && tp2
+      ? round(((tp2 - entryZone.ideal) / entryZone.ideal) * 100, 2)
+      : null,
+},
+metrics: {
       currentPrice: round(price),
       ema20: round(ema20Val),
       ema50: round(ema50Val),
