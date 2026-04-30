@@ -701,6 +701,11 @@ router.post("/scan-custom-mode", async (req, res) => {
 
     const cleanWalletAddress = walletAddress.trim();
     const cleanTokenMint = tokenMint.trim();
+console.log("🔍 Custom mode liquidity lock check for:", cleanTokenMint);
+
+const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
+
+console.log("🔒 custom liquidityLock:", liquidityLock);
 
     const user = await User.findOne({ walletAddress: cleanWalletAddress });
     if (!user) {
@@ -950,6 +955,9 @@ try {
       metrics: {
         ageMinutes: market.metrics?.ageMinutes ?? null,
         liquidityUsd: market.metrics?.liquidityUsd ?? null,
+ liquidityLocked: liquidityLock.liquidityLocked,
+liquidityLockSource: liquidityLock.liquidityLockSource,
+liquidityLockReason: liquidityLock.liquidityLockReason,
         marketCapUsd: market.metrics?.marketCapUsd ?? null,
         volume5mUsd: market.metrics?.volume5mUsd ?? null,
         buys5m: market.metrics?.buys5m ?? null,
