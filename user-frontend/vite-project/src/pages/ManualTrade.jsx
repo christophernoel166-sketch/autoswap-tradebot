@@ -341,6 +341,25 @@ const chartActionColor =
                 label="Liquidity"
                 value={formatUsd(metrics?.liquidityUsd)}
               />
+             <div className="flex justify-between border-b border-gray-700 py-2">
+  <span className="text-gray-400">Liquidity Locked</span>
+  <span
+    className={
+      metrics?.liquidityLocked === true
+        ? "text-green-400"
+        : metrics?.liquidityLocked === false
+        ? "text-red-400"
+        : "text-yellow-400"
+    }
+  >
+    {metrics?.liquidityLocked === true
+      ? "Yes"
+      : metrics?.liquidityLocked === false
+      ? "No"
+      : "Unknown"}
+  </span>
+</div>
+             
               <MetricRow
                 label="Market Cap"
                 value={formatUsd(metrics?.marketCapUsd)}
