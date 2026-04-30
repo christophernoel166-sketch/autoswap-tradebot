@@ -106,7 +106,13 @@ function normalizeMetrics(raw = {}) {
   return {
     ageMinutes: toNumber(raw.ageMinutes),
     liquidityUsd: toNumber(raw.liquidityUsd),
-    marketCapUsd: toNumber(raw.marketCapUsd),
+liquidityLocked:
+  raw.liquidityLocked === true
+    ? true
+    : raw.liquidityLocked === false
+    ? false
+    : "unknown",
+marketCapUsd: toNumber(raw.marketCapUsd),
     volume5mUsd: toNumber(raw.volume5mUsd),
     buys5m: toNumber(raw.buys5m),
     sells5m: toNumber(raw.sells5m),
@@ -574,6 +580,9 @@ function scoreRugRisk(m) {
 function runHardFailChecks(m) {
   const failedRules = [];
 
+  if (m.liquidityLocked === false) {
+    failedRules.push("Liquidity is NOT locked — rug risk detected.");
+  }
   if (m.ageMinutes < HARD_FAIL_RULES.minAgeMinutes) {
     failedRules.push("Token is too new");
   }
