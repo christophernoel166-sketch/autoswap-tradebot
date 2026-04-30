@@ -284,7 +284,9 @@ router.post("/scan", async (req, res) => {
 
     let market;
 
+const cleanTokenMint = tokenMint.trim();
 const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
+console.log("🔒 liquidityLock:", liquidityLock);
     // ================= MARKET FETCH =================
     try {
       market = await fetchTokenMarketData(tokenMint);
@@ -549,14 +551,17 @@ const profitWalletData = await fetchProfitWalletData({
   context: {},
 });
     // ================= METRICS =================
-    const rawMetrics = {
-      ageMinutes: market.metrics.ageMinutes,
-      liquidityUsd: market.metrics.liquidityUsd,
-      marketCapUsd: market.metrics.marketCapUsd,
-      volume5mUsd: market.metrics.volume5mUsd,
-      buys5m: market.metrics.buys5m,
-      sells5m: market.metrics.sells5m,
-      boosted: market.metrics.boosted,
+const rawMetrics = {
+  ageMinutes: market.metrics.ageMinutes,
+  liquidityUsd: market.metrics.liquidityUsd,
+  liquidityLocked: liquidityLock.liquidityLocked,
+  liquidityLockSource: liquidityLock.liquidityLockSource,
+  liquidityLockReason: liquidityLock.liquidityLockReason,
+  marketCapUsd: market.metrics.marketCapUsd,
+  volume5mUsd: market.metrics.volume5mUsd,
+  buys5m: market.metrics.buys5m,
+  sells5m: market.metrics.sells5m,
+  boosted: market.metrics.boosted,
 
       holderCount: null,
       largestHolderPercent: holderData.largestHolderPercent,
