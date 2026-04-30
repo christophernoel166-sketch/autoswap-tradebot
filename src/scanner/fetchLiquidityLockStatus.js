@@ -23,8 +23,8 @@ export async function fetchLiquidityLockStatus(tokenMint) {
     );
 
     const data = res.data || {};
-    const risks = Array.isArray(data.risks) ? data.risks : [];
-
+console.log("🧪 RugCheck liquidity response:", JSON.stringify(data, null, 2));
+const risks = Array.isArray(data.risks) ? data.risks : [];
     const unlockedLiquidityRisk = risks.find((risk) => {
       const name = String(risk?.name || risk?.title || "").toLowerCase();
       const description = String(risk?.description || "").toLowerCase();
