@@ -54,8 +54,17 @@ export default function ChartEntrySection({
           <MetricRow label="Entry High" value={formatValue(chartEntry?.entryZone?.high)} />
           <MetricRow label="Ideal Entry" value={formatValue(chartEntry?.entryZone?.ideal)} />
           <MetricRow label="Stop Loss" value={formatValue(chartEntry?.stopLoss)} />
-          <MetricRow label="TP1" value={formatValue(chartEntry?.targets?.tp1)} />
-          <MetricRow label="TP2" value={formatValue(chartEntry?.targets?.tp2)} />
+<MetricRow label="TP1" value={formatValue(chartEntry?.targets?.tp1)} />
+<MetricRow label="TP2" value={formatValue(chartEntry?.targets?.tp2)} />
+<MetricRow
+  label="Profit Potential"
+  value={
+    chartEntry?.profitPotentialPct != null
+      ? `${chartEntry.profitPotentialPct}%`
+      : "N/A"
+  }
+/>
+
         </div>
 
         <div className="space-y-2">
