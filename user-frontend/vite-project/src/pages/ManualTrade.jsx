@@ -355,9 +355,9 @@ const chartActionColor =
 
             <Section title="Market">
               <MetricRow
-                label="Age"
-                value={formatValue(metrics?.ageMinutes, " minutes")}
-              />
+  label="Age"
+  value={formatTokenAge(metrics?.ageMinutes)}
+/>
               <MetricRow
                 label="Liquidity"
                 value={formatUsd(metrics?.liquidityUsd)}
