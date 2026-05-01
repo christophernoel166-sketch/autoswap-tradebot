@@ -2,9 +2,9 @@ import { fetchCandles } from "./ohlcvService.js";
 
 const DEFAULT_OPTIONS = {
   symbol: "",
-  timeframe: "5m",
+  timeframe: "1m",
   limit: 120,
-  minCandles: 10,
+  minCandles: 20,
   breakoutLookback: 20,
   supportResistanceLookback: 30,
 };
