@@ -16,6 +16,27 @@ function formatUsd(value) {
   })}`;
 }
 
+// AGE FUNCTION
+function formatTokenAge(minutes) {
+  const n = Number(minutes);
+
+  if (!Number.isFinite(n)) return "—";
+
+  if (n < 60) {
+    return `${Math.round(n)} minutes`;
+  }
+
+  if (n < 1440) {
+    const hours = Math.floor(n / 60);
+    const mins = Math.round(n % 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
+  const days = Math.floor(n / 1440);
+  const hours = Math.floor((n % 1440) / 60);
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+}
+
 function shortAddress(address) {
   if (!address || typeof address !== "string") return "—";
   return address.length > 12
