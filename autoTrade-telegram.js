@@ -1688,32 +1688,64 @@ async function monitorUser(mint, price, walletAddress, info, state) {
 
 
 // INTERNAL HELPER
-/**
- * ===================================================
- * 🛑 STOP LOSS — SELL ALL
- * ===================================================
- */
-if (change <= -profile.stopLossPercent) {
-  LOG.info({ walletAddress, mint, change }, "🛑 Stop-loss hit (queued sell)");
+// ===================================================
+// 📈 TRAILING ACTIVATION CHECK
+// ===================================================
 
-  const locked = await acquireSellLock(walletAddress, mint);
-  if (!locked) {
+const trailingDistancePct =
+  Number(profile.trailingDistancePercent || 0);
+
+const walletHigh =
+  state.highestPrices?.get(walletAddress);
+
+// ✅ trailing only active AFTER profit reaches trailingActivationPercent
+const activationProfitPct =
+  Number(profile.trailingActivationPercent || 5);
+
+const trailingShouldBeActive =
+  trailingDistancePct > 0 &&
+  change >= activationProfitPct;
+
+// ===================================================
+// 🛑 STOP LOSS ONLY BEFORE PROFIT
+// ===================================================
+
+if (!trailingShouldBeActive) {
+  const currentStopLoss =
+    info.dynamicStopLoss ?? profile.stopLossPercent;
+
+  if (change <= -currentStopLoss) {
     LOG.info(
-      { walletAddress, mint },
-      "⏭️ Sell skipped — duplicate sell lock"
+      {
+        walletAddress,
+        mint,
+        change,
+        currentStopLoss,
+      },
+      "🛑 Stop-loss hit (queued sell)"
     );
+
+    const locked =
+      await acquireSellLock(walletAddress, mint);
+
+    if (!locked) {
+      LOG.info(
+        { walletAddress, mint },
+        "⏭️ Sell skipped — duplicate sell lock"
+      );
+      return;
+    }
+
+    await enqueueSellJob({
+      walletAddress,
+      mint,
+      reason: "stop_loss",
+      percent: 100,
+      createdAt: Date.now(),
+    });
+
     return;
   }
-
-  await enqueueSellJob({
-    walletAddress,
-    mint,
-    reason: "stop_loss",
-    percent: 100,
-    createdAt: Date.now(),
-  });
-
-  return;
 }
 
 /**
@@ -1725,6 +1757,7 @@ if (info.tpStage < 1 && change >= profile.tp1Percent) {
   LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached (queued sell)");
 
   const locked = await acquireSellLock(walletAddress, mint);
+
   if (!locked) {
     LOG.info(
       { walletAddress, mint },
@@ -1741,8 +1774,9 @@ if (info.tpStage < 1 && change >= profile.tp1Percent) {
     createdAt: Date.now(),
   });
 
-  profile.stopLossPercent = 0;
+  info.dynamicStopLoss = 0; // break-even
   info.tpStage = 1;
+
   return;
 }
 
@@ -1755,6 +1789,7 @@ if (info.tpStage < 2 && change >= profile.tp2Percent) {
   LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached (queued sell)");
 
   const locked = await acquireSellLock(walletAddress, mint);
+
   if (!locked) {
     LOG.info(
       { walletAddress, mint },
@@ -1771,8 +1806,9 @@ if (info.tpStage < 2 && change >= profile.tp2Percent) {
     createdAt: Date.now(),
   });
 
-  profile.stopLossPercent = profile.tp2Percent;
+  info.dynamicStopLoss = profile.tp1Percent; // lock profit
   info.tpStage = 2;
+
   return;
 }
 
@@ -1785,6 +1821,7 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
   LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached (queued sell)");
 
   const locked = await acquireSellLock(walletAddress, mint);
+
   if (!locked) {
     LOG.info(
       { walletAddress, mint },
@@ -1802,24 +1839,49 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
   });
 
   info.tpStage = 3;
+
   return;
 }
 
+// ===================================================
+// 🛡️ DYNAMIC STOP AFTER TP — ALWAYS ACTIVE
+// ===================================================
+if (info.tpStage > 0 && info.dynamicStopLoss != null) {
+  if (change <= info.dynamicStopLoss) {
+    LOG.info(
+      { walletAddress, mint, change, dynamicStopLoss: info.dynamicStopLoss },
+      "🛡️ Dynamic stop hit after TP (queued sell)"
+    );
+
+    const locked = await acquireSellLock(walletAddress, mint);
+    if (!locked) return;
+
+    await enqueueSellJob({
+      walletAddress,
+      mint,
+      reason: "dynamic_stop",
+      percent: 100,
+      createdAt: Date.now(),
+    });
+
+    return;
+  }
+}
 
 // ===================================================
-// 🧪 DEBUG — TRAILING STATUS (rate-limited)
+// 🧪 DEBUG — TRAILING STATUS
 // ===================================================
-const trailingDistancePct = Number(profile.trailingDistancePercent || 0);
-const walletHigh = state.highestPrices?.get(walletAddress);
 
-info._lastTrailLogAt = info._lastTrailLogAt || 0;
-if (Date.now() - info._lastTrailLogAt > 15_000) { // every 15s per position
+info._lastTrailLogAt =
+  info._lastTrailLogAt || 0;
+
+if (Date.now() - info._lastTrailLogAt > 15_000) {
   info._lastTrailLogAt = Date.now();
 
   const dropFromPeakPct =
-  walletHigh != null && walletHigh > 0
-    ? ((walletHigh - price) / walletHigh) * 100
-    : null;
+    walletHigh != null && walletHigh > 0
+      ? ((walletHigh - price) / walletHigh) * 100
+      : null;
 
   LOG.info(
     {
@@ -1830,65 +1892,60 @@ if (Date.now() - info._lastTrailLogAt > 15_000) { // every 15s per position
       walletHigh,
       price,
       dropFromPeakPct,
-      trailingActive: walletHigh != null && trailingDistancePct > 0,
+      trailingActive: trailingShouldBeActive,
     },
     "🧪 trailing status"
   );
 }
 
-/**
- * ===================================================
- * 📉 TRAILING STOP — SELL ALL (PER WALLET, ACTIVE IMMEDIATELY)
- * ===================================================
- */
+// ===================================================
+// 📉 TRAILING STOP
+// ===================================================
 
-// ===================================================
-// 📉 TRAILING STOP (drawdown from peak)
-// ===================================================
-if (
-  trailingDistancePct > 0 &&
-  walletHigh != null &&
-  walletHigh > 0
-) {
-  const dropFromPeakPct = ((walletHigh - price) / walletHigh) * 100;
-  const trailingExitPrice = walletHigh * (1 - trailingDistancePct / 100);
+if (trailingShouldBeActive) {
+  const dropFromPeakPct =
+    ((walletHigh - price) / walletHigh) * 100;
+
+  const trailingExitPrice =
+    walletHigh * (1 - trailingDistancePct / 100);
 
   if (dropFromPeakPct >= trailingDistancePct) {
-  LOG.info(
-    {
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        entry,
+        walletHigh,
+        currentPrice: price,
+        trailingDistancePct,
+        dropFromPeakPct,
+        trailingExitPrice,
+      },
+      "📉 Trailing stop hit (queued sell)"
+    );
+
+    const locked =
+      await acquireSellLock(walletAddress, mint);
+
+    if (!locked) {
+      LOG.info(
+        { walletAddress, mint },
+        "⏭️ Sell skipped — duplicate sell lock"
+      );
+      return;
+    }
+
+    await enqueueSellJob({
       walletAddress,
       mint,
-      entry,
-      walletHigh,
-      currentPrice: price,
-      trailingDistancePct,
-      dropFromPeakPct,
-      trailingExitPrice,
-    },
-    "📉 Trailing stop hit (queued sell)"
-  );
+      reason: "trailing",
+      percent: 100,
+      createdAt: Date.now(),
+    });
 
-  const locked = await acquireSellLock(walletAddress, mint);
-  if (!locked) {
-    LOG.info(
-      { walletAddress, mint },
-      "⏭️ Sell skipped — duplicate sell lock"
-    );
     return;
   }
-
-  await enqueueSellJob({
-    walletAddress,
-    mint,
-    reason: "trailing",
-    percent: 100,
-    createdAt: Date.now(),
-  });
-
-  return;
 }
-
-} // close trailing stop IF
 } // ✅ THIS closes monitorUser
 
 // EXECUTE QUEUE SELL
@@ -2404,6 +2461,8 @@ try {
 
   // trailing is active immediately after buy
   trailingDistancePercent: Number(user.trailingDistance || 0),
+// activate trailing only after X% profit
+  trailingActivationPercent: Number(user.trailingTrigger || 5),
 },
       buyTxid,
       solAmount,
