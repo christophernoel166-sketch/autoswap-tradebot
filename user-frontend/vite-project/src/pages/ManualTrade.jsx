@@ -886,7 +886,7 @@ const chartActionColor =
             <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
               This will run advanced chart analysis to help you find the best entry.
               <br /><br />
-              A fee of <span className="font-semibold">0.0001 SOL</span> will be charged from your trading wallet to run this analysis.
+              Advanced chart analysis is provided <span className="font-semibold">free of charge</span>.
             </p>
 
             <div className="flex gap-3">
