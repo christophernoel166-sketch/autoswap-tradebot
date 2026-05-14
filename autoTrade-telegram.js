@@ -1024,22 +1024,22 @@ setInterval(() => {
 }, 3000);
 
     // ========= STEP 3B — Start subscription watcher =========
-    const SUBSCRIPTION_POLL_MS = parseInt(
-      process.env.SUBSCRIPTION_POLL_MS || "10000",
-      10
-    );
+    // const SUBSCRIPTION_POLL_MS = parseInt(
+      // process.env.SUBSCRIPTION_POLL_MS || "10000",
+     // 10
+    // );
 
     // initial kick
-    pollPendingSubscriptions().catch((err) =>
-      LOG.error({ err }, "Initial subscription poll failed")
-    );
+   // pollPendingSubscriptions().catch((err) =>
+   //   LOG.error({ err }, "Initial subscription poll failed")
+  //  );
 
     // periodic poll
-    setInterval(() => {
-      pollPendingSubscriptions().catch((err) =>
-        LOG.error({ err }, "Periodic subscription poll failed")
-      );
-    }, SUBSCRIPTION_POLL_MS);
+   // setInterval(() => {
+    //  pollPendingSubscriptions().catch((err) =>
+      // LOG.error({ err }, "Periodic subscription poll failed")
+    //  );
+  //  }, SUBSCRIPTION_POLL_MS);
 
     // ========= STEP 3 — Auto-expiry scheduler =========
     const EXPIRY_POLL_MS = parseInt(
