@@ -348,14 +348,19 @@ useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   const tokenFromUrl = params.get("token");
 
-  if (tokenFromUrl) {
+  if (
+    tokenFromUrl &&
+    connected &&
+    publicKey &&
+    walletAddress
+  ) {
     setManualTokenMint(tokenFromUrl);
 
     setTimeout(() => {
-      scanManualToken(tokenFromUrl);
-    }, 500);
+      scanManualToken();
+    }, 300);
   }
-}, []);
+}, [connected, publicKey, walletAddress]);
 
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
