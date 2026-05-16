@@ -1,6 +1,44 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+function formatUsd(value) {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) {
+    return "—";
+  }
+
+  return `$${Number(value).toLocaleString(undefined, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function formatTokenAge(minutes) {
+  const n = Number(minutes);
+
+  if (!Number.isFinite(n)) return "—";
+
+  if (n < 60) return `${Math.round(n)}m`;
+
+  if (n < 1440) {
+    const hours = Math.floor(n / 60);
+    const mins = Math.round(n % 60);
+    return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+  }
+
+  const days = Math.floor(n / 1440);
+  const hours = Math.floor((n % 1440) / 60);
+  return hours > 0 ? `${days}d ${hours}h` : `${days}d`;
+}
+
+function StatRow({ label, value }) {
+  return (
+    <div className="flex justify-between gap-4 text-sm">
+      <span className="text-gray-400">{label}</span>
+      <span className="text-white font-medium text-right">{value}</span>
+    </div>
+  );
+}
+
 export default function TokenDiscoveryPage() {
   const navigate = useNavigate();
   const [newTokens, setNewTokens] = useState([]);
@@ -49,7 +87,8 @@ export default function TokenDiscoveryPage() {
 
           <button
             onClick={fetchNewTokens}
-            className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium"
+            disabled={loading}
+            className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium disabled:opacity-60"
           >
             {loading ? "Refreshing..." : "Refresh"}
           </button>
@@ -63,8 +102,22 @@ export default function TokenDiscoveryPage() {
           {newTokens.map((token) => (
             <div
               key={token.mintAddress}
-              className="rounded-2xl border border-gray-800 bg-gray-900 p-5"
+              className="rounded-2xl border border-gray-800 bg-gray-900 p-5 hover:border-purple-500/50 transition"
             >
+              <div className="flex items-center gap-2 mb-3">
+                {token.boosted ? (
+                  <span className="text-xs bg-yellow-500/20 text-yellow-300 px-2 py-1 rounded">
+                    BOOSTED
+                  </span>
+                ) : null}
+
+                {token.dexId ? (
+                  <span className="text-xs bg-blue-500/20 text-blue-300 px-2 py-1 rounded">
+                    {String(token.dexId).toUpperCase()}
+                  </span>
+                ) : null}
+              </div>
+
               <div className="flex items-center gap-3 mb-4">
                 {token.icon ? (
                   <img
@@ -78,17 +131,31 @@ export default function TokenDiscoveryPage() {
 
                 <div className="min-w-0">
                   <div className="font-bold text-lg truncate">
-                    {token.name || token.symbol || "New Token"}
+                    {token.symbol && token.symbol !== "UNKNOWN"
+                      ? token.symbol
+                      : token.name || "New Token"}
                   </div>
-                  <div className="text-xs text-gray-400 break-all">
+
+                  <div className="text-sm text-gray-300 truncate">
+                    {token.name || "New Solana Token"}
+                  </div>
+
+                  <div className="text-xs text-gray-500 break-all">
                     {token.mintAddress}
                   </div>
                 </div>
               </div>
 
-              <p className="text-gray-300 text-sm line-clamp-3 mb-4">
-                {token.mintAddress}
-              </p>
+              <div className="space-y-2 rounded-xl bg-gray-950 border border-gray-800 p-4 mb-4">
+                <StatRow label="Age" value={formatTokenAge(token.ageMinutes)} />
+                <StatRow label="Liquidity" value={formatUsd(token.liquidityUsd)} />
+                <StatRow label="Market Cap" value={formatUsd(token.marketCapUsd)} />
+                <StatRow label="Volume (5m)" value={formatUsd(token.volume5mUsd)} />
+                <StatRow
+                  label="Buys / Sells"
+                  value={`${token.buys5m ?? 0} / ${token.sells5m ?? 0}`}
+                />
+              </div>
 
               <button
                 onClick={() => handleScanToken(token.mintAddress)}
