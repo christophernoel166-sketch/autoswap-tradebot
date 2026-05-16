@@ -273,17 +273,27 @@ function matchTokenConditions({
 // =====================================================
 router.get("/discover-new", async (_req, res) => {
   try {
-    const response = await axios.get(
+    console.log("🚀 Fetching latest token profiles...");
+
+const response = await axios.get(
   "https://api.dexscreener.com/token-profiles/latest/v1",
   {
-    timeout: 12000,
+    timeout: 8000,
     headers: {
       Accept: "application/json",
+      "User-Agent": "AutoswapsBot/1.0",
     },
   }
 );
 
-const profiles = response.data;
+console.log("✅ Dexscreener response received");
+
+const profiles = response?.data || [];
+
+console.log(
+  "📊 Profiles count:",
+  Array.isArray(profiles) ? profiles.length : 0
+);
 
     const solanaProfiles = Array.isArray(profiles)
       ? profiles.filter((item) => item?.chainId === "solana")
