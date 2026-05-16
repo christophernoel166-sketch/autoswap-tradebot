@@ -15,6 +15,7 @@ import LandingPage from "./LandingPage";
 import BestSolanaTradingBot from "./BestSolanaTradingBot";
 import FAQPage from "./FAQPage";
 import AutoTradeTelegramSignals from "./AutoTradeTelegramSignals";
+import TokenDiscoveryPage from "./TokenDiscoveryPage";
 
 function AppContent({
   theme,
@@ -28,10 +29,10 @@ function AppContent({
 const isDashboard = location.pathname === "/dashboard";
 
   useEffect(() => {
-    if (connected && publicKey && location.pathname === "/") {
-      navigate("/dashboard");
-    }
-  }, [connected, publicKey, location.pathname, navigate]);
+  if (connected && publicKey && location.pathname === "/") {
+    navigate("/discover");
+  }
+}, [connected, publicKey, location.pathname, navigate]);
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-900 dark:text-gray-100 transition-colors">
@@ -64,6 +65,7 @@ const isDashboard = location.pathname === "/dashboard";
 
       <Routes>
   <Route path="/" element={<LandingPage />} />
+<Route path="/discover" element={<TokenDiscoveryPage />} />
 
   <Route
     path="/dashboard"

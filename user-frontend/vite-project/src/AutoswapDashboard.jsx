@@ -57,6 +57,10 @@ const [chartEntry, setChartEntry] = useState(null);
 const [chartLoading, setChartLoading] = useState(false);
 const [chartError, setChartError] = useState("");
 const [showChartConfirm, setShowChartConfirm] = useState(false);
+const [newTokens, setNewTokens] = useState([]);
+const [loadingNewTokens, setLoadingNewTokens] = useState(false);
+
+
 // ================================
 // CUSTOM CONDITION MODE STATE
 // ================================
@@ -222,7 +226,27 @@ async function linkTelegramAccount() {
     });
   }
 }
+// FETCH NEW TOKENS
+async function fetchNewTokens() {
+  try {
+    setLoadingNewTokens(true);
 
+    const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+    const res = await fetch(`${API_BASE}/api/tokens/discover-new`);
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(data?.error || "Failed to fetch new tokens");
+    }
+
+    setNewTokens(data.tokens || []);
+  } catch (err) {
+    console.error("fetchNewTokens error:", err);
+  } finally {
+    setLoadingNewTokens(false);
+  }
+}
 
 async function refreshUser() {
   if (!walletAddress) return;
@@ -310,6 +334,28 @@ useEffect(() => {
 }, [walletAddress]);
 
 // fetch on-chain balance
+
+// FETCH NEW TOKENS
+useEffect(() => {
+  fetchNewTokens();
+
+  const interval = setInterval(fetchNewTokens, 30000);
+
+  return () => clearInterval(interval);
+}, []);
+
+useEffect(() => {
+  const params = new URLSearchParams(window.location.search);
+  const tokenFromUrl = params.get("token");
+
+  if (tokenFromUrl) {
+    setManualTokenMint(tokenFromUrl);
+
+    setTimeout(() => {
+      scanManualToken(tokenFromUrl);
+    }, 500);
+  }
+}, []);
 
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
