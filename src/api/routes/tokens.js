@@ -1,6 +1,6 @@
 // src/api/routes/tokens.js
-
 import express from "express";
+import axios from "axios";
 import {
   formatScanResponse,
   canExecuteManualBuy,
