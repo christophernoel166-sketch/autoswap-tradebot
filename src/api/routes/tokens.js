@@ -299,19 +299,68 @@ console.log(
       ? profiles.filter((item) => item?.chainId === "solana")
       : [];
 
-    const tokens = solanaProfiles
-      .slice(0, 30)
-      .map((item) => ({
-        chainId: item.chainId,
-        mintAddress: item.tokenAddress,
-        name: item.description || "New Solana Token",
-        symbol: item.symbol || "UNKNOWN",
-        url: item.url || null,
-        icon: item.icon || null,
-        links: item.links || [],
-      }))
-      .filter((item) => item.mintAddress);
+    const baseTokens = solanaProfiles
+  .slice(0, 20)
+  .map((item) => ({
+    chainId: item.chainId,
+    mintAddress: item.tokenAddress,
+    fallbackName: item.description || "New Solana Token",
+    fallbackSymbol: item.symbol || "UNKNOWN",
+    url: item.url || null,
+    icon: item.icon || null,
+    links: item.links || [],
+  }))
+  .filter((item) => item.mintAddress);
 
+const tokens = await Promise.all(
+  baseTokens.map(async (item) => {
+    try {
+      const market = await fetchTokenMarketData(item.mintAddress);
+
+      return {
+        chainId: item.chainId,
+        mintAddress: item.mintAddress,
+        pairAddress: market.token?.pairAddress || null,
+        dexId: market.token?.dexId || null,
+
+        name: market.token?.name || item.fallbackName,
+        symbol: market.token?.symbol || item.fallbackSymbol,
+        icon: item.icon,
+        url: item.url,
+        links: item.links,
+
+        ageMinutes: market.metrics?.ageMinutes ?? null,
+        liquidityUsd: market.metrics?.liquidityUsd ?? null,
+        marketCapUsd: market.metrics?.marketCapUsd ?? null,
+        volume5mUsd: market.metrics?.volume5mUsd ?? null,
+        buys5m: market.metrics?.buys5m ?? null,
+        sells5m: market.metrics?.sells5m ?? null,
+        boosted: market.metrics?.boosted || false,
+      };
+    } catch {
+      return {
+        chainId: item.chainId,
+        mintAddress: item.mintAddress,
+        pairAddress: null,
+        dexId: null,
+
+        name: item.fallbackName,
+        symbol: item.fallbackSymbol,
+        icon: item.icon,
+        url: item.url,
+        links: item.links,
+
+        ageMinutes: null,
+        liquidityUsd: null,
+        marketCapUsd: null,
+        volume5mUsd: null,
+        buys5m: null,
+        sells5m: null,
+        boosted: false,
+      };
+    }
+  })
+);
     return res.status(200).json({
       ok: true,
       count: tokens.length,
