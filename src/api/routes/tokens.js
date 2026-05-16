@@ -269,6 +269,56 @@ function matchTokenConditions({
 }
 
 // =====================================================
+// DISCOVER NEW SOLANA TOKENS
+// =====================================================
+router.get("/discover-new", async (_req, res) => {
+  try {
+    const response = await axios.get(
+  "https://api.dexscreener.com/token-profiles/latest/v1",
+  {
+    timeout: 12000,
+    headers: {
+      Accept: "application/json",
+    },
+  }
+);
+
+const profiles = response.data;
+
+    const solanaProfiles = Array.isArray(profiles)
+      ? profiles.filter((item) => item?.chainId === "solana")
+      : [];
+
+    const tokens = solanaProfiles
+      .slice(0, 30)
+      .map((item) => ({
+        chainId: item.chainId,
+        mintAddress: item.tokenAddress,
+        name: item.description || "New Solana Token",
+        symbol: item.symbol || "UNKNOWN",
+        url: item.url || null,
+        icon: item.icon || null,
+        links: item.links || [],
+      }))
+      .filter((item) => item.mintAddress);
+
+    return res.status(200).json({
+      ok: true,
+      count: tokens.length,
+      tokens,
+    });
+  } catch (error) {
+    console.error("GET /api/tokens/discover-new error:", error);
+
+    return res.status(500).json({
+      ok: false,
+      error: "Failed to discover new tokens",
+      details: error?.message || String(error),
+    });
+  }
+});
+
+// =====================================================
 // SCAN ROUTE
 // =====================================================
 router.post("/scan", async (req, res) => {
