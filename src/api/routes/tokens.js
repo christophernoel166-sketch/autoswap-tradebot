@@ -300,7 +300,7 @@ console.log(
       : [];
 
     const baseTokens = solanaProfiles
-  .slice(0, 20)
+  .slice(0, 60)
   .map((item) => ({
     chainId: item.chainId,
     mintAddress: item.tokenAddress,
