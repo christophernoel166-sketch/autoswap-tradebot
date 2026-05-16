@@ -78,7 +78,7 @@ export default function TokenDiscoveryPage() {
 
                 <div className="min-w-0">
                   <div className="font-bold text-lg truncate">
-                    {token.symbol || "UNKNOWN"}
+                    {token.name || token.symbol || "New Token"}
                   </div>
                   <div className="text-xs text-gray-400 break-all">
                     {token.mintAddress}
@@ -87,7 +87,7 @@ export default function TokenDiscoveryPage() {
               </div>
 
               <p className="text-gray-300 text-sm line-clamp-3 mb-4">
-                {token.name || "New Solana Token"}
+                {token.mintAddress}
               </p>
 
               <button
