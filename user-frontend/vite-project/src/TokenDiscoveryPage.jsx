@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
-import CustomTokenConditions from "./settings/CustomTokenConditions";
 
 function formatUsd(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -50,7 +49,6 @@ export default function TokenDiscoveryPage() {
   const [loading, setLoading] = useState(false);
 
   const [customConditionMode, setCustomConditionMode] = useState(false);
-  const [showCustomConditions, setShowCustomConditions] = useState(false);
 
   const [tokenConditions, setTokenConditions] = useState({
     market: {
@@ -116,124 +114,149 @@ export default function TokenDiscoveryPage() {
     }
   }
 
-async function loadUserSettings() {
-  try {
-    if (!walletAddress) return;
+  async function loadUserSettings() {
+    try {
+      if (!walletAddress) return;
 
-    const API_BASE = import.meta.env.VITE_API_BASE || "";
+      const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-    const response = await fetch(
-      `${API_BASE}/api/users?walletAddress=${encodeURIComponent(walletAddress)}`
-    );
+      const response = await fetch(
+        `${API_BASE}/api/users?walletAddress=${encodeURIComponent(
+          walletAddress
+        )}`
+      );
 
-    const data = await response.json();
+      const data = await response.json();
 
-    if (!response.ok || !data?.ok || !data?.user) {
-      return;
+      if (!response.ok || !data?.ok || !data?.user) {
+        return;
+      }
+
+      const user = data.user;
+
+      setCustomConditionMode(!!user.customConditionMode);
+
+      if (user.tokenConditions) {
+        setTokenConditions((prev) => ({
+          ...prev,
+          ...user.tokenConditions,
+        }));
+      }
+    } catch (err) {
+      console.error("loadUserSettings error:", err);
     }
-
-    const user = data.user;
-
-    setCustomConditionMode(!!user.customConditionMode);
-
-    if (user.tokenConditions) {
-      setTokenConditions((prev) => ({
-        ...prev,
-        ...user.tokenConditions,
-      }));
-    }
-  } catch (err) {
-    console.error("loadUserSettings error:", err);
   }
-}
 
-async function saveSettings() {
-  try {
-    if (!walletAddress) {
-      alert("Connect wallet first");
-      return;
+  async function saveSettings(nextCustomConditionMode = customConditionMode) {
+    try {
+      if (!walletAddress) {
+        alert("Connect wallet first");
+        return;
+      }
+
+      const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+      const response = await fetch(`${API_BASE}/api/users/update-settings`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          walletAddress,
+          customConditionMode: nextCustomConditionMode,
+          tokenConditions,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data?.ok) {
+        throw new Error(data?.error || "Failed to save settings");
+      }
+    } catch (err) {
+      console.error("saveSettings error:", err);
+      alert(err.message || "Failed to save settings");
     }
-
-    const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-    const response = await fetch(`${API_BASE}/api/users/update-settings`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        walletAddress,
-        customConditionMode,
-        tokenConditions,
-      }),
-    });
-
-    const data = await response.json();
-
-    if (!response.ok || !data?.ok) {
-      throw new Error(data?.error || "Failed to save settings");
-    }
-
-    alert("Custom token conditions saved");
-  } catch (err) {
-    console.error("saveSettings error:", err);
-    alert(err.message || "Failed to save settings");
   }
-}
 
   useEffect(() => {
-  fetchNewTokens();
+    fetchNewTokens();
 
-  if (walletAddress) {
-    loadUserSettings();
-  }
+    if (walletAddress) {
+      loadUserSettings();
+    }
 
-  const interval = setInterval(fetchNewTokens, 30000);
+    const interval = setInterval(fetchNewTokens, 30000);
 
-  return () => clearInterval(interval);
-}, [walletAddress]);
+    return () => clearInterval(interval);
+  }, [walletAddress]);
 
   function handleScanToken(mintAddress) {
-  const mode = customConditionMode ? "custom" : "default";
+    const mode = customConditionMode ? "custom" : "default";
 
-  navigate(
-    `/dashboard?token=${encodeURIComponent(mintAddress)}&mode=${mode}`
-  );
-}
+    navigate(
+      `/dashboard?token=${encodeURIComponent(mintAddress)}&mode=${mode}`
+    );
+  }
+
+  async function toggleCustomScanner() {
+    const nextValue = !customConditionMode;
+
+    setCustomConditionMode(nextValue);
+    await saveSettings(nextValue);
+  }
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gray-950 text-white px-6 py-8">
       <div className="max-w-7xl mx-auto">
-        <div className="flex items-center justify-between gap-4 mb-6">
+        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold">New Solana Meme Coins</h1>
+
             <p className="text-yellow-400 mt-2 text-sm">
-  Newly created meme coins are highly risky. Always scan before buying.
-</p>
+              Newly created meme coins are highly risky. Always scan before
+              buying.
+            </p>
           </div>
 
-          <button
-            onClick={fetchNewTokens}
-            disabled={loading}
-            className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium disabled:opacity-60"
-          >
-            {loading ? "Refreshing..." : "Refresh"}
-          </button>
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
+              <span className="text-sm text-gray-300 font-medium">
+                Custom Scanner
+              </span>
+
+              <button
+                type="button"
+                onClick={toggleCustomScanner}
+                className={`relative inline-flex h-7 w-14 items-center rounded-full transition ${
+                  customConditionMode ? "bg-green-500" : "bg-gray-600"
+                }`}
+              >
+                <span
+                  className={`inline-block h-5 w-5 transform rounded-full bg-white transition ${
+                    customConditionMode ? "translate-x-8" : "translate-x-1"
+                  }`}
+                />
+
+                <span className="absolute text-[10px] font-bold text-white left-2">
+                  {customConditionMode ? "" : "OFF"}
+                </span>
+
+                <span className="absolute text-[10px] font-bold text-white right-2">
+                  {customConditionMode ? "ON" : ""}
+                </span>
+              </button>
+            </div>
+
+            <button
+              onClick={fetchNewTokens}
+              disabled={loading}
+              className="px-5 py-3 rounded-xl bg-purple-600 hover:bg-purple-700 font-medium disabled:opacity-60"
+            >
+              {loading ? "Refreshing..." : "Refresh"}
+            </button>
+          </div>
         </div>
-
-        
-
-<div className="mb-8">
-  <CustomTokenConditions
-    customConditionMode={customConditionMode}
-    setCustomConditionMode={setCustomConditionMode}
-    tokenConditions={tokenConditions}
-    setTokenConditions={setTokenConditions}
-    showCustomConditions={showCustomConditions}
-    setShowCustomConditions={setShowCustomConditions}
-    saveSettings={saveSettings}
-  />
-</div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (
@@ -285,9 +308,18 @@ async function saveSettings() {
 
               <div className="space-y-2 rounded-xl bg-gray-950 border border-gray-800 p-4 mb-4">
                 <StatRow label="Age" value={formatTokenAge(token.ageMinutes)} />
-                <StatRow label="Liquidity" value={formatUsd(token.liquidityUsd)} />
-                <StatRow label="Market Cap" value={formatUsd(token.marketCapUsd)} />
-                <StatRow label="Volume (5m)" value={formatUsd(token.volume5mUsd)} />
+                <StatRow
+                  label="Liquidity"
+                  value={formatUsd(token.liquidityUsd)}
+                />
+                <StatRow
+                  label="Market Cap"
+                  value={formatUsd(token.marketCapUsd)}
+                />
+                <StatRow
+                  label="Volume (5m)"
+                  value={formatUsd(token.volume5mUsd)}
+                />
                 <StatRow
                   label="Buys / Sells"
                   value={`${token.buys5m ?? 0} / ${token.sells5m ?? 0}`}
