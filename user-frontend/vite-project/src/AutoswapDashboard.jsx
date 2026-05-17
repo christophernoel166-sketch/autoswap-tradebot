@@ -356,8 +356,38 @@ useEffect(() => {
   ) {
     setManualTokenMint(tokenFromUrl);
 
-    setTimeout(() => {
-      scanManualToken();
+    setTimeout(async () => {
+      try {
+        setScanLoading(true);
+        setScanError("");
+        setScanResult(null);
+
+        const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+        const response = await fetch(`${API_BASE}/api/tokens/scan`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            tokenMint: tokenFromUrl,
+            walletAddress,
+          }),
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || !data.ok) {
+          throw new Error(data?.error || "Scan failed");
+        }
+
+        setScanResult(data);
+      } catch (err) {
+        console.error(err);
+        setScanError(err.message || "Failed to scan token");
+      } finally {
+        setScanLoading(false);
+      }
     }, 300);
   }
 }, [connected, publicKey, walletAddress]);
