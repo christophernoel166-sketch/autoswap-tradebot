@@ -82,233 +82,298 @@ export default function CustomTokenConditions({
         </div>
       )}
 
-      <SectionTitle>Market</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Min Liquidity (USD)"
-          value={tokenConditions.market.minLiquidityUsd}
-          onChange={(e) =>
-            updateCondition("market", "minLiquidityUsd", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Market Cap (USD)"
-          value={tokenConditions.market.minMarketCapUsd}
-          onChange={(e) =>
-            updateCondition("market", "minMarketCapUsd", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Market Cap (USD)"
-          value={tokenConditions.market.maxMarketCapUsd}
-          onChange={(e) =>
-            updateCondition("market", "maxMarketCapUsd", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Buys (5m)"
-          value={tokenConditions.market.minBuys5m}
-          onChange={(e) =>
-            updateCondition("market", "minBuys5m", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Sells (5m)"
-          value={tokenConditions.market.maxSells5m}
-          onChange={(e) =>
-            updateCondition("market", "maxSells5m", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Age (Minutes)"
-          value={tokenConditions.market.minAgeMinutes}
-          onChange={(e) =>
-            updateCondition("market", "minAgeMinutes", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Age (Minutes)"
-          value={tokenConditions.market.maxAgeMinutes}
-          onChange={(e) =>
-            updateCondition("market", "maxAgeMinutes", e.target.value)
-          }
-        />
-      </div>
+      {customConditionMode ? (
+  <>
+    <SectionTitle>Market</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Min Liquidity (USD)"
+        value={tokenConditions.market.minLiquidityUsd}
+        onChange={(e) =>
+          updateCondition("market", "minLiquidityUsd", e.target.value)
+        }
+      />
+      <InputField
+        label="Min Market Cap (USD)"
+        value={tokenConditions.market.minMarketCapUsd}
+        onChange={(e) =>
+          updateCondition("market", "minMarketCapUsd", e.target.value)
+        }
+      />
+      <InputField
+        label="Max Market Cap (USD)"
+        value={tokenConditions.market.maxMarketCapUsd}
+        onChange={(e) =>
+          updateCondition("market", "maxMarketCapUsd", e.target.value)
+        }
+      />
+      <InputField
+        label="Min Buys (5m)"
+        value={tokenConditions.market.minBuys5m}
+        onChange={(e) =>
+          updateCondition("market", "minBuys5m", e.target.value)
+        }
+      />
+      <InputField
+        label="Max Sells (5m)"
+        value={tokenConditions.market.maxSells5m}
+        onChange={(e) =>
+          updateCondition("market", "maxSells5m", e.target.value)
+        }
+      />
+      <InputField
+        label="Min Age (Minutes)"
+        value={tokenConditions.market.minAgeMinutes}
+        onChange={(e) =>
+          updateCondition("market", "minAgeMinutes", e.target.value)
+        }
+      />
+      <InputField
+        label="Max Age (Minutes)"
+        value={tokenConditions.market.maxAgeMinutes}
+        onChange={(e) =>
+          updateCondition("market", "maxAgeMinutes", e.target.value)
+        }
+      />
+    </div>
 
-      <SectionTitle>Holder Safety</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Max Largest Holder (%)"
-          value={tokenConditions.holderSafety.maxLargestHolderPercent}
-          onChange={(e) =>
-            updateCondition("holderSafety", "maxLargestHolderPercent", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Top 10 Holding (%)"
-          value={tokenConditions.holderSafety.maxTop10HoldingPercent}
-          onChange={(e) =>
-            updateCondition("holderSafety", "maxTop10HoldingPercent", e.target.value)
-          }
-        />
-      </div>
+    <SectionTitle>Holder Safety</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Max Largest Holder (%)"
+        value={tokenConditions.holderSafety.maxLargestHolderPercent}
+        onChange={(e) =>
+          updateCondition(
+            "holderSafety",
+            "maxLargestHolderPercent",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Top 10 Holding (%)"
+        value={tokenConditions.holderSafety.maxTop10HoldingPercent}
+        onChange={(e) =>
+          updateCondition(
+            "holderSafety",
+            "maxTop10HoldingPercent",
+            e.target.value
+          )
+        }
+      />
+    </div>
 
-      <SectionTitle>Socials</SectionTitle>
-      <div className="space-y-1">
-        <ToggleField
-          label="Require Website"
-          checked={tokenConditions.socials.requireWebsite}
-          onChange={(value) =>
-            updateCondition("socials", "requireWebsite", value)
-          }
-        />
-        <ToggleField
-          label="Require Telegram"
-          checked={tokenConditions.socials.requireTelegram}
-          onChange={(value) =>
-            updateCondition("socials", "requireTelegram", value)
-          }
-        />
-        <ToggleField
-          label="Require X Account"
-          checked={tokenConditions.socials.requireTwitter}
-          onChange={(value) =>
-            updateCondition("socials", "requireTwitter", value)
-          }
-        />
-      </div>
+    <SectionTitle>Socials</SectionTitle>
+    <div className="space-y-1">
+      <ToggleField
+        label="Require Website"
+        checked={tokenConditions.socials.requireWebsite}
+        onChange={(value) =>
+          updateCondition("socials", "requireWebsite", value)
+        }
+      />
+      <ToggleField
+        label="Require Telegram"
+        checked={tokenConditions.socials.requireTelegram}
+        onChange={(value) =>
+          updateCondition("socials", "requireTelegram", value)
+        }
+      />
+      <ToggleField
+        label="Require X Account"
+        checked={tokenConditions.socials.requireTwitter}
+        onChange={(value) =>
+          updateCondition("socials", "requireTwitter", value)
+        }
+      />
+    </div>
 
-      <SectionTitle>Market Integrity</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Min Buy/Sell Ratio"
-          value={tokenConditions.marketIntegrity.minBuySellRatio5m}
-          onChange={(e) =>
-            updateCondition("marketIntegrity", "minBuySellRatio5m", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Wallet Participation Score"
-          value={tokenConditions.marketIntegrity.minWalletParticipationScore}
-          onChange={(e) =>
-            updateCondition("marketIntegrity", "minWalletParticipationScore", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Velocity Sanity Score"
-          value={tokenConditions.marketIntegrity.minVelocitySanityScore}
-          onChange={(e) =>
-            updateCondition("marketIntegrity", "minVelocitySanityScore", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Bundle Suspicion Score"
-          value={tokenConditions.marketIntegrity.maxBundleSuspicionScore}
-          onChange={(e) =>
-            updateCondition("marketIntegrity", "maxBundleSuspicionScore", e.target.value)
-          }
-        />
-      </div>
+    <SectionTitle>Market Integrity</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Min Buy/Sell Ratio"
+        value={tokenConditions.marketIntegrity.minBuySellRatio5m}
+        onChange={(e) =>
+          updateCondition(
+            "marketIntegrity",
+            "minBuySellRatio5m",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Min Wallet Participation Score"
+        value={tokenConditions.marketIntegrity.minWalletParticipationScore}
+        onChange={(e) =>
+          updateCondition(
+            "marketIntegrity",
+            "minWalletParticipationScore",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Min Velocity Sanity Score"
+        value={tokenConditions.marketIntegrity.minVelocitySanityScore}
+        onChange={(e) =>
+          updateCondition(
+            "marketIntegrity",
+            "minVelocitySanityScore",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Bundle Suspicion Score"
+        value={tokenConditions.marketIntegrity.maxBundleSuspicionScore}
+        onChange={(e) =>
+          updateCondition(
+            "marketIntegrity",
+            "maxBundleSuspicionScore",
+            e.target.value
+          )
+        }
+      />
+    </div>
 
-      <div className="space-y-1">
-        <ToggleField
-          label="Allow Fake Momentum"
-          checked={tokenConditions.marketIntegrity.allowFakeMomentum}
-          onChange={(value) =>
-            updateCondition("marketIntegrity", "allowFakeMomentum", value)
-          }
-        />
-        <ToggleField
-          label="Allow Artificial Volume"
-          checked={tokenConditions.marketIntegrity.allowArtificialVolume}
-          onChange={(value) =>
-            updateCondition("marketIntegrity", "allowArtificialVolume", value)
-          }
-        />
-      </div>
+    <div className="space-y-1">
+      <ToggleField
+        label="Allow Fake Momentum"
+        checked={tokenConditions.marketIntegrity.allowFakeMomentum}
+        onChange={(value) =>
+          updateCondition("marketIntegrity", "allowFakeMomentum", value)
+        }
+      />
+      <ToggleField
+        label="Allow Artificial Volume"
+        checked={tokenConditions.marketIntegrity.allowArtificialVolume}
+        onChange={(value) =>
+          updateCondition("marketIntegrity", "allowArtificialVolume", value)
+        }
+      />
+    </div>
 
-      <SectionTitle>Wallet Intelligence</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Min Smart Degen Count"
-          value={tokenConditions.walletIntelligence.minSmartDegenCount}
-          onChange={(e) =>
-            updateCondition("walletIntelligence", "minSmartDegenCount", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Bot Degen Count"
-          value={tokenConditions.walletIntelligence.maxBotDegenCount}
-          onChange={(e) =>
-            updateCondition("walletIntelligence", "maxBotDegenCount", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Rat Trader Count"
-          value={tokenConditions.walletIntelligence.maxRatTraderCount}
-          onChange={(e) =>
-            updateCondition("walletIntelligence", "maxRatTraderCount", e.target.value)
-          }
-        />
-        <InputField
-          label="Min Alpha Caller Count"
-          value={tokenConditions.walletIntelligence.minAlphaCallerCount}
-          onChange={(e) =>
-            updateCondition("walletIntelligence", "minAlphaCallerCount", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Sniper Wallet Count"
-          value={tokenConditions.walletIntelligence.maxSniperWalletCount}
-          onChange={(e) =>
-            updateCondition("walletIntelligence", "maxSniperWalletCount", e.target.value)
-          }
-        />
-      </div>
+    <SectionTitle>Wallet Intelligence</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Min Smart Degen Count"
+        value={tokenConditions.walletIntelligence.minSmartDegenCount}
+        onChange={(e) =>
+          updateCondition(
+            "walletIntelligence",
+            "minSmartDegenCount",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Bot Degen Count"
+        value={tokenConditions.walletIntelligence.maxBotDegenCount}
+        onChange={(e) =>
+          updateCondition(
+            "walletIntelligence",
+            "maxBotDegenCount",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Rat Trader Count"
+        value={tokenConditions.walletIntelligence.maxRatTraderCount}
+        onChange={(e) =>
+          updateCondition(
+            "walletIntelligence",
+            "maxRatTraderCount",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Min Alpha Caller Count"
+        value={tokenConditions.walletIntelligence.minAlphaCallerCount}
+        onChange={(e) =>
+          updateCondition(
+            "walletIntelligence",
+            "minAlphaCallerCount",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Sniper Wallet Count"
+        value={tokenConditions.walletIntelligence.maxSniperWalletCount}
+        onChange={(e) =>
+          updateCondition(
+            "walletIntelligence",
+            "maxSniperWalletCount",
+            e.target.value
+          )
+        }
+      />
+    </div>
 
-      <SectionTitle>Risk Structure</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Max Bundled Wallet Count"
-          value={tokenConditions.riskStructure.maxBundledWalletCount}
-          onChange={(e) =>
-            updateCondition("riskStructure", "maxBundledWalletCount", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Funding Cluster Score"
-          value={tokenConditions.riskStructure.maxFundingClusterScore}
-          onChange={(e) =>
-            updateCondition("riskStructure", "maxFundingClusterScore", e.target.value)
-          }
-        />
-        <InputField
-          label="Max Largest Funding Cluster"
-          value={tokenConditions.riskStructure.maxLargestFundingCluster}
-          onChange={(e) =>
-            updateCondition("riskStructure", "maxLargestFundingCluster", e.target.value)
-          }
-        />
-      </div>
+    <SectionTitle>Risk Structure</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Max Bundled Wallet Count"
+        value={tokenConditions.riskStructure.maxBundledWalletCount}
+        onChange={(e) =>
+          updateCondition(
+            "riskStructure",
+            "maxBundledWalletCount",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Funding Cluster Score"
+        value={tokenConditions.riskStructure.maxFundingClusterScore}
+        onChange={(e) =>
+          updateCondition(
+            "riskStructure",
+            "maxFundingClusterScore",
+            e.target.value
+          )
+        }
+      />
+      <InputField
+        label="Max Largest Funding Cluster"
+        value={tokenConditions.riskStructure.maxLargestFundingCluster}
+        onChange={(e) =>
+          updateCondition(
+            "riskStructure",
+            "maxLargestFundingCluster",
+            e.target.value
+          )
+        }
+      />
+    </div>
 
-      <SectionTitle>Rug Risk</SectionTitle>
-      <div className="grid grid-cols-1 gap-3">
-        <InputField
-          label="Max Rug Risk Score"
-          value={tokenConditions.rugRisk.maxRugRiskScore}
-          onChange={(e) =>
-            updateCondition("rugRisk", "maxRugRiskScore", e.target.value)
-          }
-        />
-      </div>
+    <SectionTitle>Rug Risk</SectionTitle>
+    <div className="grid grid-cols-1 gap-3">
+      <InputField
+        label="Max Rug Risk Score"
+        value={tokenConditions.rugRisk.maxRugRiskScore}
+        onChange={(e) =>
+          updateCondition("rugRisk", "maxRugRiskScore", e.target.value)
+        }
+      />
+    </div>
 
-      <button
-        type="button"
-        onClick={saveSettings}
-        className="w-full rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium py-3"
-      >
-        Save Custom Conditions
-      </button>
+    <button
+      type="button"
+      onClick={saveSettings}
+      className="w-full rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium py-3"
+    >
+      Save Custom Conditions
+    </button>
+  </>
+) : (
+  <div className="text-sm text-gray-400 bg-gray-900/50 border border-gray-700 rounded-lg p-3">
+    Custom Condition Mode is OFF. Tokens will be scanned with the default Autoswaps scanner.
+  </div>
+)}
+  
     </div>
   );
 }
