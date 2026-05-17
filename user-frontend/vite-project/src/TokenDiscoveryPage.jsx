@@ -207,9 +207,9 @@ async function saveSettings() {
         <div className="flex items-center justify-between gap-4 mb-6">
           <div>
             <h1 className="text-3xl font-bold">New Solana Meme Coins</h1>
-            <p className="text-gray-400 mt-2">
-              Discover newly listed tokens and scan them before trading.
-            </p>
+            <p className="text-yellow-400 mt-2 text-sm">
+  Newly created meme coins are highly risky. Always scan before buying.
+</p>
           </div>
 
           <button
@@ -221,9 +221,7 @@ async function saveSettings() {
           </button>
         </div>
 
-        <div className="mb-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-300 text-sm">
-          Newly created meme coins are highly risky. Always scan before buying.
-        </div>
+        
 
 <div className="mb-8">
   <CustomTokenConditions
