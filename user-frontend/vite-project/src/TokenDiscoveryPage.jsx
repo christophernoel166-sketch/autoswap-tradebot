@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useWallet } from "@solana/wallet-adapter-react";
+import CustomTokenConditions from "./settings/CustomTokenConditions";
 
 function formatUsd(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -41,8 +43,58 @@ function StatRow({ label, value }) {
 
 export default function TokenDiscoveryPage() {
   const navigate = useNavigate();
+  const { publicKey, connected } = useWallet();
+  const walletAddress = connected && publicKey ? publicKey.toString() : "";
+
   const [newTokens, setNewTokens] = useState([]);
   const [loading, setLoading] = useState(false);
+
+  const [customConditionMode, setCustomConditionMode] = useState(false);
+  const [showCustomConditions, setShowCustomConditions] = useState(false);
+
+  const [tokenConditions, setTokenConditions] = useState({
+    market: {
+      minLiquidityUsd: "",
+      minMarketCapUsd: "",
+      maxMarketCapUsd: "",
+      minBuys5m: "",
+      maxSells5m: "",
+      minAgeMinutes: "",
+      maxAgeMinutes: "",
+    },
+    holderSafety: {
+      maxLargestHolderPercent: "",
+      maxTop10HoldingPercent: "",
+    },
+    socials: {
+      requireWebsite: false,
+      requireTelegram: false,
+      requireTwitter: false,
+    },
+    marketIntegrity: {
+      minBuySellRatio5m: "",
+      minWalletParticipationScore: "",
+      minVelocitySanityScore: "",
+      maxBundleSuspicionScore: "",
+      allowFakeMomentum: true,
+      allowArtificialVolume: true,
+    },
+    walletIntelligence: {
+      minSmartDegenCount: "",
+      maxBotDegenCount: "",
+      maxRatTraderCount: "",
+      minAlphaCallerCount: "",
+      maxSniperWalletCount: "",
+    },
+    riskStructure: {
+      maxBundledWalletCount: "",
+      maxFundingClusterScore: "",
+      maxLargestFundingCluster: "",
+    },
+    rugRisk: {
+      maxRugRiskScore: "",
+    },
+  });
 
   async function fetchNewTokens() {
     try {
@@ -64,15 +116,90 @@ export default function TokenDiscoveryPage() {
     }
   }
 
+async function loadUserSettings() {
+  try {
+    if (!walletAddress) return;
+
+    const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+    const response = await fetch(
+      `${API_BASE}/api/users?walletAddress=${encodeURIComponent(walletAddress)}`
+    );
+
+    const data = await response.json();
+
+    if (!response.ok || !data?.ok || !data?.user) {
+      return;
+    }
+
+    const user = data.user;
+
+    setCustomConditionMode(!!user.customConditionMode);
+
+    if (user.tokenConditions) {
+      setTokenConditions((prev) => ({
+        ...prev,
+        ...user.tokenConditions,
+      }));
+    }
+  } catch (err) {
+    console.error("loadUserSettings error:", err);
+  }
+}
+
+async function saveSettings() {
+  try {
+    if (!walletAddress) {
+      alert("Connect wallet first");
+      return;
+    }
+
+    const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+    const response = await fetch(`${API_BASE}/api/users/update-settings`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        walletAddress,
+        customConditionMode,
+        tokenConditions,
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data?.ok) {
+      throw new Error(data?.error || "Failed to save settings");
+    }
+
+    alert("Custom token conditions saved");
+  } catch (err) {
+    console.error("saveSettings error:", err);
+    alert(err.message || "Failed to save settings");
+  }
+}
+
   useEffect(() => {
-    fetchNewTokens();
-    const interval = setInterval(fetchNewTokens, 30000);
-    return () => clearInterval(interval);
-  }, []);
+  fetchNewTokens();
+
+  if (walletAddress) {
+    loadUserSettings();
+  }
+
+  const interval = setInterval(fetchNewTokens, 30000);
+
+  return () => clearInterval(interval);
+}, [walletAddress]);
 
   function handleScanToken(mintAddress) {
-    navigate(`/dashboard?token=${encodeURIComponent(mintAddress)}`);
-  }
+  const mode = customConditionMode ? "custom" : "default";
+
+  navigate(
+    `/dashboard?token=${encodeURIComponent(mintAddress)}&mode=${mode}`
+  );
+}
 
   return (
     <div className="min-h-[calc(100vh-64px)] bg-gray-950 text-white px-6 py-8">
@@ -97,6 +224,18 @@ export default function TokenDiscoveryPage() {
         <div className="mb-6 rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-4 text-yellow-300 text-sm">
           Newly created meme coins are highly risky. Always scan before buying.
         </div>
+
+<div className="mb-8">
+  <CustomTokenConditions
+    customConditionMode={customConditionMode}
+    setCustomConditionMode={setCustomConditionMode}
+    tokenConditions={tokenConditions}
+    setTokenConditions={setTokenConditions}
+    showCustomConditions={showCustomConditions}
+    setShowCustomConditions={setShowCustomConditions}
+    saveSettings={saveSettings}
+  />
+</div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (

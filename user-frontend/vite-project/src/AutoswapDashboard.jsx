@@ -21,7 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-import CustomTokenConditions from "./settings/CustomTokenConditions";
+
 
 
 
@@ -43,7 +43,7 @@ const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
 const [mevProtection, setMevProtection] = useState(true);
 const [onChainBalance, setOnChainBalance] = useState(0);
 const [showTradingSettings, setShowTradingSettings] = useState(true);
-const [showCustomConditions, setShowCustomConditions] = useState(false);
+
 const [withdrawLoading, setWithdrawLoading] = useState(false);
 const [showWithdrawStatus, setShowWithdrawStatus] = useState(false);
 const [walletHistory, setWalletHistory] = useState([]);
@@ -347,6 +347,7 @@ useEffect(() => {
 useEffect(() => {
   const params = new URLSearchParams(window.location.search);
   const tokenFromUrl = params.get("token");
+const scanMode = params.get("mode") || "default";
 
   if (
     tokenFromUrl &&
@@ -364,7 +365,12 @@ useEffect(() => {
 
         const API_BASE = import.meta.env.VITE_API_BASE || "";
 
-        const response = await fetch(`${API_BASE}/api/tokens/scan`, {
+        const endpoint =
+  scanMode === "custom"
+    ? `${API_BASE}/api/tokens/scan-custom-mode`
+    : `${API_BASE}/api/tokens/scan`;
+
+const response = await fetch(endpoint, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -1563,32 +1569,7 @@ async function reRequestChannel(channelId) {
   ) : null}
 </div>
 
-<div className="bg-gray-800 rounded-xl p-4">
-  <button
-    type="button"
-    onClick={() => setShowCustomConditions((prev) => !prev)}
-    className="w-full flex items-center justify-between text-left"
-  >
-    <h3 className="text-lg font-semibold text-white">
-      Custom Token Conditions
-    </h3>
-    <span className="text-white text-xl">
-      {showCustomConditions ? "▲" : "▼"}
-    </span>
-  </button>
 
-  {showCustomConditions ? (
-    <div className="mt-4">
-      <CustomTokenConditions
-        customConditionMode={customConditionMode}
-        setCustomConditionMode={setCustomConditionMode}
-        tokenConditions={tokenConditions}
-        setTokenConditions={setTokenConditions}
-        saveSettings={saveSettings}
-      />
-    </div>
-  ) : null}
-</div>
 
 </div>
 </div>
