@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useWallet } from "@solana/wallet-adapter-react";
+import CustomTokenConditions from "./settings/CustomTokenConditions";
 
 function formatUsd(value) {
   if (value === null || value === undefined || Number.isNaN(Number(value))) {
@@ -47,7 +48,7 @@ export default function TokenDiscoveryPage() {
 
   const [newTokens, setNewTokens] = useState([]);
   const [loading, setLoading] = useState(false);
-
+  const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [customConditionMode, setCustomConditionMode] = useState(false);
 
   const [tokenConditions, setTokenConditions] = useState({
@@ -119,7 +120,6 @@ export default function TokenDiscoveryPage() {
       if (!walletAddress) return;
 
       const API_BASE = import.meta.env.VITE_API_BASE || "";
-
       const response = await fetch(
         `${API_BASE}/api/users?walletAddress=${encodeURIComponent(
           walletAddress
@@ -128,12 +128,9 @@ export default function TokenDiscoveryPage() {
 
       const data = await response.json();
 
-      if (!response.ok || !data?.ok || !data?.user) {
-        return;
-      }
+      if (!response.ok || !data?.ok || !data?.user) return;
 
       const user = data.user;
-
       setCustomConditionMode(!!user.customConditionMode);
 
       if (user.tokenConditions) {
@@ -155,7 +152,6 @@ export default function TokenDiscoveryPage() {
       }
 
       const API_BASE = import.meta.env.VITE_API_BASE || "";
-
       const response = await fetch(`${API_BASE}/api/users/update-settings`, {
         method: "POST",
         headers: {
@@ -187,7 +183,6 @@ export default function TokenDiscoveryPage() {
     }
 
     const interval = setInterval(fetchNewTokens, 30000);
-
     return () => clearInterval(interval);
   }, [walletAddress]);
 
@@ -212,7 +207,6 @@ export default function TokenDiscoveryPage() {
         <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-8">
           <div>
             <h1 className="text-3xl font-bold">New Solana Meme Coins</h1>
-
             <p className="text-yellow-400 mt-2 text-sm">
               Newly created meme coins are highly risky. Always scan before
               buying.
@@ -237,14 +231,20 @@ export default function TokenDiscoveryPage() {
                     customConditionMode ? "translate-x-8" : "translate-x-1"
                   }`}
                 />
-
                 <span className="absolute text-[10px] font-bold text-white left-2">
                   {customConditionMode ? "" : "OFF"}
                 </span>
-
                 <span className="absolute text-[10px] font-bold text-white right-2">
                   {customConditionMode ? "ON" : ""}
                 </span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowConditionsModal(true)}
+                className="text-sm px-3 py-1.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium"
+              >
+                Configure
               </button>
             </div>
 
@@ -257,6 +257,41 @@ export default function TokenDiscoveryPage() {
             </button>
           </div>
         </div>
+
+        {showConditionsModal ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+            <div className="w-full max-w-5xl max-h-[90vh] overflow-y-auto rounded-2xl bg-gray-900 border border-gray-800 shadow-2xl">
+              <div className="sticky top-0 z-10 flex items-center justify-between px-6 py-4 border-b border-gray-800 bg-gray-900">
+                <div>
+                  <h2 className="text-2xl font-bold text-white">
+                    Custom Token Conditions
+                  </h2>
+                  <p className="text-sm text-gray-400 mt-1">
+                    Configure how Autoswaps filters and scans tokens.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setShowConditionsModal(false)}
+                  className="px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium"
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="p-6">
+                <CustomTokenConditions
+                  customConditionMode={customConditionMode}
+                  setCustomConditionMode={setCustomConditionMode}
+                  tokenConditions={tokenConditions}
+                  setTokenConditions={setTokenConditions}
+                  saveSettings={saveSettings}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (
@@ -308,18 +343,9 @@ export default function TokenDiscoveryPage() {
 
               <div className="space-y-2 rounded-xl bg-gray-950 border border-gray-800 p-4 mb-4">
                 <StatRow label="Age" value={formatTokenAge(token.ageMinutes)} />
-                <StatRow
-                  label="Liquidity"
-                  value={formatUsd(token.liquidityUsd)}
-                />
-                <StatRow
-                  label="Market Cap"
-                  value={formatUsd(token.marketCapUsd)}
-                />
-                <StatRow
-                  label="Volume (5m)"
-                  value={formatUsd(token.volume5mUsd)}
-                />
+                <StatRow label="Liquidity" value={formatUsd(token.liquidityUsd)} />
+                <StatRow label="Market Cap" value={formatUsd(token.marketCapUsd)} />
+                <StatRow label="Volume (5m)" value={formatUsd(token.volume5mUsd)} />
                 <StatRow
                   label="Buys / Sells"
                   value={`${token.buys5m ?? 0} / ${token.sells5m ?? 0}`}
