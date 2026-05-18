@@ -365,7 +365,7 @@ export default function CustomTokenConditions({
       onClick={saveSettings}
       className="w-full rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium py-3"
     >
-      Save Custom Conditions
+      {savingConditions ? "Saved" : "Save Custom Conditions"}
     </button>
   </>
 ) : (

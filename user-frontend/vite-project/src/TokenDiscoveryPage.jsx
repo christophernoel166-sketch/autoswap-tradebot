@@ -50,6 +50,7 @@ export default function TokenDiscoveryPage() {
   const [loading, setLoading] = useState(false);
   const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [customConditionMode, setCustomConditionMode] = useState(false);
+const [savingConditions, setSavingConditions] = useState(false);
 
   const [tokenConditions, setTokenConditions] = useState({
     market: {
@@ -286,7 +287,16 @@ export default function TokenDiscoveryPage() {
                   setCustomConditionMode={setCustomConditionMode}
                   tokenConditions={tokenConditions}
                   setTokenConditions={setTokenConditions}
-                  saveSettings={() => saveSettings(customConditionMode)}
+                  saveSettings={async () => {
+  setSavingConditions(true);
+  await saveSettings(customConditionMode);
+
+  setTimeout(() => {
+    setSavingConditions(false);
+    setShowConditionsModal(false);
+  }, 700);
+}}
+savingConditions={savingConditions}
                 />
               </div>
             </div>
