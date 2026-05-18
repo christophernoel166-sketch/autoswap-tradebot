@@ -926,6 +926,10 @@ async function saveSettings() {
     });
 
     setMessage({ type: "success", text: "Settings saved" });
+
+setTimeout(() => {
+  setMessage(null);
+}, 2500);
     fetchUserSettings();
     refreshUser();
   } catch (err) {
