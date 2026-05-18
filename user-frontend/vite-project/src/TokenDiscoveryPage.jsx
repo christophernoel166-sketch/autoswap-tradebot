@@ -283,20 +283,27 @@ const [savingConditions, setSavingConditions] = useState(false);
 
               <div className="p-6">
                 <CustomTokenConditions
-                  customConditionMode={customConditionMode}
-                  setCustomConditionMode={setCustomConditionMode}
-                  tokenConditions={tokenConditions}
-                  setTokenConditions={setTokenConditions}
-                  saveSettings={async () => {
-  setSavingConditions(true);
-  await saveSettings(customConditionMode);
+  customConditionMode={customConditionMode}
+  setCustomConditionMode={setCustomConditionMode}
+  tokenConditions={tokenConditions}
+  setTokenConditions={setTokenConditions}
+  saveSettings={async () => {
+    try {
+      setSavingConditions(true);
 
-  setTimeout(() => {
-    setSavingConditions(false);
-    setShowConditionsModal(false);
-  }, 700);
-}}
-savingConditions={savingConditions}
+      await saveSettings(customConditionMode);
+
+      setTimeout(() => {
+        setSavingConditions(false);
+        setShowConditionsModal(false);
+      }, 700);
+    } catch (err) {
+      console.error(err);
+      setSavingConditions(false);
+    }
+  }}
+  savingConditions={savingConditions}
+/>
                 />
               </div>
             </div>
