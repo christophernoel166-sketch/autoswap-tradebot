@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 export default function TradingSettings({
   solPerTrade,
   setSolPerTrade,
@@ -21,6 +23,17 @@ export default function TradingSettings({
   setTp3Sell,
   saveSettings,
 }) {
+  const [saving, setSaving] = useState(false);
+
+  async function handleSave() {
+    setSaving(true);
+    await saveSettings();
+
+    setTimeout(() => {
+      setSaving(false);
+    }, 800);
+  }
+
   return (
     <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-sm">
       <h3 className="font-medium mb-3 text-gray-900 dark:text-gray-100">
@@ -32,10 +45,7 @@ export default function TradingSettings({
       </label>
       <input
         type="number"
-        className="border dark:border-gray-600
-                   bg-white dark:bg-gray-700
-                   text-gray-900 dark:text-gray-100
-                   px-2 py-1 w-full mb-2 rounded"
+        className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1 w-full mb-2 rounded"
         value={solPerTrade}
         onChange={(e) => setSolPerTrade(e.target.value)}
       />
@@ -45,10 +55,7 @@ export default function TradingSettings({
       </label>
       <input
         type="number"
-        className="border dark:border-gray-600
-                   bg-white dark:bg-gray-700
-                   text-gray-900 dark:text-gray-100
-                   px-2 py-1 w-full mb-3 rounded"
+        className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1 w-full mb-3 rounded"
         value={stopLoss}
         onChange={(e) => setStopLoss(e.target.value)}
       />
@@ -58,10 +65,7 @@ export default function TradingSettings({
       </label>
       <input
         type="number"
-        className="border dark:border-gray-600
-                   bg-white dark:bg-gray-700
-                   text-gray-900 dark:text-gray-100
-                   px-2 py-1 w-full mb-3 rounded"
+        className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1 w-full mb-3 rounded"
         value={trailingTrigger}
         onChange={(e) => setTrailingTrigger(e.target.value)}
       />
@@ -71,10 +75,7 @@ export default function TradingSettings({
       </label>
       <input
         type="number"
-        className="border dark:border-gray-600
-                   bg-white dark:bg-gray-700
-                   text-gray-900 dark:text-gray-100
-                   px-2 py-1 w-full mb-3 rounded"
+        className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1 w-full mb-3 rounded"
         value={trailingDistance}
         onChange={(e) => setTrailingDistance(e.target.value)}
       />
@@ -88,16 +89,16 @@ export default function TradingSettings({
           <input
             key={i}
             type="number"
-            className="border dark:border-gray-600
-                       bg-white dark:bg-gray-700
-                       text-gray-900 dark:text-gray-100
-                       px-2 py-1 rounded"
+            className="border dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 px-2 py-1 rounded"
             value={val}
             onChange={(e) => {
               const setters = [
-                setTp1, setTp1Sell,
-                setTp2, setTp2Sell,
-                setTp3, setTp3Sell,
+                setTp1,
+                setTp1Sell,
+                setTp2,
+                setTp2Sell,
+                setTp3,
+                setTp3Sell,
               ];
               setters[i](e.target.value);
             }}
@@ -106,12 +107,15 @@ export default function TradingSettings({
       </div>
 
       <button
-        onClick={saveSettings}
-        className="mt-4 w-full py-2 rounded
-                   bg-indigo-600 hover:bg-indigo-700
-                   text-white transition"
+        onClick={handleSave}
+        disabled={saving}
+        className={`mt-4 w-full py-2 rounded text-white transition ${
+          saving
+            ? "bg-green-600"
+            : "bg-indigo-600 hover:bg-indigo-700"
+        }`}
       >
-        Save Settings
+        {saving ? "Saved" : "Save Settings"}
       </button>
     </div>
   );
