@@ -286,7 +286,7 @@ export default function TokenDiscoveryPage() {
                   setCustomConditionMode={setCustomConditionMode}
                   tokenConditions={tokenConditions}
                   setTokenConditions={setTokenConditions}
-                  saveSettings={saveSettings}
+                  saveSettings={() => saveSettings(customConditionMode)}
                 />
               </div>
             </div>
