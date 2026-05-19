@@ -375,7 +375,7 @@ router.get("/discover-new", async (req, res) => {
 
     const cachedTokens = await DiscoveredToken.find({
       lastSeenAt: {
-        $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        $gte: new Date(Date.now() - 48 * 60 * 60 * 1000),
       },
     })
       .sort({ lastSeenAt: -1 })
