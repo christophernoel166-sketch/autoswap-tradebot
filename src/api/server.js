@@ -29,6 +29,7 @@ import userWithdrawals from "./userWithdrawals.js";
 import walletHistory from "./walletHistory.js";
 import tokensRouter from "./routes/tokens.js";
 import chartAnalysisRouter from "./routes/chartAnalysis.js";
+import trendingTokensRoute from "./routes/trendingTokens.js";
 export function createApiServer() {
   const app = express();
   const server = http.createServer(app);
@@ -139,7 +140,7 @@ app.use("/api/onchain-balance", onChainBalance);
   app.use("/api/admin", adminChannels);
   
   app.use("/api", withdrawRouter);
-  
+  app.use("/api/trending-tokens", trendingTokensRoute);
   app.use("/api", userBalance);
   app.use("/api", userDeposits);
   app.use("/api/user/withdrawals", userWithdrawals);
