@@ -315,14 +315,13 @@ const [activeTab, setActiveTab] = useState("newest");
         ) : null}
 
 <div className="flex flex-wrap gap-3 mb-6">
- [
-  { key: "newest", label: "Newest" },
-  { key: "trending", label: "Trending" },
-  { key: "boosted", label: "Boosted" },
-  { key: "high-volume", label: "High Volume" },
-  { key: "buy-pressure", label: "Buy Pressure" },
-  { key: "established", label: "Established" },
-]
+  {[
+    { key: "newest", label: "Newest" },
+    { key: "trending", label: "Trending" },
+    { key: "boosted", label: "Boosted" },
+    { key: "high-volume", label: "High Volume" },
+    { key: "buy-pressure", label: "Buy Pressure" },
+    { key: "established", label: "Established" },
   ].map((tab) => (
     <button
       key={tab.key}
@@ -338,7 +337,6 @@ const [activeTab, setActiveTab] = useState("newest");
     </button>
   ))}
 </div>
-
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (
