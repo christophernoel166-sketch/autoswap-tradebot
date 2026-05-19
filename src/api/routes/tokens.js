@@ -375,21 +375,25 @@ router.get("/discover-new", async (req, res) => {
 
     const cachedTokens = await DiscoveredToken.find({
       lastSeenAt: {
-        $gte: new Date(Date.now() - 48 * 60 * 60 * 1000),
+        $gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
       },
     })
       .sort({ lastSeenAt: -1 })
       .limit(200)
       .lean();
 
-    let filteredTokens = cachedTokens;
+    const liquidTokens = cachedTokens.filter(
+  (t) => Number(t.liquidityUsd || 0) > 0
+);
 
-    if (type === "boosted") {
-      filteredTokens = cachedTokens.filter((t) => t.boosted === true);
-    }
+let filteredTokens = liquidTokens;
 
-    if (type === "high-volume") {
-      filteredTokens = cachedTokens
+if (type === "boosted") {
+  filteredTokens = liquidTokens.filter((t) => t.boosted === true);
+}
+
+if (type === "high-volume") {
+  filteredTokens = liquidTokens
         .filter((t) => Number(t.volume5mUsd || 0) >= 500)
         .filter((t) => Number(t.liquidityUsd || 0) >= 2000)
         .sort(
@@ -399,13 +403,13 @@ router.get("/discover-new", async (req, res) => {
     }
 
     if (type === "buy-pressure") {
-      filteredTokens = cachedTokens
+      filteredTokens = liquidTokens
         .filter((t) => Number(t.buys5m || 0) > Number(t.sells5m || 0))
         .sort((a, b) => Number(b.buys5m || 0) - Number(a.buys5m || 0));
     }
 
     if (type === "established") {
-      filteredTokens = cachedTokens
+      filteredTokens = liquidTokens
         .filter((t) => Number(t.ageMinutes || 0) >= 60)
         .filter((t) => Number(t.liquidityUsd || 0) >= 5000)
         .sort(
