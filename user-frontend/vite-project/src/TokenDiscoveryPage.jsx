@@ -220,9 +220,15 @@ const [activeTab, setActiveTab] = useState("newest");
 
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-3 bg-gray-900 border border-gray-800 rounded-xl px-4 py-3">
-              <span className="text-sm text-gray-300 font-medium">
-                Custom Scanner
-              </span>
+              <div className="flex flex-col">
+  <span className="text-sm text-gray-300 font-medium">
+    Custom Scanner
+  </span>
+
+  <span className="text-[11px] text-gray-500">
+    Choose your token conditions
+  </span>
+</div>
 
               <button
                 type="button"
