@@ -26,6 +26,7 @@ import { fetchProfitWalletData } from "../../scanner/fetchProfitWalletData.js";
 import User from "../../../models/User.js";
 import { analyzeChartEntry } from "../../services/chartEntryService.js";
 import { fetchLiquidityLockStatus } from "../../scanner/fetchLiquidityLockStatus.js";
+import DiscoveredToken from "../models/DiscoveredToken.js";
 
 
 const router = express.Router();
@@ -301,7 +302,7 @@ console.log(
       : [];
 
     const baseTokens = solanaProfiles
-  .slice(0, 60)
+  .slice(0, 100)
   .map((item) => ({
     chainId: item.chainId,
     mintAddress: item.tokenAddress,
@@ -363,27 +364,64 @@ const tokens = await Promise.all(
   })
 );
 
-let filteredTokens = tokens;
+await Promise.all(
+  tokens
+    .filter((t) => t?.mintAddress)
+    .map((token) =>
+      DiscoveredToken.findOneAndUpdate(
+        { mintAddress: token.mintAddress },
+        {
+          ...token,
+          lastSeenAt: new Date(),
+        },
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+        }
+      )
+    )
+);
+
+const cachedTokens = await DiscoveredToken.find({
+  lastSeenAt: {
+    $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  },
+})
+  .sort({ lastSeenAt: -1 })
+  .limit(200)
+  .lean();
+
+const cachedTokens = await DiscoveredToken.find({
+  lastSeenAt: {
+    $gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+  },
+})
+  .sort({ lastSeenAt: -1 })
+  .limit(200)
+  .lean();
+
+let filteredTokens = cachedTokens;
 
 if (type === "boosted") {
-  filteredTokens = tokens.filter((t) => t.boosted === true);
+  filteredTokens = cachedTokens.filter((t) => t.boosted === true);
 }
 
 if (type === "high-volume") {
-  filteredTokens = tokens
+  filteredTokens = cachedTokens
     .filter((t) => Number(t.volume5mUsd || 0) >= 500)
     .filter((t) => Number(t.liquidityUsd || 0) >= 2000)
     .sort((a, b) => Number(b.volume5mUsd || 0) - Number(a.volume5mUsd || 0));
 }
 
 if (type === "buy-pressure") {
-  filteredTokens = tokens
+  filteredTokens = cachedTokens
     .filter((t) => Number(t.buys5m || 0) > Number(t.sells5m || 0))
     .sort((a, b) => Number(b.buys5m || 0) - Number(a.buys5m || 0));
 }
 
 if (type === "established") {
-  filteredTokens = tokens
+  filteredTokens = cachedTokens
     .filter((t) => Number(t.ageMinutes || 0) >= 60)
     .filter((t) => Number(t.liquidityUsd || 0) >= 5000)
     .sort((a, b) => Number(b.liquidityUsd || 0) - Number(a.liquidityUsd || 0));
