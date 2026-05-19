@@ -271,8 +271,9 @@ function matchTokenConditions({
 // =====================================================
 // DISCOVER NEW SOLANA TOKENS
 // =====================================================
-router.get("/discover-new", async (_req, res) => {
+router.get("/discover-new", async (req, res) => {
   try {
+const type = String(req.query.type || "newest").toLowerCase();
     console.log("🚀 Fetching latest token profiles...");
 
 const response = await axios.get(
@@ -361,11 +362,32 @@ const tokens = await Promise.all(
     }
   })
 );
+
+let filteredTokens = tokens;
+
+if (type === "boosted") {
+  filteredTokens = tokens.filter((t) => t.boosted === true);
+}
+
+if (type === "high-volume") {
+  filteredTokens = tokens
+    .filter((t) => Number(t.volume5mUsd || 0) >= 500)
+    .filter((t) => Number(t.liquidityUsd || 0) >= 2000)
+    .sort((a, b) => Number(b.volume5mUsd || 0) - Number(a.volume5mUsd || 0));
+}
+
+if (type === "buy-pressure") {
+  filteredTokens = tokens
+    .filter((t) => Number(t.buys5m || 0) > Number(t.sells5m || 0))
+    .sort((a, b) => Number(b.buys5m || 0) - Number(a.buys5m || 0));
+}
+
     return res.status(200).json({
-      ok: true,
-      count: tokens.length,
-      tokens,
-    });
+  ok: true,
+  type,
+  count: filteredTokens.length,
+  tokens: filteredTokens,
+});
   } catch (error) {
     console.error("GET /api/tokens/discover-new error:", error);
 
@@ -376,6 +398,8 @@ const tokens = await Promise.all(
     });
   }
 });
+
+
 
 // =====================================================
 // SCAN ROUTE
