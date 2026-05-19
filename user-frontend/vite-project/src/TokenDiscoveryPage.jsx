@@ -315,13 +315,14 @@ const [activeTab, setActiveTab] = useState("newest");
         ) : null}
 
 <div className="flex flex-wrap gap-3 mb-6">
-  {[
-    { key: "newest", label: "Newest" },
-    { key: "boosted", label: "Boosted" },
-    { key: "high-volume", label: "High Volume" },
-    { key: "buy-pressure", label: "Buy Pressure" },
-{ key: "established", label: "Established" },
-{ key: "trending", label: "Trending" },
+ [
+  { key: "newest", label: "Newest" },
+  { key: "trending", label: "Trending" },
+  { key: "boosted", label: "Boosted" },
+  { key: "high-volume", label: "High Volume" },
+  { key: "buy-pressure", label: "Buy Pressure" },
+  { key: "established", label: "Established" },
+]
   ].map((tab) => (
     <button
       key={tab.key}
