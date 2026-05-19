@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", async (_req, res) => {
   try {
     const response = await axios.get(
-      "https://api.dexscreener.com/metas/trending/v1",
+      "https://api.dexscreener.com/token-boosts/top/v1"
       {
         timeout: 10000,
         headers: {
@@ -17,7 +17,9 @@ router.get("/", async (_req, res) => {
       }
     );
 
-    const metas = Array.isArray(response.data) ? response.data : [];
+    const metas = Array.isArray(response.data)
+  ? response.data
+  : response.data?.data || [];
 
     const solanaItems = metas
       .filter((item) => item?.chainId === "solana" || item?.tokenAddress)
