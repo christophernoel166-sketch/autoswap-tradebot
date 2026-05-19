@@ -382,6 +382,13 @@ if (type === "buy-pressure") {
     .sort((a, b) => Number(b.buys5m || 0) - Number(a.buys5m || 0));
 }
 
+if (type === "established") {
+  filteredTokens = tokens
+    .filter((t) => Number(t.ageMinutes || 0) >= 60)
+    .filter((t) => Number(t.liquidityUsd || 0) >= 5000)
+    .sort((a, b) => Number(b.liquidityUsd || 0) - Number(a.liquidityUsd || 0));
+}
+
     return res.status(200).json({
   ok: true,
   type,

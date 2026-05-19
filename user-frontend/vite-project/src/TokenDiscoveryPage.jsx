@@ -320,6 +320,7 @@ const [activeTab, setActiveTab] = useState("newest");
     { key: "boosted", label: "Boosted" },
     { key: "high-volume", label: "High Volume" },
     { key: "buy-pressure", label: "Buy Pressure" },
+{ key: "established", label: "Established" },
   ].map((tab) => (
     <button
       key={tab.key}
