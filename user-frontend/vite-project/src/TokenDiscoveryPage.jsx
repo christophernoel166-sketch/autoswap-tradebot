@@ -51,6 +51,7 @@ export default function TokenDiscoveryPage() {
   const [showConditionsModal, setShowConditionsModal] = useState(false);
   const [customConditionMode, setCustomConditionMode] = useState(false);
 const [savingConditions, setSavingConditions] = useState(false);
+const [activeTab, setActiveTab] = useState("newest");
 
   const [tokenConditions, setTokenConditions] = useState({
     market: {
@@ -101,7 +102,9 @@ const [savingConditions, setSavingConditions] = useState(false);
       setLoading(true);
 
       const API_BASE = import.meta.env.VITE_API_BASE || "";
-      const res = await fetch(`${API_BASE}/api/tokens/discover-new`);
+      const res = await fetch(
+  `${API_BASE}/api/tokens/discover-new?type=${activeTab}`
+);
       const data = await res.json();
 
       if (!res.ok || !data.ok) {
@@ -177,15 +180,16 @@ const [savingConditions, setSavingConditions] = useState(false);
   }
 
   useEffect(() => {
-    fetchNewTokens();
+  fetchNewTokens();
 
-    if (walletAddress) {
-      loadUserSettings();
-    }
+  if (walletAddress) {
+    loadUserSettings();
+  }
 
-    const interval = setInterval(fetchNewTokens, 30000);
-    return () => clearInterval(interval);
-  }, [walletAddress]);
+  const interval = setInterval(fetchNewTokens, 30000);
+
+  return () => clearInterval(interval);
+}, [walletAddress, activeTab]);
 
   function handleScanToken(mintAddress) {
     const mode = customConditionMode ? "custom" : "default";
@@ -309,6 +313,29 @@ const [savingConditions, setSavingConditions] = useState(false);
             </div>
           </div>
         ) : null}
+
+<div className="flex flex-wrap gap-3 mb-6">
+  {[
+    { key: "newest", label: "Newest" },
+    { key: "boosted", label: "Boosted" },
+    { key: "high-volume", label: "High Volume" },
+    { key: "buy-pressure", label: "Buy Pressure" },
+  ].map((tab) => (
+    <button
+      key={tab.key}
+      type="button"
+      onClick={() => setActiveTab(tab.key)}
+      className={`px-4 py-2 rounded-xl text-sm font-medium transition ${
+        activeTab === tab.key
+          ? "bg-purple-600 text-white"
+          : "bg-gray-900 text-gray-300 border border-gray-800 hover:bg-gray-800"
+      }`}
+    >
+      {tab.label}
+    </button>
+  ))}
+</div>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (
