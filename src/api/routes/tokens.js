@@ -408,6 +408,27 @@ if (type === "high-volume") {
         .sort((a, b) => Number(b.buys5m || 0) - Number(a.buys5m || 0));
     }
 
+if (type === "trending") {
+  filteredTokens = liquidTokens
+    .filter((t) => Number(t.volume5mUsd || 0) >= 300)
+    .filter(
+      (t) => Number(t.buys5m || 0) + Number(t.sells5m || 0) >= 10
+    )
+    .sort((a, b) => {
+      const scoreA =
+        Number(a.volume5mUsd || 0) +
+        Number(a.buys5m || 0) * 50 -
+        Number(a.sells5m || 0) * 20;
+
+      const scoreB =
+        Number(b.volume5mUsd || 0) +
+        Number(b.buys5m || 0) * 50 -
+        Number(b.sells5m || 0) * 20;
+
+      return scoreB - scoreA;
+    });
+}
+
     if (type === "established") {
       filteredTokens = liquidTokens
         .filter((t) => Number(t.ageMinutes || 0) >= 60)
