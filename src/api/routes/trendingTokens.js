@@ -7,7 +7,7 @@ const router = express.Router();
 router.get("/", async (_req, res) => {
   try {
     const response = await axios.get(
-      "https://api.dexscreener.com/token-boosts/top/v1"
+      "https://api.dexscreener.com/token-boosts/top/v1",
       {
         timeout: 10000,
         headers: {
@@ -18,11 +18,11 @@ router.get("/", async (_req, res) => {
     );
 
     const metas = Array.isArray(response.data)
-  ? response.data
-  : response.data?.data || [];
+      ? response.data
+      : response.data?.data || [];
 
     const solanaItems = metas
-      .filter((item) => item?.chainId === "solana" || item?.tokenAddress)
+      .filter((item) => item?.chainId === "solana")
       .slice(0, 50);
 
     const tokens = await Promise.all(
@@ -43,11 +43,21 @@ router.get("/", async (_req, res) => {
             mintAddress,
             pairAddress: market.token?.pairAddress || null,
             dexId: market.token?.dexId || null,
-            name: market.token?.name || item.description || "Trending Token",
-            symbol: market.token?.symbol || item.symbol || "UNKNOWN",
+
+            name:
+              market.token?.name ||
+              item.description ||
+              "Trending Token",
+
+            symbol:
+              market.token?.symbol ||
+              item.symbol ||
+              "UNKNOWN",
+
             icon: item.icon || null,
             url: item.url || null,
             links: item.links || [],
+
             ageMinutes: market.metrics?.ageMinutes ?? null,
             liquidityUsd: market.metrics?.liquidityUsd ?? null,
             marketCapUsd: market.metrics?.marketCapUsd ?? null,
@@ -56,7 +66,13 @@ router.get("/", async (_req, res) => {
             sells5m: market.metrics?.sells5m ?? null,
             boosted: market.metrics?.boosted || false,
           };
-        } catch {
+        } catch (err) {
+          console.warn(
+            "Trending token market fetch failed:",
+            mintAddress,
+            err?.message
+          );
+
           return null;
         }
       })
