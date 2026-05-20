@@ -329,6 +329,7 @@ try {
             mintAddress: item.mintAddress,
             pairAddress: market.token?.pairAddress || null,
             dexId: market.token?.dexId || null,
+            pairCreatedAt: market.rawPair?.pairCreatedAt || null,
             name: market.token?.name || item.fallbackName,
             symbol: market.token?.symbol || item.fallbackSymbol,
             icon: item.icon,
@@ -348,6 +349,7 @@ try {
             mintAddress: item.mintAddress,
             pairAddress: null,
             dexId: null,
+             pairCreatedAt: null,
             name: item.fallbackName,
             symbol: item.fallbackSymbol,
             icon: item.icon,
@@ -449,6 +451,16 @@ if (type === "trending") {
             Number(b.liquidityUsd || 0) - Number(a.liquidityUsd || 0)
         );
     }
+
+const now = Date.now();
+
+filteredTokens = filteredTokens.map((t) => ({
+  ...t,
+
+  ageMinutes: t.pairCreatedAt
+    ? Math.floor((now - Number(t.pairCreatedAt)) / 60000)
+    : t.ageMinutes,
+}));
 
     return res.status(200).json({
       ok: true,

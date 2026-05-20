@@ -3,12 +3,14 @@ import mongoose from "mongoose";
 const discoveredTokenSchema = new mongoose.Schema(
   {
     chainId: String,
+
     mintAddress: {
       type: String,
       required: true,
       unique: true,
       index: true,
     },
+
     pairAddress: String,
     dexId: String,
 
@@ -18,12 +20,17 @@ const discoveredTokenSchema = new mongoose.Schema(
     url: String,
     links: Array,
 
+    // REAL pair creation timestamp from Dexscreener
+    pairCreatedAt: Number,
+
     ageMinutes: Number,
     liquidityUsd: Number,
     marketCapUsd: Number,
     volume5mUsd: Number,
+
     buys5m: Number,
     sells5m: Number,
+
     boosted: Boolean,
 
     lastSeenAt: {
