@@ -278,18 +278,29 @@ router.get("/discover-new", async (req, res) => {
 
     console.log("🚀 Fetching latest token profiles...");
 
-    const response = await axios.get(
-      "https://api.dexscreener.com/token-profiles/latest/v1",
-      {
-        timeout: 8000,
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "AutoswapsBot/1.0",
-        },
-      }
-    );
+    let profiles = [];
 
-    const profiles = response?.data || [];
+try {
+  const response = await axios.get(
+    "https://api.dexscreener.com/token-profiles/latest/v1",
+    {
+      timeout: 8000,
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "AutoswapsBot/1.0",
+      },
+    }
+  );
+
+  profiles = response?.data || [];
+} catch (err) {
+  console.warn(
+    "Dexscreener latest profiles failed, using cache:",
+    err?.response?.status || err?.message
+  );
+
+  profiles = [];
+}
 
     const solanaProfiles = Array.isArray(profiles)
       ? profiles.filter((item) => item?.chainId === "solana")

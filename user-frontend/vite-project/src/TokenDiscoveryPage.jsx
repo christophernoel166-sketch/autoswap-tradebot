@@ -186,7 +186,7 @@ const [activeTab, setActiveTab] = useState("newest");
     loadUserSettings();
   }
 
-  const interval = setInterval(fetchNewTokens, 30000);
+  const interval = setInterval(fetchNewTokens, 60000);
 
   return () => clearInterval(interval);
 }, [walletAddress, activeTab]);
