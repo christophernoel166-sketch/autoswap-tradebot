@@ -408,7 +408,42 @@ console.log(
   }))
 );
 
-const liquidTokens = cachedTokens.filter(
+const refreshedTokens = await Promise.all(
+  cachedTokens.map(async (token) => {
+    try {
+      const market = await fetchTokenMarketData(token.mintAddress);
+
+      const updatedToken = {
+        ...token,
+        pairAddress: market.token?.pairAddress || token.pairAddress,
+        dexId: market.token?.dexId || token.dexId,
+        pairCreatedAt: market.rawPair?.pairCreatedAt || token.pairCreatedAt,
+        name: market.token?.name || token.name,
+        symbol: market.token?.symbol || token.symbol,
+        ageMinutes: market.metrics?.ageMinutes ?? token.ageMinutes,
+        liquidityUsd: market.metrics?.liquidityUsd ?? token.liquidityUsd,
+        marketCapUsd: market.metrics?.marketCapUsd ?? token.marketCapUsd,
+        volume5mUsd: market.metrics?.volume5mUsd ?? token.volume5mUsd,
+        buys5m: market.metrics?.buys5m ?? token.buys5m,
+        sells5m: market.metrics?.sells5m ?? token.sells5m,
+        boosted: market.metrics?.boosted ?? token.boosted,
+        lastSeenAt: new Date(),
+      };
+
+      await DiscoveredToken.findOneAndUpdate(
+        { mintAddress: token.mintAddress },
+        updatedToken,
+        { new: true }
+      );
+
+      return updatedToken;
+    } catch (err) {
+      return token;
+    }
+  })
+);
+
+const liquidTokens = refreshedTokens.filter(
   (t) => Number(t.liquidityUsd || 0) > 0
 );
 
