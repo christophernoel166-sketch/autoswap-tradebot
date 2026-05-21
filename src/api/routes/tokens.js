@@ -335,54 +335,25 @@ try {
       }))
       .filter((item) => item.mintAddress);
 
-    const tokens = await Promise.all(
-      baseTokens.map(async (item) => {
-        try {
-          const market = await fetchTokenMarketData(item.mintAddress);
-
-          return {
-            chainId: item.chainId,
-            mintAddress: item.mintAddress,
-            pairAddress: market.token?.pairAddress || null,
-            dexId: market.token?.dexId || null,
-            pairCreatedAt: market.rawPair?.pairCreatedAt || null,
-            name: market.token?.name || item.fallbackName,
-            symbol: market.token?.symbol || item.fallbackSymbol,
-            icon: item.icon,
-            url: item.url,
-            links: item.links,
-            ageMinutes: market.metrics?.ageMinutes ?? null,
-            liquidityUsd: market.metrics?.liquidityUsd ?? null,
-            marketCapUsd: market.metrics?.marketCapUsd ?? null,
-            volume5mUsd: market.metrics?.volume5mUsd ?? null,
-            buys5m: market.metrics?.buys5m ?? null,
-            sells5m: market.metrics?.sells5m ?? null,
-            boosted: market.metrics?.boosted || false,
-          };
-        } catch {
-          return {
-            chainId: item.chainId,
-            mintAddress: item.mintAddress,
-            pairAddress: null,
-            dexId: null,
-             pairCreatedAt: null,
-            name: item.fallbackName,
-            symbol: item.fallbackSymbol,
-            icon: item.icon,
-            url: item.url,
-            links: item.links,
-            ageMinutes: null,
-            liquidityUsd: null,
-            marketCapUsd: null,
-            volume5mUsd: null,
-            buys5m: null,
-            sells5m: null,
-            boosted: false,
-          };
-        }
-      })
-    );
-
+   const tokens = baseTokens.map((item) => ({
+  chainId: item.chainId,
+  mintAddress: item.mintAddress,
+  pairAddress: null,
+  dexId: null,
+  pairCreatedAt: null,
+  name: item.fallbackName,
+  symbol: item.fallbackSymbol,
+  icon: item.icon,
+  url: item.url,
+  links: item.links,
+  ageMinutes: null,
+  liquidityUsd: null,
+  marketCapUsd: null,
+  volume5mUsd: null,
+  buys5m: null,
+  sells5m: null,
+  boosted: false,
+}));
     await Promise.all(
       tokens
         .filter((t) => t?.mintAddress)
