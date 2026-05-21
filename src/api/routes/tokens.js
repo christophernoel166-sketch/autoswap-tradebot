@@ -282,7 +282,9 @@ router.get("/discover-new", async (req, res) => {
 
 const discoveryUrls = [
   "https://api.dexscreener.com/token-profiles/latest/v1",
- 
+  "https://api.dexscreener.com/token-boosts/latest/v1",
+  "https://api.dexscreener.com/token-boosts/top/v1",
+  "https://api.dexscreener.com/community-takeovers/latest/v1",
 ];
 
 try {
@@ -411,8 +413,20 @@ try {
 
 
 
+const MARKET_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+
 const refreshedTokens = await Promise.all(
-  cachedTokens.slice(0, 30).map(async (token) => {
+  cachedTokens.map(async (token) => {
+    const lastUpdated = token.updatedAt
+      ? new Date(token.updatedAt).getTime()
+      : 0;
+
+    const isFresh = Date.now() - lastUpdated < MARKET_REFRESH_INTERVAL_MS;
+
+    if (isFresh) {
+      return token;
+    }
+
     try {
       const market = await fetchTokenMarketData(token.mintAddress);
 
