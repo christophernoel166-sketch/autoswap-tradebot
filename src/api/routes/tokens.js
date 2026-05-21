@@ -276,7 +276,7 @@ router.get("/discover-new", async (req, res) => {
   try {
     const type = String(req.query.type || "newest").toLowerCase();
 
-    console.log("🚀 Fetching latest token profiles...");
+    
 
    let profiles = [];
 
@@ -308,7 +308,7 @@ try {
       : [];
   });
 
-  console.log("Discovery profiles fetched:", profiles.length);
+  
 } catch (err) {
   console.warn(
     "Dexscreener discovery sources failed:",
