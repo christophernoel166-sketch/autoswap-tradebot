@@ -387,15 +387,28 @@ try {
     );
 
     const cachedTokens = await DiscoveredToken.find({
-      lastSeenAt: {
-        $gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
-      },
-    })
-      .sort({ lastSeenAt: -1 })
-      .limit(200)
-      .lean();
+  lastSeenAt: {
+    $gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
+  },
+})
+  .sort({ lastSeenAt: -1 })
+  .limit(200)
+  .lean();
 
-    const liquidTokens = cachedTokens.filter(
+console.log(
+  "Cached tokens sample:",
+  cachedTokens.slice(0, 3).map((t) => ({
+    symbol: t.symbol,
+    ageMinutes: t.ageMinutes,
+    pairCreatedAt: t.pairCreatedAt,
+    liquidityUsd: t.liquidityUsd,
+    marketCapUsd: t.marketCapUsd,
+    volume5mUsd: t.volume5mUsd,
+    lastSeenAt: t.lastSeenAt,
+  }))
+);
+
+const liquidTokens = cachedTokens.filter(
   (t) => Number(t.liquidityUsd || 0) > 0
 );
 
