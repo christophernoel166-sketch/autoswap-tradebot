@@ -278,24 +278,40 @@ router.get("/discover-new", async (req, res) => {
 
     console.log("🚀 Fetching latest token profiles...");
 
-    let profiles = [];
+   let profiles = [];
+
+const discoveryUrls = [
+  "https://api.dexscreener.com/token-profiles/latest/v1",
+  "https://api.dexscreener.com/token-boosts/latest/v1",
+  "https://api.dexscreener.com/token-boosts/top/v1",
+  "https://api.dexscreener.com/community-takeovers/latest/v1",
+];
 
 try {
-  const response = await axios.get(
-    "https://api.dexscreener.com/token-profiles/latest/v1",
-    {
-      timeout: 8000,
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "AutoswapsBot/1.0",
-      },
-    }
+  const responses = await Promise.allSettled(
+    discoveryUrls.map((url) =>
+      axios.get(url, {
+        timeout: 8000,
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "AutoswapsBot/1.0",
+        },
+      })
+    )
   );
 
-  profiles = response?.data || [];
+  profiles = responses.flatMap((result) => {
+    if (result.status !== "fulfilled") return [];
+
+    return Array.isArray(result.value?.data)
+      ? result.value.data
+      : [];
+  });
+
+  console.log("Discovery profiles fetched:", profiles.length);
 } catch (err) {
   console.warn(
-    "Dexscreener latest profiles failed, using cache:",
+    "Dexscreener discovery sources failed:",
     err?.response?.status || err?.message
   );
 
