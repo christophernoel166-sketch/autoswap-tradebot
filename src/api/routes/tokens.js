@@ -414,7 +414,7 @@ try {
 
 
 const refreshedTokens = await Promise.all(
-  cachedTokens.slice(0, 100).map(async (token) => {
+  cachedTokens.slice(0, 70).map(async (token) => {
     try {
       const market = await fetchTokenMarketData(token.mintAddress);
 
