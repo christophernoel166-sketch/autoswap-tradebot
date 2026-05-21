@@ -415,8 +415,24 @@ try {
 
 const MARKET_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 
+const MARKET_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
+const MAX_REFRESH_PER_REQUEST = 10;
+
+let refreshedCount = 0;
+
 const refreshedTokens = await Promise.all(
   cachedTokens.map(async (token) => {
+    const lastUpdated = token.updatedAt
+      ? new Date(token.updatedAt).getTime()
+      : 0;
+
+    const isFresh = Date.now() - lastUpdated < MARKET_REFRESH_INTERVAL_MS;
+
+    if (isFresh || refreshedCount >= MAX_REFRESH_PER_REQUEST) {
+      return token;
+    }
+
+    refreshedCount += 1;
     const lastUpdated = token.updatedAt
       ? new Date(token.updatedAt).getTime()
       : 0;
