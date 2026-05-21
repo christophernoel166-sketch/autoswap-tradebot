@@ -459,17 +459,9 @@ const refreshedTokens = await Promise.all(
   })
 );
 
-const liquidTokens = refreshedTokens.filter((t) => {
-  const liquidity = Number(t.liquidityUsd || 0);
-  const marketCap = Number(t.marketCapUsd || 0);
-  const age = Number(t.ageMinutes || 0);
-
-  return (
-    liquidity >= 1000 &&
-    marketCap >= 1000 &&
-    age <= 24 * 60
-  );
-});
+const liquidTokens = refreshedTokens.filter(
+  (t) => Number(t.liquidityUsd || 0) > 0
+);
 
 let filteredTokens = liquidTokens;
 
