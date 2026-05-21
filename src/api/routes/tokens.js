@@ -411,18 +411,7 @@ try {
   .limit(200)
   .lean();
 
-console.log(
-  "Cached tokens sample:",
-  cachedTokens.slice(0, 3).map((t) => ({
-    symbol: t.symbol,
-    ageMinutes: t.ageMinutes,
-    pairCreatedAt: t.pairCreatedAt,
-    liquidityUsd: t.liquidityUsd,
-    marketCapUsd: t.marketCapUsd,
-    volume5mUsd: t.volume5mUsd,
-    lastSeenAt: t.lastSeenAt,
-  }))
-);
+
 
 const refreshedTokens = await Promise.all(
   cachedTokens.map(async (token) => {
