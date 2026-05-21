@@ -414,8 +414,6 @@ try {
 
 
 const MARKET_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
-
-const MARKET_REFRESH_INTERVAL_MS = 2 * 60 * 1000;
 const MAX_REFRESH_PER_REQUEST = 10;
 
 let refreshedCount = 0;
