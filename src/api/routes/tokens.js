@@ -424,22 +424,14 @@ const refreshedTokens = await Promise.all(
       ? new Date(token.updatedAt).getTime()
       : 0;
 
-    const isFresh = Date.now() - lastUpdated < MARKET_REFRESH_INTERVAL_MS;
+    const isFresh =
+      Date.now() - lastUpdated < MARKET_REFRESH_INTERVAL_MS;
 
     if (isFresh || refreshedCount >= MAX_REFRESH_PER_REQUEST) {
       return token;
     }
 
     refreshedCount += 1;
-    const lastUpdated = token.updatedAt
-      ? new Date(token.updatedAt).getTime()
-      : 0;
-
-    const isFresh = Date.now() - lastUpdated < MARKET_REFRESH_INTERVAL_MS;
-
-    if (isFresh) {
-      return token;
-    }
 
     try {
       const market = await fetchTokenMarketData(token.mintAddress);
