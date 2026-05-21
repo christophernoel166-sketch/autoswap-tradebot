@@ -550,7 +550,7 @@ router.post("/scan", async (req, res) => {
 
 const cleanTokenMint = tokenMint.trim();
 const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
-console.log("🔒 liquidityLock:", liquidityLock);
+
     // ================= MARKET FETCH =================
     try {
       market = await fetchTokenMarketData(tokenMint);
@@ -965,11 +965,10 @@ router.post("/scan-custom-mode", async (req, res) => {
 
     const cleanWalletAddress = walletAddress.trim();
     const cleanTokenMint = tokenMint.trim();
-console.log("🔍 Custom mode liquidity lock check for:", cleanTokenMint);
+
 
 const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
 
-console.log("🔒 custom liquidityLock:", liquidityLock);
 
     const user = await User.findOne({ walletAddress: cleanWalletAddress });
     if (!user) {
