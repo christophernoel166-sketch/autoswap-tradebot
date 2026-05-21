@@ -23,7 +23,7 @@ export async function fetchLiquidityLockStatus(tokenMint) {
     );
 
     const data = res.data || {};
-console.log("🧪 RugCheck liquidity response:", JSON.stringify(data, null, 2));
+
 const risks = Array.isArray(data.risks) ? data.risks : [];
     const unlockedLiquidityRisk = risks.find((risk) => {
       const name = String(risk?.name || risk?.title || "").toLowerCase();
@@ -55,10 +55,9 @@ const risks = Array.isArray(data.risks) ? data.risks : [];
     };
   } catch (error) {
     console.warn(
-      "fetchLiquidityLockStatus failed:",
-      error?.response?.status || "",
-      error?.response?.data || error?.message || String(error)
-    );
+  "fetchLiquidityLockStatus failed:",
+  error?.response?.status || error?.message || String(error)
+);
 
     return {
       liquidityLocked: "unknown",

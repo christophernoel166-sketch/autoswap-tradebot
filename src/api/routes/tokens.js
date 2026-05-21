@@ -1323,7 +1323,7 @@ router.post("/manual-buy", async (req, res) => {
       scannedAt: scanResult.scannedAt,
     };
 
-    
+    console.log("manual-buy using provided scanResult:", scan);
 
     const check = canExecuteManualBuy(
       {
