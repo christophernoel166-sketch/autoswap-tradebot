@@ -323,7 +323,7 @@ try {
       : [];
 
     const baseTokens = solanaProfiles
-      .slice(0, 20)
+      .slice(0, 40)
       .map((item) => ({
         chainId: item.chainId,
         mintAddress: item.tokenAddress,
