@@ -52,6 +52,7 @@ export default function TokenDiscoveryPage() {
   const [customConditionMode, setCustomConditionMode] = useState(false);
 const [savingConditions, setSavingConditions] = useState(false);
 const [activeTab, setActiveTab] = useState("newest");
+const [manualMint, setManualMint] = useState("");
 
   const [tokenConditions, setTokenConditions] = useState({
     market: {
@@ -191,13 +192,25 @@ const [activeTab, setActiveTab] = useState("newest");
   return () => clearInterval(interval);
 }, [walletAddress, activeTab]);
 
-  function handleScanToken(mintAddress) {
-    const mode = customConditionMode ? "custom" : "default";
+ 
 
-    navigate(
-      `/dashboard?token=${encodeURIComponent(mintAddress)}&mode=${mode}`
-    );
-  }
+function handleScanToken(mintAddress) {
+  const mode = customConditionMode ? "custom" : "default";
+
+  navigate(
+    `/dashboard?token=${encodeURIComponent(mintAddress)}&mode=${mode}`
+  );
+}
+
+function handleManualMintScan() {
+  const mint = manualMint.trim();
+
+  if (!mint) return;
+
+  handleScanToken(mint);
+}
+
+ 
 
   async function toggleCustomScanner() {
     const nextValue = !customConditionMode;
@@ -343,6 +356,24 @@ const [activeTab, setActiveTab] = useState("newest");
     </button>
   ))}
 </div>
+
+<div className="flex flex-col sm:flex-row gap-3 mb-6 max-w-2xl">
+  <input
+    value={manualMint}
+    onChange={(e) => setManualMint(e.target.value)}
+    placeholder="Paste token contract address"
+    className="flex-1 rounded-xl border border-gray-800 bg-gray-900 px-4 py-3 text-white outline-none focus:border-purple-500"
+  />
+
+  <button
+    type="button"
+    onClick={handleManualMintScan}
+    className="px-5 py-3 rounded-xl bg-green-600 hover:bg-green-700 font-medium"
+  >
+    Scan
+  </button>
+</div>
+
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {newTokens.map((token) => (
