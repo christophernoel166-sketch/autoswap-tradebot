@@ -444,23 +444,32 @@ if (type === "high-volume") {
 
 if (type === "trending") {
   filteredTokens = liquidTokens
-    .filter((t) => Number(t.volume5mUsd || 0) >= 300)
-    .filter(
-      (t) => Number(t.buys5m || 0) + Number(t.sells5m || 0) >= 10
-    )
-    .sort((a, b) => {
-      const scoreA =
-        Number(a.volume5mUsd || 0) +
-        Number(a.buys5m || 0) * 50 -
-        Number(a.sells5m || 0) * 20;
+    .map((t) => {
+      const liquidity = Number(t.liquidityUsd || 0);
+      const volume5m = Number(t.volume5mUsd || 0);
+      const buys = Number(t.buys5m || 0);
+      const sells = Number(t.sells5m || 0);
+      const txns = buys + sells;
+      const marketCap = Number(t.marketCapUsd || 0);
+      const age = Number(t.ageMinutes || 0);
 
-      const scoreB =
-        Number(b.volume5mUsd || 0) +
-        Number(b.buys5m || 0) * 50 -
-        Number(b.sells5m || 0) * 20;
+      const trendingScore =
+        volume5m * 1.5 +
+        txns * 100 +
+        buys * 80 +
+        liquidity * 0.05 +
+        marketCap * 0.01 -
+        sells * 30 -
+        age * 2;
 
-      return scoreB - scoreA;
-    });
+      return {
+        ...t,
+        trendingScore,
+      };
+    })
+    .filter((t) => Number(t.volume5mUsd || 0) >= 1000)
+    .filter((t) => Number(t.buys5m || 0) + Number(t.sells5m || 0) >= 50)
+    .sort((a, b) => Number(b.trendingScore || 0) - Number(a.trendingScore || 0));
 }
 
     if (type === "established") {
