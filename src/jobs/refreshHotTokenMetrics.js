@@ -2,7 +2,7 @@ import DiscoveredToken from "../api/models/DiscoveredToken.js";
 import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 
 const HOT_REFRESH_INTERVAL_MS = 10 * 1000; // every 10 seconds
-const HOT_BATCH_SIZE = 3;
+const HOT_BATCH_SIZE = 30;
 
 let hotRefreshRunning = false;
 
