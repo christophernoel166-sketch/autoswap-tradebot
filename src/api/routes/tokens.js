@@ -406,9 +406,19 @@ const cachedTokens = await DiscoveredToken.find({
 
 const refreshedTokens = cachedTokens;
 
-const liquidTokens = refreshedTokens.filter(
-  (t) => Number(t.liquidityUsd || 0) > 0
-);
+const liquidTokens = refreshedTokens.filter((t) => {
+  const liquidity = Number(t.liquidityUsd || 0);
+  const volume5m = Number(t.volume5mUsd || 0);
+  const buys = Number(t.buys5m || 0);
+  const sells = Number(t.sells5m || 0);
+
+  return (
+    liquidity >= 10000 &&
+    volume5m >= 1000 &&
+    buys >= 50 &&
+    sells >= 50
+  );
+});
 
 let filteredTokens = liquidTokens;
 
