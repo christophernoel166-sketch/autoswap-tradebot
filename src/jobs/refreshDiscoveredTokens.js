@@ -2,7 +2,7 @@ import DiscoveredToken from "../api/models/DiscoveredToken.js";
 import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 
 const REFRESH_INTERVAL_MS = 60 * 1000; // every 60 seconds
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 30;
 
 let refreshRunning = false;
 
@@ -13,11 +13,25 @@ async function refreshDiscoveredTokensOnce() {
 
   try {
     const tokens = await DiscoveredToken.find({
-      mintAddress: { $exists: true, $ne: null },
-    })
-      .sort({ updatedAt: 1 })
-      .limit(BATCH_SIZE)
-      .lean();
+  mintAddress: { $exists: true, $ne: null },
+  $or: [
+    { liquidityUsd: null },
+    { marketCapUsd: null },
+    { pairCreatedAt: null },
+    {
+      updatedAt: {
+        $lte: new Date(Date.now() - 5 * 60 * 1000),
+      },
+    },
+  ],
+})
+  .sort({
+    liquidityUsd: 1,
+    marketCapUsd: 1,
+    updatedAt: 1,
+  })
+  .limit(BATCH_SIZE)
+  .lean();
 
     for (const token of tokens) {
       try {
