@@ -32,7 +32,7 @@ import chartAnalysisRouter from "./routes/chartAnalysis.js";
 import trendingTokensRoute from "./routes/trendingTokens.js";
 import { startDiscoveredTokenRefresher } from "../jobs/refreshDiscoveredTokens.js";
 import { startHotNewPairsDiscovery } from "../jobs/discoverHotNewPairs.js";
-
+import { startBatchedDexscreenerDiscovery } from "../jobs/batchedDexscreenerDiscovery.js";
 export function createApiServer() {
   const app = express();
   const server = http.createServer(app);
@@ -171,6 +171,7 @@ app.use("/api/tokens", chartAnalysisRouter);
 
 startDiscoveredTokenRefresher();
  startHotNewPairsDiscovery();
+startBatchedDexscreenerDiscovery();
     });
   }
 
