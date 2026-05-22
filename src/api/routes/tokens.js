@@ -358,11 +358,31 @@ try {
       tokens
         .filter((t) => t?.mintAddress)
         .map((token) =>
-          DiscoveredToken.findOneAndUpdate(
+                  DiscoveredToken.findOneAndUpdate(
             { mintAddress: token.mintAddress },
             {
-              ...token,
-              lastSeenAt: new Date(),
+              $set: {
+                chainId: token.chainId,
+                icon: token.icon,
+                url: token.url,
+                links: token.links,
+                lastSeenAt: new Date(),
+              },
+              $setOnInsert: {
+                mintAddress: token.mintAddress,
+                pairAddress: token.pairAddress,
+                dexId: token.dexId,
+                pairCreatedAt: token.pairCreatedAt,
+                name: token.name,
+                symbol: token.symbol,
+                ageMinutes: token.ageMinutes,
+                liquidityUsd: token.liquidityUsd,
+                marketCapUsd: token.marketCapUsd,
+                volume5mUsd: token.volume5mUsd,
+                buys5m: token.buys5m,
+                sells5m: token.sells5m,
+                boosted: token.boosted,
+              },
             },
             {
               upsert: true,
@@ -373,7 +393,7 @@ try {
         )
     );
 
-    const cachedTokens = await DiscoveredToken.find({
+const cachedTokens = await DiscoveredToken.find({
   lastSeenAt: {
     $gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
   },
