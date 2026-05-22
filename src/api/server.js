@@ -31,6 +31,7 @@ import tokensRouter from "./routes/tokens.js";
 import chartAnalysisRouter from "./routes/chartAnalysis.js";
 import trendingTokensRoute from "./routes/trendingTokens.js";
 import { startDiscoveredTokenRefresher } from "../jobs/refreshDiscoveredTokens.js";
+import { startHotNewPairsDiscovery } from "../jobs/discoverHotNewPairs.js";
 
 export function createApiServer() {
   const app = express();
@@ -169,7 +170,7 @@ app.use("/api/tokens", chartAnalysisRouter);
       console.log(`✅ API server listening on port ${port}`);
 
 startDiscoveredTokenRefresher();
- 
+ startHotNewPairsDiscovery();
     });
   }
 
