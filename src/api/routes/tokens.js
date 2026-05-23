@@ -294,16 +294,30 @@ const cachedTokens = await DiscoveredToken.find({
 const refreshedTokens = cachedTokens;
 
 const liquidTokens = refreshedTokens.filter((t) => {
+  const age = Number(t.ageMinutes || 0);
   const liquidity = Number(t.liquidityUsd || 0);
+  const marketCap = Number(t.marketCapUsd || 0);
   const volume5m = Number(t.volume5mUsd || 0);
   const buys = Number(t.buys5m || 0);
   const sells = Number(t.sells5m || 0);
   const txns = buys + sells;
 
+  const isVeryNewToken =
+    age >= 1 &&
+    age <= 120 &&
+    liquidity >= 15000 &&
+    marketCap >= 40000;
+
+  const isOlderStrongToken =
+    age > 120 &&
+    age <= 24 * 60 &&
+    liquidity >= 50000 &&
+    marketCap >= 200000;
+
   return (
-    liquidity >= 10000 &&
+    (isVeryNewToken || isOlderStrongToken) &&
     volume5m >= 1000 &&
-    txns >= 50
+    txns >= 70
   );
 });
 

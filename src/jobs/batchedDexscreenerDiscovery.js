@@ -34,7 +34,7 @@ function isQualifiedToken(token) {
     age <= 24 * 60 &&
     liquidity >= 10000 &&
     volume5m >= 1000 &&
-    txns >= 50
+    txns >= 70
   );
 }
 
