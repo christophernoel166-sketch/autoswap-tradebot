@@ -293,7 +293,16 @@ const cachedTokens = await DiscoveredToken.find({
 
 const refreshedTokens = cachedTokens;
 
-const liquidTokens = refreshedTokens.filter((t) => {
+const now = Date.now();
+
+const normalizedTokens = refreshedTokens.map((t) => ({
+  ...t,
+  ageMinutes: t.pairCreatedAt
+    ? Math.floor((now - Number(t.pairCreatedAt)) / 60000)
+    : t.ageMinutes,
+}));
+
+const liquidTokens = normalizedTokens.filter((t) => {
   const age = Number(t.ageMinutes || 0);
   const liquidity = Number(t.liquidityUsd || 0);
   const marketCap = Number(t.marketCapUsd || 0);
@@ -421,15 +430,6 @@ if (type === "surge-watch") {
         );
     }
 
-const now = Date.now();
-
-filteredTokens = filteredTokens.map((t) => ({
-  ...t,
-
-  ageMinutes: t.pairCreatedAt
-    ? Math.floor((now - Number(t.pairCreatedAt)) / 60000)
-    : t.ageMinutes,
-}));
 
     return res.status(200).json({
       ok: true,
