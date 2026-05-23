@@ -337,6 +337,7 @@ function handleManualMintScan() {
   {[
     { key: "newest", label: "Newest" },
     { key: "trending", label: "Trending" },
+    { key: "surge-watch", label: "Surge Watch" },
     { key: "boosted", label: "Boosted" },
     { key: "high-volume", label: "High Volume" },
     { key: "buy-pressure", label: "Buy Pressure" },

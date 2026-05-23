@@ -373,6 +373,44 @@ if (type === "trending") {
     .sort((a, b) => Number(b.trendingScore || 0) - Number(a.trendingScore || 0));
 }
 
+if (type === "surge-watch") {
+  filteredTokens = liquidTokens
+    .map((t) => {
+      const age = Number(t.ageMinutes || 0);
+      const liquidity = Number(t.liquidityUsd || 0);
+      const marketCap = Number(t.marketCapUsd || 0);
+      const volume5m = Number(t.volume5mUsd || 0);
+      const buys = Number(t.buys5m || 0);
+      const sells = Number(t.sells5m || 0);
+      const txns = buys + sells;
+
+      const buySellRatio = sells > 0 ? buys / sells : buys;
+      const volumeToMarketCap = marketCap > 0 ? volume5m / marketCap : 0;
+
+      const surgeScore =
+        volume5m * 2 +
+        buys * 120 -
+        sells * 60 +
+        txns * 80 +
+        liquidity * 0.03 +
+        volumeToMarketCap * 50000 -
+        marketCap * 0.005 -
+        age * 3;
+
+      return {
+        ...t,
+        buySellRatio,
+        volumeToMarketCap,
+        surgeScore,
+      };
+    })
+    .filter((t) => Number(t.volume5mUsd || 0) >= 3000)
+    .filter((t) => Number(t.buys5m || 0) > Number(t.sells5m || 0))
+    .filter((t) => Number(t.buySellRatio || 0) >= 1.2)
+    .filter((t) => Number(t.volumeToMarketCap || 0) >= 0.01)
+    .sort((a, b) => Number(b.surgeScore || 0) - Number(a.surgeScore || 0));
+}
+
     if (type === "established") {
       filteredTokens = liquidTokens
         .filter((t) => Number(t.ageMinutes || 0) >= 60)
