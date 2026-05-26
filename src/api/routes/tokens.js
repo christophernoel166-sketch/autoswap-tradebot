@@ -326,7 +326,7 @@ const liquidTokens = normalizedTokens.filter((t) => {
   return (
     (isVeryNewToken || isOlderStrongToken) &&
     volume5m >= 1000 &&
-    txns >= 70
+    txns >= 100
   );
 });
 
