@@ -321,7 +321,7 @@ const liquidTokens = normalizedTokens.filter((t) => {
     age > 120 &&
     age <= 24 * 60 &&
     liquidity >= 50000 &&
-    marketCap >= 200000;
+    marketCap >= 300000;
 
   return (
     (isVeryNewToken || isOlderStrongToken) &&

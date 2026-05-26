@@ -57,9 +57,13 @@ export default function ActivePositions({
                            rounded p-3 flex flex-col gap-2"
               >
                 <div className="flex justify-between items-center">
-                  <span className="font-mono text-sm truncate max-w-[160px] text-gray-900 dark:text-gray-100">
-                    {p.mint}
-                  </span>
+  <span className="font-mono text-sm truncate max-w-[160px] text-gray-900 dark:text-gray-100">
+    {p.mint}
+
+    <div className="text-[10px] text-red-400 break-all">
+      {JSON.stringify(p)}
+    </div>
+  </span>
 
                   <span
                     className={`text-sm font-medium ${
@@ -198,8 +202,12 @@ export default function ActivePositions({
                     </td>
 
                     <td className="py-2 font-mono text-gray-900 dark:text-gray-100">
-                      {p.mint}
-                    </td>
+  {p.mint}
+
+  <div className="text-[10px] text-red-400 break-all">
+    {JSON.stringify(p)}
+  </div>
+</td>
 
                     <td className="py-2 text-gray-900 dark:text-gray-100">
                       {Number(p.entryPrice || 0).toFixed(6)}
