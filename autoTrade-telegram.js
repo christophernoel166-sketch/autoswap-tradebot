@@ -2743,89 +2743,103 @@ export async function restoreOpenPositions() {
           }
 
           restored++;
-
-
+ // ===================================================
+          // 📸 Rebuild wallet snapshot cache
           // ===================================================
-// 📸 Rebuild wallet snapshot cache
-// ===================================================
-const snapshotKey =
-  walletSnapshotKey(
-    walletAddress
-  );
+          const snapshotKey =
+            walletSnapshotKey(
+              walletAddress
+            );
 
-const existingRaw =
-  await redis.get(snapshotKey);
+          const existingRaw =
+            await redis.get(snapshotKey);
 
-let snapshots = [];
+          let snapshots = [];
 
-try {
-  snapshots = existingRaw
-    ? JSON.parse(existingRaw)
-    : [];
-} catch {
-  snapshots = [];
-}
+          try {
+            snapshots = existingRaw
+              ? JSON.parse(existingRaw)
+              : [];
+          } catch {
+            snapshots = [];
+          }
 
-const alreadyExists =
-  snapshots.some(
-    (s) => s.mint === mint
-  );
+          const alreadyExists =
+            snapshots.some(
+              (s) => s.mint === mint
+            );
 
-if (!alreadyExists) {
-  snapshots.push({
-    mint,
+          if (!alreadyExists) {
+            snapshots.push({
+              mint,
 
-    sourceChannel:
-      info.sourceChannel || null,
+              sourceChannel:
+                info.sourceChannel || null,
 
-    solAmount: Number(
-      info.solAmount || 0
-    ),
+              solAmount: Number(
+                info.solAmount || 0
+              ),
 
-    tokenAmount: Number(
-      info.tokenAmount || 0
-    ),
+              tokenAmount: Number(
+                info.tokenAmount || 0
+              ),
 
-    entryPrice: Number(
-      info.entryPrice || 0
-    ),
+              entryPrice: Number(
+                info.entryPrice || 0
+              ),
 
-    currentPrice: Number(
-      info.entryPrice || 0
-    ),
+              currentPrice: Number(
+                info.entryPrice || 0
+              ),
 
-    changePercent: 0,
+              changePercent: 0,
 
-    pnlSol: 0,
+              pnlSol: 0,
 
-    buyTxid:
-      info.buyTxid || null,
+              buyTxid:
+                info.buyTxid || null,
 
-    tpStage: Number(
-      info.tpStage || 0
-    ),
+              tpStage: Number(
+                info.tpStage || 0
+              ),
 
-    highestPrice: Number(
-      info.highestPrice || 0
-    ),
+              highestPrice: Number(
+                info.highestPrice || 0
+              ),
 
-    openedAt: Number(
-      info.openedAt || 0
-    ),
-  });
+              openedAt: Number(
+                info.openedAt || 0
+              ),
+            });
 
-  await redis.set(
-    snapshotKey,
-    JSON.stringify(snapshots)
-  );
+            await redis.set(
+              snapshotKey,
+              JSON.stringify(snapshots)
+            );
+          }
 
-  LOG.info(
-    {
-      walletAddress,
-      mint,
-      snapshotKey,
-    },
-    "📸 Snapshot restored"
-  );
-}
+        } catch (err) {
+          LOG.error(
+            {
+              walletAddress,
+              mint,
+              err,
+            },
+            "❌ Failed restoring position"
+          );
+        }
+      }
+    }
+
+    LOG.info(
+      { restored },
+      "♻️ Position recovery complete"
+    );
+
+  } catch (err) {
+    LOG.error(
+      err,
+      "❌ restoreOpenPositions failed"
+    );
+  }
 }
