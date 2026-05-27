@@ -1,31 +1,21 @@
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import User from "./models/User.js";
+import User from "../../models/User.js";
 
-import redis from "../lib/redis.js";
-
-import {
-  connection,
-  WSOL_MINT,
-  USDC_MINT,
-} from "../config/index.js";
-
-import {
-  ensureMonitor,
-} from "../services/priceMonitor.js";
-
-import {
-  walletPositionsKey,
-  positionKey,
-} from "../utils/redisKeys.js";
+import { redis } from "../utils/redis.js";
 
 import {
   restoreTradingWallet,
-} from "../utils/wallet.js";
+} from "../services/walletService.js";
 
 import {
-  fetchTokenMarketData,
-} from "../services/tokenMarketData.js";
+  positionKey,
+  walletPositionsKey,
+} from "../redis/positionKeys.js";
+
+import {
+  getDexScreenerPrice,
+} from "../services/priceFeed.js";
 
 import LOG from "../utils/logger.js";
 
