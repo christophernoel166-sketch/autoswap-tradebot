@@ -2377,8 +2377,12 @@ const buyResult = await executeSwap(wallet, quote);
 
 const buyTxid = buyResult?.txid;
 
+const tokenDecimals =
+  Number(quote?.outputMintDecimals || 6);
+
 const tokenAmount =
-  Number(buyResult?.tokenAmount || 0);
+  Number(buyResult?.tokenAmount || 0) /
+  Math.pow(10, tokenDecimals);
 
 LOG.info(
   {
