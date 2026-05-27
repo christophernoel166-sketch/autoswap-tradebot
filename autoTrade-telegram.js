@@ -2743,6 +2743,14 @@ export async function restoreOpenPositions() {
           }
 
           restored++;
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    snapshotKey,
+  },
+  "📸 Snapshot restored"
+);
 
           // ===================================================
           // 📸 Rebuild wallet snapshot cache
