@@ -312,7 +312,13 @@ if (confErr || statusErr) {
 }
 
 
-    return txid;
+    return {
+  txid,
+
+  tokenAmount: quote?.outAmount
+    ? Number(quote.outAmount)
+    : 0,
+};
   } catch (err) {
     console.error("[executeSwap] Error:", err?.message ?? err);
     throw err;

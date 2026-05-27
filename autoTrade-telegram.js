@@ -1594,6 +1594,7 @@ async function ensureMonitor(mint) {
 
           // position info
           solAmount: info.solAmount || 0,
+          tokenAmount: info.tokenAmount || 0,
           tpStage: info.tpStage || 0,
           highestPrice: state.highestPrices?.get(walletAddress) || entry,
 
@@ -2365,13 +2366,22 @@ if (balance < REQUIRED_LAMPORTS) {
       return;
     }
 
-    // ===================================================
-// 🚀 Execute BUY from USER wallet
+   // 🚀 Execute BUY from USER wallet
 // ===================================================
-const buyTxid = await executeSwap(wallet, quote);
+const buyResult = await executeSwap(wallet, quote);
+
+const buyTxid = buyResult?.txid;
+
+const tokenAmount =
+  Number(buyResult?.tokenAmount || 0);
 
 LOG.info(
-  { wallet: user.walletAddress, mint, buyTxid },
+  {
+    wallet: user.walletAddress,
+    mint,
+    buyTxid,
+    tokenAmount,
+  },
   "✅ BUY executed (user wallet)"
 );
 
@@ -2405,6 +2415,7 @@ try {
     [POSITION_FIELDS.sourceChannel]: sourceChannel,
 
     [POSITION_FIELDS.solAmount]: String(solAmount),
+     tokenAmount: String(tokenAmount),
     [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
     [POSITION_FIELDS.buyTxid]: String(buyTxid),
 
@@ -2466,6 +2477,7 @@ try {
 },
       buyTxid,
       solAmount,
+      tokenAmount,
       entryPrice,
       sourceChannel,
       slippageBps,
