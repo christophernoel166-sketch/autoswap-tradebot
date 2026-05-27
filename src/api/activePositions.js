@@ -40,10 +40,12 @@ router.get("/:walletAddress", async (req, res) => {
       sourceChannel: p.sourceChannel || null,
 
       solAmount: Number(p.solAmount || 0),
-      entryPrice: Number(p.entryPrice || 0),
-      currentPrice: Number(p.currentPrice || 0),
-      changePercent: Number(p.changePercent || 0),
-      pnlSol: Number(p.pnlSol || 0),
+tokenAmount: Number(p.tokenAmount || 0),
+
+entryPrice: Number(p.entryPrice || 0),
+currentPrice: Number(p.currentPrice || 0),
+changePercent: Number(p.changePercent || 0),
+pnlSol: Number(p.pnlSol || 0),
 
       buyTxid: p.buyTxid || null,
       tpStage: Number(p.tpStage || 0),
