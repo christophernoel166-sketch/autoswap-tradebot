@@ -51,6 +51,9 @@ import {
   getDexScreenerPrice,
   getDexScreenerPrices,
 } from "./src/services/priceFeed.js";
+import {
+  restoreWalletBalances,
+} from "../recovery/restoreWalletBalances.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
