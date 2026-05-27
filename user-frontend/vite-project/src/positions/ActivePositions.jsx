@@ -9,285 +9,374 @@ export default function ActivePositions({
     manualSell(mint, percent);
   }
 
+  function formatNumber(value, decimals = 6) {
+    return Number(value || 0).toLocaleString(undefined, {
+      minimumFractionDigits: 0,
+      maximumFractionDigits: decimals,
+    });
+  }
+
+  function shortMint(mint) {
+    if (!mint) return "Unknown";
+    return `${mint.slice(0, 4)}...${mint.slice(-4)}`;
+  }
+
   return (
-    <div className="bg-white dark:bg-gray-800 p-4 rounded shadow-sm mt-6 mb-10">
+    <div
+      className="bg-white dark:bg-gray-800
+                 p-4 rounded-xl shadow-sm mt-6 mb-10"
+    >
+      {/* ========================================= */}
       {/* HEADER */}
-      <div className="flex justify-between mb-3 items-center">
-        <h2 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+      {/* ========================================= */}
+      <div className="flex justify-between items-center mb-5">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
           Active Positions
         </h2>
 
         <div className="flex gap-2">
           <button
             onClick={fetchPositions}
-            className="px-3 py-1 border dark:border-gray-700
+            className="px-4 py-2 rounded-lg text-sm
+                       border border-gray-300 dark:border-gray-700
                        bg-white dark:bg-gray-700
-                       text-sm rounded
-                       text-gray-900 dark:text-gray-100"
+                       text-gray-900 dark:text-gray-100
+                       hover:bg-gray-100 dark:hover:bg-gray-600
+                       transition"
           >
-            {loading ? "Loading…" : "Refresh"}
+            {loading ? "Loading..." : "Refresh"}
           </button>
 
           <button
             onClick={manualSellAll}
-            className="px-3 py-1 border dark:border-gray-700
-                       bg-white dark:bg-gray-700
-                       text-sm rounded
-                       text-gray-900 dark:text-gray-100"
+            className="px-4 py-2 rounded-lg text-sm
+                       bg-red-500 hover:bg-red-600
+                       text-white transition"
           >
             Sell All
           </button>
         </div>
       </div>
 
+      {/* ========================================= */}
       {/* EMPTY STATE */}
+      {/* ========================================= */}
       {positions.length === 0 ? (
-        <div className="text-gray-500 dark:text-gray-400 text-sm">
+        <div
+          className="text-center py-10
+                     text-gray-500 dark:text-gray-400"
+        >
           No active positions.
         </div>
       ) : (
         <>
-          {/* ================= MOBILE VIEW (CARDS) ================= */}
-          <div className="space-y-3 lg:hidden">
-            {positions.map((p, i) => (
-              <div
-                key={i}
-                className="border dark:border-gray-700
-                           bg-gray-50 dark:bg-gray-700
-                           rounded p-3 flex flex-col gap-2"
-              >
-                <div className="flex justify-between items-center">
-  <span className="font-mono text-sm truncate max-w-[160px] text-gray-900 dark:text-gray-100">
-  {p.mint?.slice(0, 4)}...
-  {p.mint?.slice(-4)}
-</span>
+          {/* ========================================= */}
+          {/* MOBILE VIEW */}
+          {/* ========================================= */}
+          <div className="lg:hidden space-y-4">
+            {positions.map((p, i) => {
+              const tokenAmount = Number(
+                p.tokenAmount || 0
+              );
 
-                  <span
-                    className={`text-sm font-medium ${
-                      Number(p.changePercent || 0) >= 0
-                        ? "text-green-600 dark:text-green-400"
-                        : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {Number(p.changePercent || 0).toFixed(2)}%
-                  </span>
-                </div>
+              const value =
+                tokenAmount *
+                Number(p.currentPrice || 0);
 
-                <div className="grid grid-cols-2 gap-2 text-xs text-gray-700 dark:text-gray-300">
-                  <div>
-                    <div className="text-gray-400 dark:text-gray-400">
-                      Entry
+              return (
+                <div
+                  key={i}
+                  className="rounded-xl p-4
+                             border border-gray-200
+                             dark:border-gray-700
+                             bg-gray-50 dark:bg-gray-700"
+                >
+                  {/* TOP */}
+                  <div className="flex justify-between items-start mb-3">
+                    <div>
+                      <div
+                        className="font-semibold
+                                   text-gray-900
+                                   dark:text-gray-100"
+                      >
+                        {shortMint(p.mint)}
+                      </div>
+
+                      <div
+                        className="text-xs mt-1
+                                   text-gray-500 dark:text-gray-400"
+                      >
+                        Qty: {formatNumber(tokenAmount, 4)}
+                      </div>
                     </div>
-                    {Number(p.entryPrice || 0).toFixed(6)}
-                  </div>
 
-                  <div>
-                    <div className="text-gray-400 dark:text-gray-400">
-                      Current
-                    </div>
-                    {Number(p.currentPrice || 0).toFixed(6)}
-                  </div>
-
-                  <div>
-                    <div className="text-gray-400 dark:text-gray-400">
-                      PnL
-                    </div>
-                    <span
-                      className={
-                        Number(p.pnlSol || 0) >= 0
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }
+                    <div
+                      className={`text-sm font-semibold ${
+                        Number(p.changePercent || 0) >= 0
+                          ? "text-green-500"
+                          : "text-red-500"
+                      }`}
                     >
-                      {Number(p.pnlSol || 0).toFixed(6)} SOL
-                    </span>
-                  </div>
-
-                  <div>
-                    <div className="text-gray-400 dark:text-gray-400">
-                      TP Stage
+                      {Number(
+                        p.changePercent || 0
+                      ).toFixed(2)}
+                      %
                     </div>
-                    {p.tpStage}
+                  </div>
+
+                  {/* STATS */}
+                  <div
+                    className="grid grid-cols-2 gap-3
+                               text-sm"
+                  >
+                    <div>
+                      <div className="text-gray-400">
+                        Value
+                      </div>
+
+                      <div className="text-gray-900 dark:text-gray-100">
+                        {formatNumber(value)} SOL
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-400">
+                        Entry
+                      </div>
+
+                      <div className="text-gray-900 dark:text-gray-100">
+                        {formatNumber(
+                          p.entryPrice
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-400">
+                        Current
+                      </div>
+
+                      <div className="text-gray-900 dark:text-gray-100">
+                        {formatNumber(
+                          p.currentPrice
+                        )}
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="text-gray-400">
+                        PnL
+                      </div>
+
+                      <div
+                        className={
+                          Number(p.pnlSol || 0) >= 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }
+                      >
+                        {formatNumber(
+                          p.pnlSol
+                        )}{" "}
+                        SOL
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* BUTTONS */}
+                  <div className="grid grid-cols-4 gap-2 mt-4">
+                    {[25, 50, 75, 100].map(
+                      (percent) => (
+                        <button
+                          key={percent}
+                          onClick={() =>
+                            handleSellPercent(
+                              p.mint,
+                              percent
+                            )
+                          }
+                          className="py-2 rounded-lg text-xs
+                                     border border-gray-300
+                                     dark:border-gray-600
+                                     bg-white dark:bg-gray-800
+                                     text-gray-900 dark:text-gray-100
+                                     hover:bg-gray-100
+                                     dark:hover:bg-gray-700
+                                     transition"
+                        >
+                          {percent === 100
+                            ? "All"
+                            : `${percent}%`}
+                        </button>
+                      )
+                    )}
                   </div>
                 </div>
-
-                <div className="mt-2 grid grid-cols-4 gap-2">
-                  <button
-                    onClick={() => handleSellPercent(p.mint, 25)}
-                    className="px-2 py-1 border dark:border-gray-600
-                               bg-white dark:bg-gray-800
-                               text-xs rounded
-                               text-gray-900 dark:text-gray-100"
-                  >
-                    25%
-                  </button>
-
-                  <button
-                    onClick={() => handleSellPercent(p.mint, 50)}
-                    className="px-2 py-1 border dark:border-gray-600
-                               bg-white dark:bg-gray-800
-                               text-xs rounded
-                               text-gray-900 dark:text-gray-100"
-                  >
-                    50%
-                  </button>
-
-                  <button
-                    onClick={() => handleSellPercent(p.mint, 75)}
-                    className="px-2 py-1 border dark:border-gray-600
-                               bg-white dark:bg-gray-800
-                               text-xs rounded
-                               text-gray-900 dark:text-gray-100"
-                  >
-                    75%
-                  </button>
-
-                  <button
-                    onClick={() => handleSellPercent(p.mint, 100)}
-                    className="px-2 py-1 border dark:border-gray-600
-                               bg-white dark:bg-gray-800
-                               text-xs rounded
-                               text-gray-900 dark:text-gray-100"
-                  >
-                    All
-                  </button>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {/* ================= DESKTOP VIEW (TABLE) ================= */}
+          {/* ========================================= */}
+          {/* DESKTOP VIEW */}
+          {/* ========================================= */}
           <div className="hidden lg:block overflow-x-auto">
-            <table className="min-w-[700px] w-full text-sm">
+            <table className="w-full text-sm">
               <thead>
-                <tr className="border-b dark:border-gray-700">
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
-                    #
-                  </th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+                <tr
+                  className="border-b
+                             dark:border-gray-700"
+                >
+                  <th className="text-left py-3 text-gray-400">
                     Token
                   </th>
-                   <th className="text-left py-2 text-gray-600 dark:text-gray-400">
-  Qty
-</th>
-<th className="text-left py-2 text-gray-600 dark:text-gray-400">
-  Value
-</th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+
+                  <th className="text-left py-3 text-gray-400">
+                    Qty
+                  </th>
+
+                  <th className="text-left py-3 text-gray-400">
+                    Value
+                  </th>
+
+                  <th className="text-left py-3 text-gray-400">
                     Entry
                   </th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+
+                  <th className="text-left py-3 text-gray-400">
                     Current
                   </th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+
+                  <th className="text-left py-3 text-gray-400">
                     %
                   </th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+
+                  <th className="text-left py-3 text-gray-400">
                     PnL
                   </th>
-                  <th className="text-left py-2 text-gray-600 dark:text-gray-400">
-                    TP
+
+                  <th className="text-left py-3 text-gray-400">
+                    Actions
                   </th>
-                  <th></th>
                 </tr>
               </thead>
 
               <tbody>
-                {positions.map((p, i) => (
-                  <tr
-                    key={i}
-                    className="border-t dark:border-gray-700
-                               hover:bg-gray-50 dark:hover:bg-gray-700/40
-                               transition-colors"
-                  >
-                    <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {i + 1}
-                    </td>
+                {positions.map((p, i) => {
+                  const tokenAmount = Number(
+                    p.tokenAmount || 0
+                  );
 
-                    <td className="py-4 font-mono text-gray-900 dark:text-gray-100">
-  {p.mint?.slice(0, 4)}...
-  {p.mint?.slice(-4)}
-</td>
-<td className="py-4 text-gray-900 dark:text-gray-100">
-  {Number(p.tokenAmount || 0).toLocaleString()}
-</td>
+                  const value =
+                    tokenAmount *
+                    Number(p.currentPrice || 0);
 
-<td className="py-4 text-gray-900 dark:text-gray-100">
-  {(Number(p.tokenAmount || 0) * Number(p.currentPrice || 0)).toFixed(6)} SOL
-</td>
-                    <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {Number(p.entryPrice || 0).toFixed(6)}
-                    </td>
-
-                    <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {Number(p.currentPrice || 0).toFixed(6)}
-                    </td>
-
-                    <td
-                      className={
-                        Number(p.changePercent || 0) >= 0
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }
+                  return (
+                    <tr
+                      key={i}
+                      className="border-b
+                                 dark:border-gray-700
+                                 hover:bg-gray-50
+                                 dark:hover:bg-gray-700/30
+                                 transition"
                     >
-                      {Number(p.changePercent || 0).toFixed(2)}%
-                    </td>
-
-                    <td
-                      className={
-                        Number(p.pnlSol || 0) >= 0
-                          ? "py-2 text-green-600 dark:text-green-400"
-                          : "py-2 text-red-600 dark:text-red-400"
-                      }
-                    >
-                      {Number(p.pnlSol || 0).toFixed(6)} SOL
-                    </td>
-
-                    <td className="py-2 text-gray-900 dark:text-gray-100">
-                      {p.tpStage}
-                    </td>
-
-                    <td className="py-2">
-                      <div className="flex gap-1">
-                        <button
-                          onClick={() => handleSellPercent(p.mint, 25)}
-                          className="px-2 py-1 border dark:border-gray-600
-                                     bg-white dark:bg-gray-800
-                                     rounded text-xs text-gray-900 dark:text-gray-100"
+                      {/* TOKEN */}
+                      <td className="py-4">
+                        <div
+                          className="font-medium
+                                     text-gray-900
+                                     dark:text-gray-100"
                         >
-                          25%
-                        </button>
+                          {shortMint(p.mint)}
+                        </div>
 
-                        <button
-                          onClick={() => handleSellPercent(p.mint, 50)}
-                          className="px-2 py-1 border dark:border-gray-600
-                                     bg-white dark:bg-gray-800
-                                     rounded text-xs text-gray-900 dark:text-gray-100"
+                        <div
+                          className="text-xs
+                                     text-gray-500
+                                     dark:text-gray-400"
                         >
-                          50%
-                        </button>
+                          TP Stage: {p.tpStage}
+                        </div>
+                      </td>
 
-                        <button
-                          onClick={() => handleSellPercent(p.mint, 75)}
-                          className="px-2 py-1 border dark:border-gray-600
-                                     bg-white dark:bg-gray-800
-                                     rounded text-xs text-gray-900 dark:text-gray-100"
-                        >
-                          75%
-                        </button>
+                      {/* QTY */}
+                      <td className="py-4 text-gray-900 dark:text-gray-100">
+                        {formatNumber(tokenAmount, 4)}
+                      </td>
 
-                        <button
-                          onClick={() => handleSellPercent(p.mint, 100)}
-                          className="px-2 py-1 border dark:border-gray-600
-                                     bg-white dark:bg-gray-800
-                                     rounded text-xs text-gray-900 dark:text-gray-100"
-                        >
-                          All
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      {/* VALUE */}
+                      <td className="py-4 text-gray-900 dark:text-gray-100">
+                        {formatNumber(value)} SOL
+                      </td>
+
+                      {/* ENTRY */}
+                      <td className="py-4 text-gray-900 dark:text-gray-100">
+                        {formatNumber(p.entryPrice)}
+                      </td>
+
+                      {/* CURRENT */}
+                      <td className="py-4 text-gray-900 dark:text-gray-100">
+                        {formatNumber(p.currentPrice)}
+                      </td>
+
+                      {/* CHANGE */}
+                      <td
+                        className={`py-4 font-medium ${
+                          Number(p.changePercent || 0) >= 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {Number(
+                          p.changePercent || 0
+                        ).toFixed(2)}
+                        %
+                      </td>
+
+                      {/* PNL */}
+                      <td
+                        className={`py-4 font-medium ${
+                          Number(p.pnlSol || 0) >= 0
+                            ? "text-green-500"
+                            : "text-red-500"
+                        }`}
+                      >
+                        {formatNumber(p.pnlSol)} SOL
+                      </td>
+
+                      {/* ACTIONS */}
+                      <td className="py-4">
+                        <div className="flex gap-2">
+                          {[25, 50, 75, 100].map(
+                            (percent) => (
+                              <button
+                                key={percent}
+                                onClick={() =>
+                                  handleSellPercent(
+                                    p.mint,
+                                    percent
+                                  )
+                                }
+                                className="px-3 py-1.5
+                                           rounded-lg text-xs
+                                           border border-gray-300
+                                           dark:border-gray-600
+                                           bg-white dark:bg-gray-800
+                                           text-gray-900 dark:text-gray-100
+                                           hover:bg-gray-100
+                                           dark:hover:bg-gray-700
+                                           transition"
+                              >
+                                {percent === 100
+                                  ? "All"
+                                  : `${percent}%`}
+                              </button>
+                            )
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
