@@ -2618,12 +2618,12 @@ export async function restoreOpenPositions() {
   try {
     LOG.info("♻️ Restoring open positions from Redis...");
 
-    const walletKeys = await redis.keys("wallet:*:positions");
+    const walletKeys = await redis.keys("wallet:active:*");
 
     let restored = 0;
 
     for (const walletKey of walletKeys) {
-      const walletAddress = walletKey.split(":")[1];
+      const walletAddress = walletKey.split(":")[2];
 
       const mints = await redis.smembers(walletKey);
 
@@ -2743,112 +2743,88 @@ export async function restoreOpenPositions() {
           }
 
           restored++;
-LOG.info(
-  {
-    walletAddress,
+
+
+          // ===================================================
+// 📸 Rebuild wallet snapshot cache
+// ===================================================
+const snapshotKey =
+  walletSnapshotKey(
+    walletAddress
+  );
+
+const existingRaw =
+  await redis.get(snapshotKey);
+
+let snapshots = [];
+
+try {
+  snapshots = existingRaw
+    ? JSON.parse(existingRaw)
+    : [];
+} catch {
+  snapshots = [];
+}
+
+const alreadyExists =
+  snapshots.some(
+    (s) => s.mint === mint
+  );
+
+if (!alreadyExists) {
+  snapshots.push({
     mint,
+
+    sourceChannel:
+      info.sourceChannel || null,
+
+    solAmount: Number(
+      info.solAmount || 0
+    ),
+
+    tokenAmount: Number(
+      info.tokenAmount || 0
+    ),
+
+    entryPrice: Number(
+      info.entryPrice || 0
+    ),
+
+    currentPrice: Number(
+      info.entryPrice || 0
+    ),
+
+    changePercent: 0,
+
+    pnlSol: 0,
+
+    buyTxid:
+      info.buyTxid || null,
+
+    tpStage: Number(
+      info.tpStage || 0
+    ),
+
+    highestPrice: Number(
+      info.highestPrice || 0
+    ),
+
+    openedAt: Number(
+      info.openedAt || 0
+    ),
+  });
+
+  await redis.set(
     snapshotKey,
-  },
-  "📸 Snapshot restored"
-);
+    JSON.stringify(snapshots)
+  );
 
-          // ===================================================
-          // 📸 Rebuild wallet snapshot cache
-          // ===================================================
-          const snapshotKey =
-            walletSnapshotKey(
-              walletAddress
-            );
-
-          const existingRaw =
-            await redis.get(snapshotKey);
-
-          let snapshots = [];
-
-          try {
-            snapshots = existingRaw
-              ? JSON.parse(existingRaw)
-              : [];
-          } catch {
-            snapshots = [];
-          }
-
-          const alreadyExists =
-            snapshots.some(
-              (s) => s.mint === mint
-            );
-
-          if (!alreadyExists) {
-            snapshots.push({
-              mint,
-
-              sourceChannel:
-                info.sourceChannel || null,
-
-              solAmount: Number(
-                info.solAmount || 0
-              ),
-
-              tokenAmount: Number(
-                info.tokenAmount || 0
-              ),
-
-              entryPrice: Number(
-                info.entryPrice || 0
-              ),
-
-              currentPrice: Number(
-                info.entryPrice || 0
-              ),
-
-              changePercent: 0,
-
-              pnlSol: 0,
-
-              buyTxid:
-                info.buyTxid || null,
-
-              tpStage: Number(
-                info.tpStage || 0
-              ),
-
-              highestPrice: Number(
-                info.highestPrice || 0
-              ),
-
-              openedAt: Number(
-                info.openedAt || 0
-              ),
-            });
-
-            await redis.set(
-              snapshotKey,
-              JSON.stringify(snapshots)
-            );
-          }
-
-        } catch (err) {
-          LOG.error(
-            {
-              walletAddress,
-              mint,
-              err,
-            },
-            "❌ Failed restoring position"
-          );
-        }
-      }
-    }
-
-    LOG.info(
-      { restored },
-      "♻️ Position recovery complete"
-    );
-
-  } catch (err) {
-    LOG.error(
-      err,
-      "❌ restoreOpenPositions failed"
-    );
-  }
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      snapshotKey,
+    },
+    "📸 Snapshot restored"
+  );
 }
