@@ -17,7 +17,7 @@ import {
   getDexScreenerPrice,
 } from "../services/priceFeed.js";
 
-
+import LOG from "../utils/logger.js";
 
 export async function restoreWalletBalances() {
   try {

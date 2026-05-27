@@ -51,9 +51,9 @@ import {
   getDexScreenerPrice,
   getDexScreenerPrices,
 } from "./src/services/priceFeed.js";
-import {
-  restoreWalletBalances,
-} from "./src/recovery/restoreWalletBalances.js";
+// import {
+//  restoreWalletBalances,
+// } from "./src/recovery/restoreWalletBalances.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1021,7 +1021,7 @@ registerSellExecutor(executeQueuedSell);
 startBuyWorker();
 startSellWorker();
 await restoreOpenPositions();
-await restoreWalletBalances();
+
 setInterval(() => {
   refreshAllMonitoredMintPrices().catch((err) => {
     LOG.error({ err }, "❌ global price refresh interval failed");
@@ -2639,70 +2639,193 @@ export async function restoreOpenPositions() {
 
           const state = await ensureMonitor(mint);
 
-          const user = await User.findOne({ walletAddress });
+          const user = await User.findOne({
+            walletAddress,
+          });
 
           if (!user) {
             continue;
           }
 
-          const wallet = restoreTradingWallet(user);
+          const wallet =
+            restoreTradingWallet(user);
 
-          state.users.set(String(walletAddress), {
-            walletAddress,
-            wallet,
+          state.users.set(
+            String(walletAddress),
+            {
+              walletAddress,
+              wallet,
 
-            tpStage: Number(info.tpStage || 0),
-
-            buyTxid: info.buyTxid,
-
-            solAmount: Number(info.solAmount || 0),
-
-            tokenAmount: Number(info.tokenAmount || 0),
-
-            entryPrice: Number(info.entryPrice || 0),
-
-            sourceChannel: info.sourceChannel,
-
-            slippageBps: Number(info.slippageBps || 500),
-
-            profile: {
-              tp1Percent: Number(info.tp1Percent || 25),
-              tp1SellPercent: Number(info.tp1SellPercent || 25),
-
-              tp2Percent: Number(info.tp2Percent || 50),
-              tp2SellPercent: Number(info.tp2SellPercent || 25),
-
-              tp3Percent: Number(info.tp3Percent || 100),
-              tp3SellPercent: Number(info.tp3SellPercent || 50),
-
-              stopLossPercent: Number(info.stopLossPercent || 20),
-
-              trailingDistancePercent: Number(
-                info.trailingDistancePercent || 10
+              tpStage: Number(
+                info.tpStage || 0
               ),
 
-              trailingActivationPercent: Number(
-                info.trailingActivationPercent || 5
-              ),
-            },
-          });
+              buyTxid: info.buyTxid,
 
-          const entryPrice = Number(info.entryPrice || 0);
+              solAmount: Number(
+                info.solAmount || 0
+              ),
+
+              tokenAmount: Number(
+                info.tokenAmount || 0
+              ),
+
+              entryPrice: Number(
+                info.entryPrice || 0
+              ),
+
+              sourceChannel:
+                info.sourceChannel,
+
+              slippageBps: Number(
+                info.slippageBps || 500
+              ),
+
+              profile: {
+                tp1Percent: Number(
+                  info.tp1Percent || 25
+                ),
+
+                tp1SellPercent: Number(
+                  info.tp1SellPercent || 25
+                ),
+
+                tp2Percent: Number(
+                  info.tp2Percent || 50
+                ),
+
+                tp2SellPercent: Number(
+                  info.tp2SellPercent || 25
+                ),
+
+                tp3Percent: Number(
+                  info.tp3Percent || 100
+                ),
+
+                tp3SellPercent: Number(
+                  info.tp3SellPercent || 50
+                ),
+
+                stopLossPercent: Number(
+                  info.stopLossPercent || 20
+                ),
+
+                trailingDistancePercent:
+                  Number(
+                    info.trailingDistancePercent || 10
+                  ),
+
+                trailingActivationPercent:
+                  Number(
+                    info.trailingActivationPercent || 5
+                  ),
+              },
+            }
+          );
+
+          const entryPrice = Number(
+            info.entryPrice || 0
+          );
 
           if (entryPrice > 0) {
-            state.entryPrices.set(walletAddress, entryPrice);
+            state.entryPrices.set(
+              walletAddress,
+              entryPrice
+            );
 
             state.highestPrices.set(
               walletAddress,
-              Number(info.highestPrice || entryPrice)
+              Number(
+                info.highestPrice ||
+                  entryPrice
+              )
             );
           }
 
           restored++;
 
+          // ===================================================
+          // 📸 Rebuild wallet snapshot cache
+          // ===================================================
+          const snapshotKey =
+            walletSnapshotKey(
+              walletAddress
+            );
+
+          const existingRaw =
+            await redis.get(snapshotKey);
+
+          let snapshots = [];
+
+          try {
+            snapshots = existingRaw
+              ? JSON.parse(existingRaw)
+              : [];
+          } catch {
+            snapshots = [];
+          }
+
+          const alreadyExists =
+            snapshots.some(
+              (s) => s.mint === mint
+            );
+
+          if (!alreadyExists) {
+            snapshots.push({
+              mint,
+
+              sourceChannel:
+                info.sourceChannel || null,
+
+              solAmount: Number(
+                info.solAmount || 0
+              ),
+
+              tokenAmount: Number(
+                info.tokenAmount || 0
+              ),
+
+              entryPrice: Number(
+                info.entryPrice || 0
+              ),
+
+              currentPrice: Number(
+                info.entryPrice || 0
+              ),
+
+              changePercent: 0,
+
+              pnlSol: 0,
+
+              buyTxid:
+                info.buyTxid || null,
+
+              tpStage: Number(
+                info.tpStage || 0
+              ),
+
+              highestPrice: Number(
+                info.highestPrice || 0
+              ),
+
+              openedAt: Number(
+                info.openedAt || 0
+              ),
+            });
+
+            await redis.set(
+              snapshotKey,
+              JSON.stringify(snapshots)
+            );
+          }
+
         } catch (err) {
           LOG.error(
-            { walletAddress, mint, err },
+            {
+              walletAddress,
+              mint,
+              err,
+            },
             "❌ Failed restoring position"
           );
         }
@@ -2715,6 +2838,9 @@ export async function restoreOpenPositions() {
     );
 
   } catch (err) {
-    LOG.error(err, "❌ restoreOpenPositions failed");
+    LOG.error(
+      err,
+      "❌ restoreOpenPositions failed"
+    );
   }
 }
