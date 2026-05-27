@@ -58,12 +58,9 @@ export default function ActivePositions({
               >
                 <div className="flex justify-between items-center">
   <span className="font-mono text-sm truncate max-w-[160px] text-gray-900 dark:text-gray-100">
-    {p.mint}
-
-    <div className="text-[10px] text-red-400 break-all">
-      {JSON.stringify(p)}
-    </div>
-  </span>
+  {p.mint?.slice(0, 4)}...
+  {p.mint?.slice(-4)}
+</span>
 
                   <span
                     className={`text-sm font-medium ${
@@ -201,12 +198,9 @@ export default function ActivePositions({
                       {i + 1}
                     </td>
 
-                    <td className="py-2 font-mono text-gray-900 dark:text-gray-100">
-  {p.mint}
-
-  <div className="text-[10px] text-red-400 break-all">
-    {JSON.stringify(p)}
-  </div>
+                    <td className="py-4 font-mono text-gray-900 dark:text-gray-100">
+  {p.mint?.slice(0, 4)}...
+  {p.mint?.slice(-4)}
 </td>
 
                     <td className="py-2 text-gray-900 dark:text-gray-100">
