@@ -1,6 +1,6 @@
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import User from "../models/User.js";
+import User from "./models/User.js";
 
 import redis from "../lib/redis.js";
 
