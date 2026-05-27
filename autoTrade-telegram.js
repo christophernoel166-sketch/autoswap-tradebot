@@ -53,7 +53,7 @@ import {
 } from "./src/services/priceFeed.js";
 import {
   restoreWalletBalances,
-} from "../recovery/restoreWalletBalances.js";
+} from "./src/recovery/restoreWalletBalances.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1021,6 +1021,7 @@ registerSellExecutor(executeQueuedSell);
 startBuyWorker();
 startSellWorker();
 await restoreOpenPositions();
+await restoreWalletBalances();
 setInterval(() => {
   refreshAllMonitoredMintPrices().catch((err) => {
     LOG.error({ err }, "❌ global price refresh interval failed");
