@@ -1017,6 +1017,7 @@ registerSellExecutor(executeQueuedSell);
 
 startBuyWorker();
 startSellWorker();
+await restoreOpenPositions();
 setInterval(() => {
   refreshAllMonitoredMintPrices().catch((err) => {
     LOG.error({ err }, "❌ global price refresh interval failed");
@@ -2511,20 +2512,7 @@ if (entryPrice) {
 
 
 
- // ======= Step A: lightweight Express server for bot APIs =======
-// import expressModule from "express"; // avoid name clash
-// import cors from "cors";
-
-// const app = expressModule();
-// app.use(expressModule.json());
-// app.use(cors());
-//const PORT = Number(process.env.PORT || 8080);
-
-
-
-
-// import cors from "cors";
-// import express from "express";
+ 
 const app = express();
 app.use(express.json());
 app.use(cors());
@@ -2622,8 +2610,107 @@ process.once("SIGTERM", () => {
 });
 
 
-// ========= Named exports (for other modules to import) =========
-// export { bot, ensureMonitor, monitored, safeSellAll };
+export async function restoreOpenPositions() {
+  try {
+    LOG.info("♻️ Restoring open positions from Redis...");
 
-// export default { bot, ensureMonitor, monitored, safeSellAll };
+    const walletKeys = await redis.keys("wallet:*:positions");
 
+    let restored = 0;
+
+    for (const walletKey of walletKeys) {
+      const walletAddress = walletKey.split(":")[1];
+
+      const mints = await redis.smembers(walletKey);
+
+      for (const mint of mints) {
+        try {
+          const posKey = positionKey(walletAddress, mint);
+
+          const info = await redis.hgetall(posKey);
+
+          if (!info || info.status !== "open") {
+            continue;
+          }
+
+          const state = await ensureMonitor(mint);
+
+          const user = await User.findOne({ walletAddress });
+
+          if (!user) {
+            continue;
+          }
+
+          const wallet = restoreTradingWallet(user);
+
+          state.users.set(String(walletAddress), {
+            walletAddress,
+            wallet,
+
+            tpStage: Number(info.tpStage || 0),
+
+            buyTxid: info.buyTxid,
+
+            solAmount: Number(info.solAmount || 0),
+
+            tokenAmount: Number(info.tokenAmount || 0),
+
+            entryPrice: Number(info.entryPrice || 0),
+
+            sourceChannel: info.sourceChannel,
+
+            slippageBps: Number(info.slippageBps || 500),
+
+            profile: {
+              tp1Percent: Number(info.tp1Percent || 25),
+              tp1SellPercent: Number(info.tp1SellPercent || 25),
+
+              tp2Percent: Number(info.tp2Percent || 50),
+              tp2SellPercent: Number(info.tp2SellPercent || 25),
+
+              tp3Percent: Number(info.tp3Percent || 100),
+              tp3SellPercent: Number(info.tp3SellPercent || 50),
+
+              stopLossPercent: Number(info.stopLossPercent || 20),
+
+              trailingDistancePercent: Number(
+                info.trailingDistancePercent || 10
+              ),
+
+              trailingActivationPercent: Number(
+                info.trailingActivationPercent || 5
+              ),
+            },
+          });
+
+          const entryPrice = Number(info.entryPrice || 0);
+
+          if (entryPrice > 0) {
+            state.entryPrices.set(walletAddress, entryPrice);
+
+            state.highestPrices.set(
+              walletAddress,
+              Number(info.highestPrice || entryPrice)
+            );
+          }
+
+          restored++;
+
+        } catch (err) {
+          LOG.error(
+            { walletAddress, mint, err },
+            "❌ Failed restoring position"
+          );
+        }
+      }
+    }
+
+    LOG.info(
+      { restored },
+      "♻️ Position recovery complete"
+    );
+
+  } catch (err) {
+    LOG.error(err, "❌ restoreOpenPositions failed");
+  }
+}
