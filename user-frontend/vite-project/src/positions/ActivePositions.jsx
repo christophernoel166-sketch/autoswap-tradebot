@@ -167,6 +167,12 @@ export default function ActivePositions({
                   <th className="text-left py-2 text-gray-600 dark:text-gray-400">
                     Token
                   </th>
+                   <th className="text-left py-2 text-gray-600 dark:text-gray-400">
+  Qty
+</th>
+<th className="text-left py-2 text-gray-600 dark:text-gray-400">
+  Value
+</th>
                   <th className="text-left py-2 text-gray-600 dark:text-gray-400">
                     Entry
                   </th>
@@ -202,7 +208,13 @@ export default function ActivePositions({
   {p.mint?.slice(0, 4)}...
   {p.mint?.slice(-4)}
 </td>
+<td className="py-4 text-gray-900 dark:text-gray-100">
+  {Number(p.tokenAmount || 0).toLocaleString()}
+</td>
 
+<td className="py-4 text-gray-900 dark:text-gray-100">
+  {(Number(p.tokenAmount || 0) * Number(p.currentPrice || 0)).toFixed(6)} SOL
+</td>
                     <td className="py-2 text-gray-900 dark:text-gray-100">
                       {Number(p.entryPrice || 0).toFixed(6)}
                     </td>
