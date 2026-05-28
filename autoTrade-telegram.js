@@ -2774,6 +2774,16 @@ export async function restoreOpenPositions() {
             }
           );
 
+LOG.info(
+  {
+    walletAddress,
+    hasInfoWallet: !!info.wallet,
+    walletPubkey:
+      info.wallet?.publicKey?.toBase58?.(),
+  },
+  "🧪 snapshot wallet verification"
+);
+
           const entryPrice = Number(
             info.entryPrice || 0
           );
