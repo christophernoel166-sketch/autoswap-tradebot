@@ -3,12 +3,14 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 
-import {
+import splToken from "@solana/spl-token";
+
+const {
   getAssociatedTokenAddress,
-} from "@solana/spl-token";
+} = splToken;
 
 const RPC_URL =
-  process.env.SOLANA_RPC_URL;
+  process.env.RPC_URL;
 
 const connection =
   new Connection(RPC_URL, "confirmed");
