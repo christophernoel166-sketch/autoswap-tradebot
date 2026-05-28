@@ -51,9 +51,7 @@ import {
   getDexScreenerPrice,
   getDexScreenerPrices,
 } from "./src/services/priceFeed.js";
-import {
-  getWalletTokenBalance,
-} from "./src/services/walletBalance.js";
+
 // import {
 //  restoreWalletBalances,
 // } from "./src/recovery/restoreWalletBalances.js";
