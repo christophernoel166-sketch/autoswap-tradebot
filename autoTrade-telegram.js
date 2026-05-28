@@ -2792,9 +2792,11 @@ export async function restoreOpenPositions() {
                 info.solAmount || 0
               ),
 
-              tokenAmount: Number(
-                info.tokenAmount || 0
-              ),
+             tokenAmount:
+  await getWalletTokenBalance(
+    walletAddress,
+    mint
+  ),
 
               entryPrice: Number(
                 info.entryPrice || 0
