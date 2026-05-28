@@ -19,48 +19,62 @@ export async function getWalletTokenBalance(
   mintAddress
 ) {
   try {
-    console.log("🧪 balance fetch start", {
-      walletAddress,
-      mintAddress,
-    });
+    console.log(
+      "🧪 balance fetch start",
+      {
+        walletAddress,
+        mintAddress,
+      }
+    );
 
-    const owner =
+    const wallet =
       new PublicKey(walletAddress);
 
     const mint =
       new PublicKey(mintAddress);
 
-    const accounts =
+    // ✅ THIS IS THE IMPORTANT FIX
+    const tokenAccounts =
       await connection.getParsedTokenAccountsByOwner(
-        owner,
-        { mint }
+        wallet,
+        {
+          mint,
+        }
       );
 
     console.log(
       "🧪 token accounts found:",
-      accounts?.value?.length || 0
+      tokenAccounts.value.length
     );
 
-    if (
-      !accounts?.value ||
-      accounts.value.length === 0
-    ) {
-      console.log("🧪 NO TOKEN ACCOUNT FOUND");
+    if (!tokenAccounts.value.length) {
+      console.log(
+        "🧪 NO TOKEN ACCOUNT FOUND"
+      );
 
       return 0;
     }
 
-    const balance =
-      accounts.value[0]?.account?.data?.parsed?.info
-        ?.tokenAmount?.uiAmount;
+    const account =
+      tokenAccounts.value[0];
 
-    console.log("🧪 REAL TOKEN BALANCE:", balance);
+    const amount =
+      Number(
+        account.account.data
+          .parsed.info.tokenAmount
+          .uiAmount || 0
+      );
 
-    return Number(balance || 0);
+    console.log(
+      "🧪 REAL TOKEN BALANCE:",
+      amount
+    );
+
+    return amount;
 
   } catch (err) {
     console.error(
-      "❌ wallet balance fetch failed:",
+      "❌ getWalletTokenBalance failed",
       err
     );
 
