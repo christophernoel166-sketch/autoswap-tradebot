@@ -2701,6 +2701,18 @@ export async function restoreOpenPositions() {
           const wallet =
             restoreTradingWallet(user);
 
+LOG.info(
+  {
+    walletAddress,
+    hasWalletObject: !!wallet,
+    hasPublicKey:
+      !!wallet?.publicKey,
+    restoredWalletPubkey:
+      wallet?.publicKey?.toBase58?.(),
+  },
+  "🧪 restoreTradingWallet result"
+);
+
           state.users.set(
             String(walletAddress),
             {
