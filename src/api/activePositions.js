@@ -35,7 +35,8 @@ router.get("/:walletAddress", async (req, res) => {
     }
 
     const normalized = positions.map((p) => ({
-      walletAddress,
+  walletAddress:
+    p.walletAddress || walletAddress,
       mint: p.mint || null,
       sourceChannel: p.sourceChannel || null,
 
