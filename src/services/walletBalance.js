@@ -3,12 +3,6 @@ import {
   PublicKey,
 } from "@solana/web3.js";
 
-import splToken from "@solana/spl-token";
-
-const {
-  getAssociatedTokenAddress,
-} = splToken;
-
 const RPC_URL =
   process.env.RPC_URL;
 
@@ -25,28 +19,38 @@ export async function getWalletTokenBalance(
   mintAddress
 ) {
   try {
-    const wallet =
+    const owner =
       new PublicKey(walletAddress);
 
     const mint =
       new PublicKey(mintAddress);
 
-    const ata =
-      await getAssociatedTokenAddress(
-        mint,
-        wallet
+    // ✅ Find token accounts directly
+    const accounts =
+      await connection.getParsedTokenAccountsByOwner(
+        owner,
+        { mint }
       );
+
+    if (
+      !accounts?.value ||
+      accounts.value.length === 0
+    ) {
+      return 0;
+    }
 
     const balance =
-      await connection.getTokenAccountBalance(
-        ata
-      );
+      accounts.value[0]?.account?.data?.parsed?.info
+        ?.tokenAmount?.uiAmount;
 
-    return Number(
-      balance?.value?.uiAmount || 0
-    );
+    return Number(balance || 0);
 
   } catch (err) {
+    console.error(
+      "wallet balance fetch failed:",
+      err?.message
+    );
+
     return 0;
   }
 }
