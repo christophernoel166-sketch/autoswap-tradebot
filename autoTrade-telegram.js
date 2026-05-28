@@ -54,6 +54,9 @@ import {
 // import {
 //  restoreWalletBalances,
 // } from "./src/recovery/restoreWalletBalances.js";
+import {
+  getWalletTokenBalance,
+} from "./src/services/walletBalance.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1599,7 +1602,11 @@ async function ensureMonitor(mint) {
 
           // position info
           solAmount: info.solAmount || 0,
-          tokenAmount: info.tokenAmount || 0,
+          tokenAmount:
+  await getWalletTokenBalance(
+    walletAddress,
+    mint
+  ),
           tpStage: info.tpStage || 0,
           highestPrice: state.highestPrices?.get(walletAddress) || entry,
 
