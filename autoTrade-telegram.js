@@ -1592,6 +1592,38 @@ async function ensureMonitor(mint) {
         const solAmount = info.solAmount || 0;
         const pnlSol = (changePercent / 100) * solAmount;
 
+const realTokenBalance =
+  await getWalletTokenBalance(
+    walletAddress,
+    mint
+  );
+
+// ✅ auto-remove dead positions
+if (realTokenBalance <= 0) {
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+    },
+    "🧹 Removing dead position (0 token balance)"
+  );
+
+  state.users.delete(walletAddress);
+  state.entryPrices.delete(walletAddress);
+  state.highestPrices.delete(walletAddress);
+
+  await redis.del(
+    positionKey(walletAddress, mint)
+  );
+
+  await redis.srem(
+    walletPositionsKey(walletAddress),
+    mint
+  );
+
+  continue;
+}
+
         const snapshotItem = {
           mint,
 
