@@ -1710,11 +1710,18 @@ if (realTokenBalance <= 0) {
     }
   };
 
+  state.startLoop = () => {
+  if (state.intervalId) return;
+
   state.intervalId = setInterval(() => {
     loop().catch((err) =>
-      LOG.error({ err, mint }, "monitor loop async error")
+      LOG.error(
+        { err, mint },
+        "monitor loop async error"
+      )
     );
   }, POLL_INTERVAL_MS);
+};
 
   monitored.set(mint, state);
   LOG.info({ mint }, "monitor started");
@@ -2512,6 +2519,7 @@ try {
     // 📈 Register for monitoring
     // ===================================================
     const state = await ensureMonitor(mint);
+state.startLoop?.();
 
     state.users.set(String(user.walletAddress), {
       walletAddress: user.walletAddress,
@@ -2698,17 +2706,18 @@ export async function restoreOpenPositions() {
             continue;
           }
 
-          const wallet =
-            restoreTradingWallet(user);
+        
+const restoredWallet =
+  restoreTradingWallet(user);
 
 LOG.info(
   {
     walletAddress,
-    hasWalletObject: !!wallet,
+    hasWalletObject: !!restoredWallet,
     hasPublicKey:
-      !!wallet?.publicKey,
+      !!restoredWallet?.publicKey,
     restoredWalletPubkey:
-      wallet?.publicKey?.toBase58?.(),
+      restoredWallet?.publicKey?.toBase58?.(),
   },
   "🧪 restoreTradingWallet result"
 );
@@ -2717,7 +2726,7 @@ LOG.info(
             String(walletAddress),
             {
               walletAddress,
-              wallet,
+              wallet: restoredWallet,
 
               tpStage: Number(
                 info.tpStage || 0
@@ -2853,9 +2862,9 @@ LOG.info(
                 info.solAmount || 0
               ),
 
-             tokenAmount:
+           tokenAmount:
   await getWalletTokenBalance(
-    walletAddress,
+    restoredWallet.publicKey.toBase58(),
     mint
   ),
 
@@ -2910,6 +2919,10 @@ LOG.info(
       { restored },
       "♻️ Position recovery complete"
     );
+
+for (const state of monitored.values()) {
+  state.startLoop?.();
+}
 
   } catch (err) {
     LOG.error(
