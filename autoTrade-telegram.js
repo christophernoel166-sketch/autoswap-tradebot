@@ -2682,6 +2682,14 @@ export async function restoreOpenPositions() {
 
     const walletKeys = await redis.keys("wallet:active:*");
 
+LOG.info(
+  {
+    walletKeysCount: walletKeys.length,
+    walletKeys,
+  },
+  "🧪 Redis active wallets"
+);
+
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
   LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
