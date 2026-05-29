@@ -2920,6 +2920,14 @@ if (!walletKeys.length) {
     let restored = 0;
 
     for (const walletKey of walletKeys) {
+LOG.info(
+  {
+    walletKey,
+    mints: await redis.smembers(walletKey),
+  },
+  "🧪 Redis wallet positions"
+);
+
       const walletAddress = walletKey.split(":")[2];
 
       const mints = await redis.smembers(walletKey);
@@ -2929,6 +2937,18 @@ if (!walletKeys.length) {
           const posKey = positionKey(walletAddress, mint);
 
           const info = await redis.hgetall(posKey);
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    posKey,
+    status: info?.status,
+    fields: Object.keys(info || {}),
+  },
+  "🧪 Position data found"
+);
+
 
           if (!info || info.status !== "open") {
             continue;
