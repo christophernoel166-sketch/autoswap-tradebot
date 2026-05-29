@@ -2949,6 +2949,15 @@ LOG.info(
   "🧪 Position data found"
 );
 
+LOG.warn(
+  {
+    walletAddress,
+    mint,
+    status: info?.status,
+  },
+  "🚨 Position skipped during restore"
+);
+
 
           if (!info || info.status !== "open") {
             continue;
