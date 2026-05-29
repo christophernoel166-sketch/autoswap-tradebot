@@ -2722,6 +2722,21 @@ LOG.info(
   "🧪 PHANTOM POSITION KEYS"
 );
 
+for (const key of phantomPositions) {
+  const pos = await redis.hgetall(key);
+
+  LOG.info(
+    {
+      key,
+      walletAddress: pos.walletAddress,
+      mint: pos.mint,
+      status: pos.status,
+      fields: Object.keys(pos),
+    },
+    "🧪 PHANTOM POSITION DATA"
+  );
+}
+
 
 LOG.info(
   {
