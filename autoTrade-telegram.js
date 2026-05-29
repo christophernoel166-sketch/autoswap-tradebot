@@ -2682,6 +2682,18 @@ export async function restoreOpenPositions() {
 
     const walletKeys = await redis.keys("wallet:active:*");
 
+const phantomActiveKey =
+  await redis.get(
+    "wallet:active:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
+  );
+
+LOG.info(
+  {
+    phantomActiveKey,
+  },
+  "🧪 PHANTOM ACTIVE KEY"
+);
+
 const myUser = await User.findOne({
   tradingWalletPublicKey:
     "FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy"
