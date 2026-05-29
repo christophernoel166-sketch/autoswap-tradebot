@@ -2959,7 +2959,7 @@ LOG.warn(
 );
 
 
-        const info = await redis.hgetall(posKey);
+         
 
 if (!info) {
   continue;
