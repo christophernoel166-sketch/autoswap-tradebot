@@ -2959,19 +2959,92 @@ LOG.warn(
 );
 
 
-          if (!info || info.status !== "open") {
-            continue;
-          }
+        const info = await redis.hgetall(posKey);
 
-          const state = await ensureMonitor(mint);
+if (!info) {
+  continue;
+}
 
-          const user = await User.findOne({
-            walletAddress,
-          });
+const user = await User.findOne({
+  walletAddress,
+});
 
-          if (!user) {
-            continue;
-          }
+if (!user) {
+  continue;
+}
+
+// =========================================
+// HANDLE STUCK CLOSING POSITIONS
+// =========================================
+if (info.status === "closing") {
+
+  const restoredWallet =
+    restoreTradingWallet(user);
+
+  const tokenBalance =
+    await getWalletTokenBalance(
+      restoredWallet.publicKey.toBase58(),
+      mint
+    );
+
+  if (tokenBalance <= 0) {
+
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+      },
+      "🧹 Closing position already empty — marking closed"
+    );
+
+    await redis.hset(
+      posKey,
+      "status",
+      "closed"
+    );
+
+    await redis.srem(
+      walletPositionsKey(walletAddress),
+      mint
+    );
+
+    continue;
+  }
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      tokenBalance,
+    },
+    "♻️ Recovering stuck closing position"
+  );
+
+  await redis.hset(
+    posKey,
+    "status",
+    "open"
+  );
+
+  info.status = "open";
+}
+
+// Skip only truly closed positions
+if (info.status !== "open") {
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      status: info.status,
+    },
+    "🚨 Position skipped during restore"
+  );
+
+  continue;
+}
+
+const state = await ensureMonitor(mint);
 
         
 const restoredWallet =
