@@ -2710,6 +2710,19 @@ LOG.info(
   "🧪 MY POSITION KEYS"
 );
 
+const phantomPositions = await redis.keys(
+  "position:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K:*"
+);
+
+LOG.info(
+  {
+    count: phantomPositions.length,
+    phantomPositions,
+  },
+  "🧪 PHANTOM POSITION KEYS"
+);
+
+
 LOG.info(
   {
     walletKeysCount: walletKeys.length,
