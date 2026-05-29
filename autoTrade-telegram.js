@@ -2682,6 +2682,19 @@ export async function restoreOpenPositions() {
 
     const walletKeys = await redis.keys("wallet:active:*");
 
+const myUser = await User.findOne({
+  walletAddress: "FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy"
+});
+
+LOG.info(
+  {
+    found: !!myUser,
+    tradingEnabled: myUser?.tradingEnabled,
+  },
+  "🧪 MY WALLET CHECK"
+);
+
+
 LOG.info(
   {
     walletKeysCount: walletKeys.length,
