@@ -253,16 +253,80 @@ export async function executeSwap(wallet, quote, ctx = undefined) {
     // ===================================================
     // ✅ CONFIRM TRANSACTION LANDED (DIAGNOSTICS)
     // ===================================================
-    const conf = await connection.confirmTransaction(
-  txid,
-  "confirmed"
+  let conf;
+
+try {
+  conf = await connection.confirmTransaction(
+    txid,
+    "confirmed"
+  );
+} catch (err) {
+
+  logWithTrace(
+    "warn",
+    ctx,
+    "⚠️ Confirmation timeout — checking actual chain status",
+    {
+      txid,
+      message: err?.message,
+    }
+  );
+
+  await sleep(5000);
+
+  const retryStatus =
+    await connection.getSignatureStatuses(
+      [txid],
+      {
+        searchTransactionHistory: true,
+      }
+    );
+
+  const sig =
+    retryStatus?.value?.[0];
+
+  if (
+    sig &&
+    (
+      sig.confirmationStatus === "confirmed" ||
+      sig.confirmationStatus === "finalized"
+    ) &&
+    !sig.err
+  ) {
+
+    logWithTrace(
+      "warn",
+      ctx,
+      "✅ Transaction actually landed after timeout",
+      {
+        txid,
+      }
+    );
+
+    conf = {
+      value: {
+        err: null,
+      },
+    };
+  } else {
+    throw err;
+  }
+}
+
+logWithTrace(
+  "log",
+  ctx,
+  "🧪 SWAP CONFIRM RESULT",
+  conf
 );
 
-    logWithTrace("log", ctx, "🧪 SWAP CONFIRM RESULT", conf);
-
-    const st = await connection.getSignatureStatuses([txid], {
+const st =
+  await connection.getSignatureStatuses(
+    [txid],
+    {
       searchTransactionHistory: true,
-    });
+    }
+  );
 
     logWithTrace("log", ctx, "🧪 SWAP SIG STATUS", st?.value?.[0]);
 // ===================================================
