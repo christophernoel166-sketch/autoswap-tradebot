@@ -253,16 +253,10 @@ export async function executeSwap(wallet, quote, ctx = undefined) {
     // ===================================================
     // ✅ CONFIRM TRANSACTION LANDED (DIAGNOSTICS)
     // ===================================================
-    const latest = await connection.getLatestBlockhash("confirmed");
-
     const conf = await connection.confirmTransaction(
-      {
-        signature: txid,
-        blockhash: latest.blockhash,
-        lastValidBlockHeight: latest.lastValidBlockHeight,
-      },
-      "confirmed"
-    );
+  txid,
+  "confirmed"
+);
 
     logWithTrace("log", ctx, "🧪 SWAP CONFIRM RESULT", conf);
 
