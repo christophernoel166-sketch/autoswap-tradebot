@@ -6,6 +6,9 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import { Telegraf } from "telegraf";
 
+import { TOKEN_PROGRAM_ID }
+from "@solana/spl-token";
+
 import pino from "pino";
 import {
   Connection,
@@ -2678,6 +2681,233 @@ export async function restoreOpenPositions() {
     LOG.info("♻️ Restoring open positions from Redis...");
 
     const walletKeys = await redis.keys("wallet:active:*");
+
+// REBUILD FROM BLOCKCHAIN
+if (!walletKeys.length) {
+  LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
+
+  const users = await User.find({
+    tradingEnabled: true,
+  });
+
+  for (const user of users) {
+    try {
+      const wallet = restoreTradingWallet(user);
+
+      const tokenAccounts =
+        await connection.getParsedTokenAccountsByOwner(
+          wallet.publicKey,
+          {
+            programId: TOKEN_PROGRAM_ID,
+          }
+        );
+
+      for (const acc of tokenAccounts.value) {
+        const info =
+          acc.account.data.parsed.info;
+
+        const mint = info.mint;
+
+        const amount =
+          Number(info.tokenAmount.uiAmount || 0);
+
+        // Skip empty balances
+        if (amount <= 0) {
+          continue;
+        }
+
+        // Optional: ignore dust/spam balances
+        if (amount < 0.000001) {
+          continue;
+        }
+
+        LOG.info(
+          {
+            wallet: user.walletAddress,
+            mint,
+            amount,
+          },
+          "♻️ Recovered token from blockchain"
+        );
+
+        // ==========================================
+        // Create monitor state
+        // ==========================================
+        const state = await ensureMonitor(mint);
+
+        // Try to fetch current market price
+        let currentPrice = 0;
+
+        try {
+          currentPrice =
+            await getDexScreenerPrice(mint);
+
+          if (
+            !currentPrice ||
+            Number.isNaN(currentPrice)
+          ) {
+            currentPrice = 0;
+          }
+        } catch (err) {
+          LOG.warn(
+            {
+              wallet: user.walletAddress,
+              mint,
+            },
+            "⚠️ Failed to fetch restore price"
+          );
+        }
+
+        // ==========================================
+        // Register user position
+        // ==========================================
+        state.users.set(
+          String(user.walletAddress),
+          {
+            walletAddress:
+              user.walletAddress,
+
+            wallet,
+
+            tpStage: 0,
+
+            buyTxid: null,
+
+            solAmount: 0,
+
+            tokenAmount: amount,
+
+            entryPrice: currentPrice,
+
+            sourceChannel: "restore",
+
+            slippageBps: Math.min(
+              Math.max(
+                Math.round(
+                  (user.maxSlippagePercent || 5) *
+                    100
+                ),
+                50
+              ),
+              2000
+            ),
+
+            profile: {
+              tp1Percent: user.tp1,
+              tp1SellPercent:
+                user.tp1SellPercent,
+
+              tp2Percent: user.tp2,
+              tp2SellPercent:
+                user.tp2SellPercent,
+
+              tp3Percent: user.tp3,
+              tp3SellPercent:
+                user.tp3SellPercent,
+
+              stopLossPercent:
+                user.stopLoss,
+
+              trailingDistancePercent:
+                Number(
+                  user.trailingDistance || 0
+                ),
+
+              trailingActivationPercent:
+                Number(
+                  user.trailingTrigger || 5
+                ),
+            },
+          }
+        );
+
+        // ==========================================
+        // Restore entry/highest tracking
+        // ==========================================
+        if (currentPrice > 0) {
+          state.entryPrices.set(
+            String(user.walletAddress),
+            currentPrice
+          );
+
+          state.highestPrices.set(
+            String(user.walletAddress),
+            currentPrice
+          );
+        }
+
+        // ==========================================
+        // Rebuild Redis position
+        // ==========================================
+        await redis.sadd(
+          walletPositionsKey(
+            user.walletAddress
+          ),
+          mint
+        );
+
+        await redis.hset(
+          positionKey(
+            user.walletAddress,
+            mint
+          ),
+          {
+            walletAddress:
+              user.walletAddress,
+
+            mint,
+
+            sourceChannel: "restore",
+
+            solAmount: "0",
+
+            tokenAmount:
+              String(amount),
+
+            entryPrice:
+              String(currentPrice),
+
+            buyTxid: "",
+
+            tpStage: "0",
+
+            highestPrice:
+              String(currentPrice),
+
+            status: "open",
+
+            openedAt: String(
+              Date.now()
+            ),
+          }
+        );
+
+        LOG.info(
+          {
+            wallet: user.walletAddress,
+            mint,
+            currentPrice,
+          },
+          "✅ Position rebuilt from blockchain"
+        );
+
+        state.startLoop?.();
+      }
+    } catch (err) {
+      LOG.error(
+        {
+          err,
+          wallet: user.walletAddress,
+        },
+        "❌ Blockchain restore failed"
+      );
+    }
+  }
+
+  LOG.info(
+    "✅ Blockchain rebuild completed"
+  );
+}
 
     let restored = 0;
 
