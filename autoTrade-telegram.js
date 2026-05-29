@@ -2695,6 +2695,18 @@ LOG.info(
 );
 
 
+const myPositions = await redis.keys(
+  "position:FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy:*"
+);
+
+LOG.info(
+  {
+    count: myPositions.length,
+    myPositions,
+  },
+  "🧪 MY POSITION KEYS"
+);
+
 LOG.info(
   {
     walletKeysCount: walletKeys.length,
