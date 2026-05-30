@@ -2510,7 +2510,7 @@ LOG.info(
   },
   "🧪 NEW POSITION CREATED"
 );
-
+// ADDED
 setTimeout(async () => {
   try {
     const stillThere = await redis.hgetall(posKey);
@@ -2715,12 +2715,13 @@ export async function restoreOpenPositions() {
     const walletKeys = await redis.keys("wallet:active:*");
 
 const phantomActiveKey =
-  await redis.get(
+  await redis.smembers(
     "wallet:active:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
   );
 
 LOG.info(
   {
+    count: phantomActiveKey.length,
     phantomActiveKey,
   },
   "🧪 PHANTOM ACTIVE KEY"
