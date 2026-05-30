@@ -2497,6 +2497,20 @@ try {
   LOG.info({ walletKey, posKey, status }, "🧪 Redis verify write (status)");
 
   LOG.info({ wallet: user.walletAddress, mint }, "🧠 Position written to Redis");
+const verifyPosition = await redis.hgetall(posKey);
+
+LOG.info(
+  {
+    walletAddress: user.walletAddress,
+    tradingWalletPublicKey:
+      user.tradingWalletPublicKey,
+    posKey,
+    status: verifyPosition.status,
+    mint: verifyPosition.mint,
+  },
+  "🧪 NEW POSITION CREATED"
+);
+
 } catch (err) {
   const walletKey = walletPositionsKey(user.walletAddress);
   const posKey = positionKey(user.walletAddress, mint);
