@@ -2511,6 +2511,24 @@ LOG.info(
   "🧪 NEW POSITION CREATED"
 );
 
+setTimeout(async () => {
+  try {
+    const stillThere = await redis.hgetall(posKey);
+
+    LOG.info(
+      {
+        posKey,
+        exists: !!stillThere?.status,
+        status: stillThere?.status,
+        mint: stillThere?.mint,
+      },
+      "🧪 POSITION AFTER 30 SECONDS"
+    );
+  } catch (err) {
+    LOG.error(err, "POSITION CHECK FAILED");
+  }
+}, 30000);
+
 } catch (err) {
   const walletKey = walletPositionsKey(user.walletAddress);
   const posKey = positionKey(user.walletAddress, mint);
