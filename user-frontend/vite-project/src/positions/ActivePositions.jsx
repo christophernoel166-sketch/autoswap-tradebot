@@ -135,8 +135,8 @@ export default function ActivePositions({
                       </div>
 
                       <div className="text-gray-900 dark:text-gray-100">
-                        {formatNumber(value)} SOL
-                      </div>
+  ${formatNumber(value)}
+</div>
                     </div>
 
                     <div>
@@ -305,8 +305,8 @@ export default function ActivePositions({
 
                       {/* VALUE */}
                       <td className="py-4 text-gray-900 dark:text-gray-100">
-                        {formatNumber(value)} SOL
-                      </td>
+  ${formatNumber(value)}
+</td>
 
                       {/* ENTRY */}
                       <td className="py-4 text-gray-900 dark:text-gray-100">
