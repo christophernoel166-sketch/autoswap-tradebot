@@ -2742,9 +2742,7 @@ LOG.info(
   "🧪 TRADING WALLET CHECK"
 );
 
-const phantomActiveKey = await redis.smembers(
-  "wallet:active:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
-);
+
 
 LOG.info(
   {
