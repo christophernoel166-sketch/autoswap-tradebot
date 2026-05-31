@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { FiCopy } from "react-icons/fi";
 
 export default function ActivePositions({
@@ -7,6 +8,9 @@ export default function ActivePositions({
   manualSell,
   manualSellAll,
 }) {
+
+const [copiedMint, setCopiedMint] = useState(null);
+
   function handleSellPercent(mint, percent) {
     manualSell(mint, percent);
   }
@@ -293,12 +297,20 @@ export default function ActivePositions({
     </div>
 
     <button
-      onClick={() => navigator.clipboard.writeText(p.mint)}
-      className="text-gray-400 hover:text-blue-500"
-      title="Copy contract address"
-    >
-      <FiCopy size={14} />
-    </button>
+  onClick={() => {
+    navigator.clipboard.writeText(p.mint);
+
+    setCopiedMint(p.mint);
+
+    setTimeout(() => {
+      setCopiedMint(null);
+    }, 2000);
+  }}
+  className="text-gray-400 hover:text-blue-500"
+  title="Copy contract address"
+>
+  <FiCopy size={14} />
+</button>
   </div>
 
   <div
