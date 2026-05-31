@@ -20,6 +20,7 @@ router.get("/:wallet", async (req, res) => {
     }
 
     const pubkey = new PublicKey(wallet);
+  console.log("RPC:getBalance", wallet);
     const lamports = await connection.getBalance(pubkey);
 
     return res.json({
