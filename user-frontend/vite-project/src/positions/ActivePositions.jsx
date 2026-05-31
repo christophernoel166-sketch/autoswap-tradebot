@@ -1,3 +1,5 @@
+import { FiCopy } from "react-icons/fi";
+
 export default function ActivePositions({
   positions,
   loading,
@@ -280,24 +282,33 @@ export default function ActivePositions({
                                  transition"
                     >
                       {/* TOKEN */}
-                      <td className="py-4">
-                        <div
-                          className="font-medium
-                                     text-gray-900
-                                     dark:text-gray-100"
-                        >
-                          {shortMint(p.mint)}
-                        </div>
+<td className="py-4">
+  <div className="flex items-center gap-2">
+    <div
+      className="font-medium
+                 text-gray-900
+                 dark:text-gray-100"
+    >
+      {shortMint(p.mint)}
+    </div>
 
-                        <div
-                          className="text-xs
-                                     text-gray-500
-                                     dark:text-gray-400"
-                        >
-                          TP Stage: {p.tpStage}
-                        </div>
-                      </td>
+    <button
+      onClick={() => navigator.clipboard.writeText(p.mint)}
+      className="text-gray-400 hover:text-blue-500"
+      title="Copy contract address"
+    >
+      <FiCopy size={14} />
+    </button>
+  </div>
 
+  <div
+    className="text-xs
+               text-gray-500
+               dark:text-gray-400"
+  >
+    TP Stage: {p.tpStage}
+  </div>
+</td>
                       {/* QTY */}
                       <td className="py-4 text-gray-900 dark:text-gray-100">
                         {formatNumber(tokenAmount, 4)}
