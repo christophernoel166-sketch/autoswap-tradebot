@@ -673,6 +673,10 @@ let holderData = {
 };
 
 try {
+console.log(
+  "🔍 HOLDER SCAN REQUEST",
+  tokenMint
+);
   holderData = await fetchTokenHolderData(tokenMint, {
     excludeAddresses: getExcludedHolderAddressesForMint(tokenMint),
     marketContext: {

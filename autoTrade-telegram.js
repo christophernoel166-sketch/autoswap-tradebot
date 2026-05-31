@@ -2742,6 +2742,17 @@ LOG.info(
   "🧪 TRADING WALLET CHECK"
 );
 
+const phantomActiveKey = await redis.smembers(
+  "wallet:active:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
+);
+
+LOG.info(
+  {
+    count: phantomActiveKey.length,
+    phantomActiveKey,
+  },
+  "🧪 ALL ACTIVE MINTS NOW"
+);
 
 const myPositions = await redis.keys(
   "position:FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy:*"
