@@ -3265,6 +3265,15 @@ LOG.info(
             );
           }
 
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    status: position.status
+  },
+  "✅ RESTORING POSITION"
+);
+
           restored++;
  // ===================================================
           // 📸 Rebuild wallet snapshot cache
