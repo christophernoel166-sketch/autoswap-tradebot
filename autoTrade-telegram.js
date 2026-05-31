@@ -3050,15 +3050,6 @@ LOG.info(
   "🧪 Position data found"
 );
 
-LOG.warn(
-  {
-    walletAddress,
-    mint,
-    status: info?.status,
-  },
-  "🚨 Position skipped during restore"
-);
-
 
          
 
@@ -3269,7 +3260,7 @@ LOG.info(
   {
     walletAddress,
     mint,
-    status: position.status
+    status: info.status
   },
   "✅ RESTORING POSITION"
 );
