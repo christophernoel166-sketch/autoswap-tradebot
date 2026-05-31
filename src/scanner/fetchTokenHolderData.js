@@ -198,7 +198,7 @@ export async function fetchTokenHolderData(tokenMint, options = {}) {
     throw new Error("No token accounts found");
   }
 
-  const topAccounts = accounts.slice(0, 15);
+  const topAccounts = accounts.slice(0, 5);
   const resolvedAccounts = [];
 
   for (const acc of topAccounts) {
