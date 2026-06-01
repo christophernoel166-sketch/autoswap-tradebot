@@ -2809,7 +2809,12 @@ LOG.info(
   "🧪 Redis active wallets"
 );
 
-
+LOG.warn(
+  {
+    walletKeysCount: walletKeys.length,
+  },
+  "🧪 SHOULD BLOCKCHAIN RECOVERY RUN?"
+);
 
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
