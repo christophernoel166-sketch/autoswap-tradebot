@@ -1,6 +1,7 @@
 import express from "express";
 import { redis } from "../utils/redis.js";
 import { walletSnapshotKey } from "../redis/positionKeys.js";
+import User from "../../models/User.js";
 
 const router = express.Router();
 
@@ -14,9 +15,33 @@ router.get("/:walletAddress", async (req, res) => {
   try {
     const walletAddress = String(req.params.walletAddress || "").trim();
 
-    if (!walletAddress) {
+if (!walletAddress) {
       return res.status(400).json({ error: "wallet_required" });
     }
+
+const user = await User.findOne({
+  walletAddress,
+});
+
+if (!user) {
+  return res.json({
+    positions: [],
+    phantomHoldings: [],
+  });
+}
+
+const tradingWalletPublicKey =
+  user.tradingWalletPublicKey;
+
+console.log(
+  "🧪 ACTIVE POSITIONS WALLET",
+  {
+    walletAddress,
+    tradingWalletPublicKey,
+  }
+);
+
+    
 
     const key = walletSnapshotKey(walletAddress);
     const raw = await redis.get(key);
