@@ -3146,6 +3146,56 @@ if (info.status === "closing") {
   info.status = "open";
 }
 
+// =========================================
+// CHECK REAL WALLET BALANCE
+// =========================================
+const restoredWallet =
+  restoreTradingWallet(user);
+
+const realTokenBalance =
+  await getWalletTokenBalance(
+    restoredWallet.publicKey.toBase58(),
+    mint
+  );
+
+LOG.warn(
+  {
+    walletAddress,
+    mint,
+    realTokenBalance,
+    status: info.status,
+  },
+  "🧪 CLOSED POSITION BALANCE CHECK"
+);
+
+// =========================================
+// REOPEN CLOSED POSITIONS IF TOKENS EXIST
+// =========================================
+if (
+  info.status === "closed" &&
+  realTokenBalance > 0
+) {
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      realTokenBalance,
+    },
+    "♻️ Reopening closed position because tokens still exist"
+  );
+
+  await redis.hset(
+    posKey,
+    "status",
+    "open"
+  );
+
+  info.status = "open";
+
+  info.tokenAmount =
+    String(realTokenBalance);
+}
+
 // Skip only truly closed positions
 if (info.status !== "open") {
 
@@ -3164,8 +3214,7 @@ if (info.status !== "open") {
 const state = await ensureMonitor(mint);
 
         
-const restoredWallet =
-  restoreTradingWallet(user);
+
 
 LOG.info(
   {

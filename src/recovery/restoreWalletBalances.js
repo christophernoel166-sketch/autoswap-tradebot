@@ -3,6 +3,9 @@ import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import User from "../../models/User.js";
 
 import { redis } from "../utils/redis.js";
+import {
+  connection,
+} from "../services/solanaConnection.js";
 
 import {
   restoreTradingWallet,
