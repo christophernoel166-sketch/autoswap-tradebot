@@ -21,9 +21,12 @@ router.get("/:walletAddress", async (req, res) => {
     const key = walletSnapshotKey(walletAddress);
     const raw = await redis.get(key);
 
-    if (!raw) {
-      return res.json({ positions: [] });
-    }
+   if (!raw) {
+  return res.json({
+    positions: [],
+    phantomHoldings: []
+  });
+}
 
     let positions = [];
     try {
@@ -54,7 +57,10 @@ pnlSol: Number(p.pnlSol || 0),
       openedAt: Number(p.openedAt || 0),
     }));
 
-    return res.json({ positions: normalized });
+   return res.json({
+  positions: normalized,
+  phantomHoldings: []
+});
   } catch (err) {
     console.error("active-positions error:", err);
     return res.status(500).json({ error: "internal_error" });

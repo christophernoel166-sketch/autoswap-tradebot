@@ -1602,6 +1602,47 @@ if (!tradingWalletAddress) {
   continue;
 }
 
+const realTokenBalance =
+  await getWalletTokenBalance(
+    tradingWalletAddress,
+    mint
+  );
+
+LOG.info(
+  {
+    walletAddress: tradingWalletAddress,
+    mint,
+    realTokenBalance,
+  },
+  "🧪 BALANCE CHECK"
+);
+
+// ✅ auto-remove dead positions
+if (realTokenBalance <= 0) {
+  LOG.warn(
+  {
+    walletAddress:
+      tradingWalletAddress,
+    mint,
+  },
+    "🧹 Removing dead position (0 token balance)"
+  );
+
+  state.users.delete(walletAddress);
+  state.entryPrices.delete(walletAddress);
+  state.highestPrices.delete(walletAddress);
+
+  await redis.del(
+    positionKey(walletAddress, mint)
+  );
+
+  await redis.srem(
+    walletPositionsKey(walletAddress),
+    mint
+  );
+
+  continue;
+}
 
         const snapshotItem = {
   mint,
