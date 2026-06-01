@@ -1608,6 +1608,15 @@ const realTokenBalance =
     mint
   );
 
+LOG.info(
+  {
+    walletAddress: tradingWalletAddress,
+    mint,
+    realTokenBalance,
+  },
+  "🧪 BALANCE CHECK"
+);
+
 // ✅ auto-remove dead positions
 if (realTokenBalance <= 0) {
   LOG.warn(
