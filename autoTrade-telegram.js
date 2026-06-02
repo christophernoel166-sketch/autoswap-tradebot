@@ -2725,7 +2725,7 @@ export async function restoreOpenPositions() {
 
 const phantomActiveKey =
   await redis.smembers(
-    "wallet:active:"DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
+    "wallet:active: "DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
   );
 
 LOG.info(
