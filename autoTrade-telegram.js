@@ -2723,7 +2723,7 @@ export async function restoreOpenPositions() {
 
 const myPositions =
   await redis.keys(
-    "position:FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy:*"
+    "position:FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy"
   );
 
 LOG.warn(
