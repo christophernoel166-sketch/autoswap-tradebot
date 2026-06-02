@@ -2721,6 +2721,17 @@ export async function restoreOpenPositions() {
   try {
     LOG.info("♻️ Restoring open positions from Redis...");
 
+const allPositions =
+  await redis.keys("position:*");
+
+LOG.warn(
+  {
+    count: allPositions.length,
+    allPositions,
+  },
+  "🧪 ALL REDIS POSITIONS"
+);
+
     const walletKeys = await redis.keys("wallet:active:*");
 
 const phantomActiveKey =
