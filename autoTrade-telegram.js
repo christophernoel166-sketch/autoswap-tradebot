@@ -2840,15 +2840,19 @@ for (const acc of tokenAccounts.value) {
   const exists =
     await redis.exists(posKey);
 
-  LOG.warn(
-    {
-      mint,
-      balance,
-      posKey,
-      exists,
-    },
-    "🪙 WALLET TOKEN CHECK"
-  );
+  if (!exists) {
+    const price =
+      await getDexScreenerPrice(mint);
+
+    LOG.warn(
+      {
+        mint,
+        balance,
+        currentPrice: price,
+      },
+      "🚨 MISSING POSITION FOUND"
+    );
+  }
 }
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
