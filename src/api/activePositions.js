@@ -43,26 +43,95 @@ console.log(
 
     
 
-    const key = walletSnapshotKey(walletAddress);
-    const raw = await redis.get(key);
-
-console.log(
-  "🧪 SNAPSHOT RAW",
-  raw
+const activeMints = await redis.smembers(
+  `wallet:active:${walletAddress}`
 );
 
 console.log(
-  "🧪 SNAPSHOT KEY",
-  key
+  "🧪 ACTIVE MINTS",
+  activeMints
 );
 
-   if (!raw) {
-  return res.json({
-    positions: [],
-    phantomHoldings: []
+const positions = [];
+
+for (const mint of activeMints) {
+  const posKey =
+    `position:${walletAddress}:${mint}`;
+
+  const pos =
+    await redis.hgetall(posKey);
+
+  if (
+    !pos ||
+    Object.keys(pos).length === 0
+  ) {
+    continue;
+  }
+
+  positions.push({
+    walletAddress,
+    mint,
+
+    sourceChannel:
+      pos.sourceChannel || null,
+
+    solAmount: Number(
+      pos.solAmount || 0
+    ),
+
+    tokenAmount: Number(
+      pos.tokenAmount || 0
+    ),
+
+    entryPrice: Number(
+      pos.entryPrice || 0
+    ),
+
+    currentPrice: Number(
+      pos.currentPrice || 0
+    ),
+
+    changePercent: Number(
+      pos.changePercent || 0
+    ),
+
+    pnlSol: Number(
+      pos.pnlSol || 0
+    ),
+
+    buyTxid:
+      pos.buyTxid || null,
+
+    tpStage: Number(
+      pos.tpStage || 0
+    ),
+
+    highestPrice: Number(
+      pos.highestPrice || 0
+    ),
+
+    openedAt: Number(
+      pos.openedAt || 0
+    ),
+
+    status:
+      pos.status || "open",
   });
 }
 
+console.log(
+  "🧪 DASHBOARD POSITIONS",
+  positions.map(p => ({
+    mint: p.mint,
+    status: p.status,
+    tokenAmount: p.tokenAmount
+  }))
+);
+
+return res.json({
+  positions,
+  phantomHoldings: []
+});
     let positions = [];
     try {
       const parsed = JSON.parse(raw);
