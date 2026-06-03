@@ -2805,6 +2805,41 @@ LOG.warn(
   "🧪 SHOULD BLOCKCHAIN RECOVERY RUN?"
 );
 
+LOG.warn("🧪 SCANNING WALLET FOR MISSING POSITIONS");
+
+const wallet = restoreTradingWallet(myUser);
+
+const tokenAccounts =
+  await connection.getParsedTokenAccountsByOwner(
+    wallet.publicKey,
+    {
+      programId: TOKEN_PROGRAM_ID,
+    }
+  );
+
+for (const acc of tokenAccounts.value) {
+  const info =
+    acc.account.data.parsed.info;
+
+  const mint = info.mint;
+
+  const balance = Number(
+    info.tokenAmount.uiAmount || 0
+  );
+
+  if (balance <= 0) {
+    continue;
+  }
+
+  LOG.warn(
+    {
+      mint,
+      balance,
+    },
+    "🪙 TOKEN FOUND IN WALLET"
+  );
+}
+
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
   LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
