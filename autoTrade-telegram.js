@@ -2727,7 +2727,7 @@ export async function restoreOpenPositions() {
 
 const phantomActiveKey =
   await redis.smembers(
-    "wallet:active: DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
+    "wallet:active:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K"
   );
 
 LOG.info(
@@ -2792,8 +2792,8 @@ for (const key of myPositions) {
   );
 }
 
-const phantomPositions = await redis.keys(
-  "position:DyD8hwaXNQbQt3Qxr2aZ9pRwjoifKxNmvgQrHgdpS61K:*"
+const myPositions = await redis.keys(
+  `position:${myUser.walletAddress}:*`
 );
 
 LOG.info(
