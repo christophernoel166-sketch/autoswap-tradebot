@@ -2763,6 +2763,9 @@ LOG.info(
   "🧪 ALL ACTIVE MINTS NOW"
 );
 
+const myPositions = await redis.keys(
+  `position:${myUser.walletAddress}:*`
+);
 
 LOG.info(
   {
@@ -2772,7 +2775,6 @@ LOG.info(
   "🧪 MY POSITION KEYS"
 );
 
-// ADD THIS HERE
 for (const key of myPositions) {
   const pos = await redis.hgetall(key);
 
@@ -2788,35 +2790,6 @@ for (const key of myPositions) {
     "🧪 MY POSITION DATA"
   );
 }
-
-const myPositions = await redis.keys(
-  `position:${myUser.walletAddress}:*`
-);
-
-LOG.info(
-  {
-    count: phantomPositions.length,
-    phantomPositions,
-  },
-  "🧪 PHANTOM POSITION KEYS"
-);
-
-for (const key of phantomPositions) {
-  const pos = await redis.hgetall(key);
-
-  LOG.info(
-    {
-      key,
-      walletAddress: pos.walletAddress,
-      mint: pos.mint,
-      status: pos.status,
-      fields: Object.keys(pos),
-    },
-    "🧪 PHANTOM POSITION DATA"
-  );
-}
-
-
 LOG.info(
   {
     walletKeysCount: walletKeys.length,
