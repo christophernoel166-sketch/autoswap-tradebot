@@ -3099,6 +3099,9 @@ if (!walletKeys.length) {
           mint
         );
 
+const estimatedSolAmount =
+  Number(amount || 0) *
+  Number(currentPrice || 0);
         await redis.hset(
           positionKey(
             user.walletAddress,
@@ -3112,7 +3115,8 @@ if (!walletKeys.length) {
 
             sourceChannel: "restore",
 
-            solAmount: "0",
+            solAmount:
+  String(estimatedSolAmount),
 
             tokenAmount:
               String(amount),
@@ -3132,6 +3136,7 @@ if (!walletKeys.length) {
             openedAt: String(
               Date.now()
             ),
+          recovered: "true",
           }
         );
 
