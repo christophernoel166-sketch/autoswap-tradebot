@@ -1,6 +1,6 @@
 import express from "express";
 import { redis } from "../utils/redis.js";
-import { walletSnapshotKey } from "../redis/positionKeys.js";
+// import { walletSnapshotKey } from "../redis/positionKeys.js";
 import User from "../../models/User.js";
 
 const router = express.Router();
@@ -43,7 +43,7 @@ console.log(
 
     
 
-const activeMints = await redis.smembers(
+  const activeMints = await redis.smembers(
   `wallet:active:${walletAddress}`
 );
 
@@ -60,6 +60,16 @@ for (const mint of activeMints) {
 
   const pos =
     await redis.hgetall(posKey);
+
+console.log(
+  "🧪 POSITION HASH",
+  {
+    mint,
+    posKey,
+    fields: Object.keys(pos),
+    status: pos.status,
+  }
+);
 
   if (
     !pos ||
@@ -132,48 +142,9 @@ return res.json({
   positions,
   phantomHoldings: []
 });
-    let positions = [];
-    try {
-      const parsed = JSON.parse(raw);
-      positions = Array.isArray(parsed) ? parsed : [];
-    } catch (err) {
-      console.error("active-positions snapshot parse error:", err);
-      return res.json({ positions: [] });
-    }
 
-console.log(
-  "🧪 SNAPSHOT POSITIONS",
-  positions.map(p => ({
-    mint: p.mint,
-    tokenAmount: p.tokenAmount,
-    status: p.status
-  }))
-);
 
-    const normalized = positions.map((p) => ({
-  walletAddress:
-    p.walletAddress || walletAddress,
-      mint: p.mint || null,
-      sourceChannel: p.sourceChannel || null,
 
-      solAmount: Number(p.solAmount || 0),
-tokenAmount: Number(p.tokenAmount || 0),
-
-entryPrice: Number(p.entryPrice || 0),
-currentPrice: Number(p.currentPrice || 0),
-changePercent: Number(p.changePercent || 0),
-pnlSol: Number(p.pnlSol || 0),
-
-      buyTxid: p.buyTxid || null,
-      tpStage: Number(p.tpStage || 0),
-      highestPrice: Number(p.highestPrice || 0),
-      openedAt: Number(p.openedAt || 0),
-    }));
-
-   return res.json({
-  positions: normalized,
-  phantomHoldings: []
-});
   } catch (err) {
     console.error("active-positions error:", err);
     return res.status(500).json({ error: "internal_error" });
