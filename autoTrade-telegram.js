@@ -2831,15 +2831,25 @@ for (const acc of tokenAccounts.value) {
     continue;
   }
 
+  const posKey =
+    positionKey(
+      myUser.walletAddress,
+      mint
+    );
+
+  const exists =
+    await redis.exists(posKey);
+
   LOG.warn(
     {
       mint,
       balance,
+      posKey,
+      exists,
     },
-    "🪙 TOKEN FOUND IN WALLET"
+    "🪙 WALLET TOKEN CHECK"
   );
 }
-
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
   LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
