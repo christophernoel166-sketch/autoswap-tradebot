@@ -2764,9 +2764,6 @@ LOG.info(
 );
 
 
-  "position:FbPVjUtqdfJXsBUCMhA4LZmvh9EvqJoc5w1gYAKARyiy:*"
-);
-
 LOG.info(
   {
     count: myPositions.length,
