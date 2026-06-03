@@ -1,6 +1,6 @@
 import express from "express";
 import { redis } from "../utils/redis.js";
-import { walletSnapshotKey } from "../redis/positionKeys.js";
+// import { walletSnapshotKey } from "../redis/positionKeys.js";
 import User from "../../models/User.js";
 
 const router = express.Router();
