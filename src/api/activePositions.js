@@ -46,6 +46,16 @@ console.log(
     const key = walletSnapshotKey(walletAddress);
     const raw = await redis.get(key);
 
+console.log(
+  "🧪 SNAPSHOT RAW",
+  raw
+);
+
+console.log(
+  "🧪 SNAPSHOT KEY",
+  key
+);
+
    if (!raw) {
   return res.json({
     positions: [],
