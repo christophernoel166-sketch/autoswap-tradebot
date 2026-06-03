@@ -2850,7 +2850,51 @@ for (const acc of tokenAccounts.value) {
         balance,
         currentPrice: price,
       },
-      "🚨 MISSING POSITION FOUND"
+      "🚨 RECREATING MISSING POSITION"
+    );
+
+    await redis.hset(
+      posKey,
+      {
+        walletAddress:
+          myUser.walletAddress,
+
+        mint,
+
+        status: "open",
+
+        tokenAmount:
+          String(balance),
+
+        entryPrice:
+          String(price || 0),
+
+        highestPrice:
+          String(price || 0),
+
+        openedAt:
+          String(Date.now()),
+
+        tpStage: "0",
+
+        sourceChannel:
+          "recovered"
+      }
+    );
+
+    await redis.sadd(
+      walletPositionsKey(
+        myUser.walletAddress
+      ),
+      mint
+    );
+
+    LOG.warn(
+      {
+        mint,
+        posKey,
+      },
+      "✅ POSITION RESTORED"
     );
   }
 }
