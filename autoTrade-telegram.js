@@ -2889,6 +2889,17 @@ for (const acc of tokenAccounts.value) {
       mint
     );
 
+const verify =
+  await redis.hgetall(posKey);
+
+LOG.warn(
+  {
+    mint,
+    verify,
+  },
+  "🧪 VERIFY POSITION SAVED"
+);
+
     LOG.warn(
       {
         mint,
