@@ -62,6 +62,16 @@ for (const mint of activeMints) {
     await redis.hgetall(posKey);
 
 console.log(
+  "🧪 POSITION RETURNED",
+  {
+    mint,
+    currentPrice: pos.currentPrice,
+    entryPrice: pos.entryPrice,
+    tokenAmount: pos.tokenAmount,
+  }
+);
+
+console.log(
   "🧪 POSITION HASH",
   {
     mint,
