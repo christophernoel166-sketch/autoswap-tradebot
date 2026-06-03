@@ -1595,6 +1595,32 @@ async function ensureMonitor(mint) {
         const solAmount = info.solAmount || 0;
         const pnlSol = (changePercent / 100) * solAmount;
 
+// ADD HERE
+await redis.hset(
+  positionKey(walletAddress, mint),
+  {
+    currentPrice: String(currentPrice),
+    changePercent: String(changePercent),
+    pnlSol: String(pnlSol),
+
+    highestPrice: String(
+      state.highestPrices?.get(walletAddress) ||
+      currentPrice
+    ),
+  }
+);
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    currentPrice,
+    changePercent,
+    pnlSol,
+  },
+  "🧪 POSITION PRICE UPDATED"
+);
+
 const tradingWalletAddress =
   info.wallet?.publicKey?.toBase58?.();
 
