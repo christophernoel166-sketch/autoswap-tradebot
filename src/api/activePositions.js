@@ -72,6 +72,15 @@ console.log(
       return res.json({ positions: [] });
     }
 
+console.log(
+  "🧪 SNAPSHOT POSITIONS",
+  positions.map(p => ({
+    mint: p.mint,
+    tokenAmount: p.tokenAmount,
+    status: p.status
+  }))
+);
+
     const normalized = positions.map((p) => ({
   walletAddress:
     p.walletAddress || walletAddress,
