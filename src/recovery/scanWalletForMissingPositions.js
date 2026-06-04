@@ -41,18 +41,31 @@ export async function scanWalletForMissingPositions() {
     let restored = 0;
 
     for (const user of users) {
-      try {
-        const wallet =
-          restoreTradingWallet(user);
 
-        const tokenAccounts =
-          await connection.getParsedTokenAccountsByOwner(
-            wallet.publicKey,
-            {
-              programId:
-                TOKEN_PROGRAM_ID,
-            }
-          );
+  if (!user.tradingWalletPublicKey) {
+    LOG.warn(
+      {
+        walletAddress:
+          user.walletAddress,
+      },
+      "⚠️ User has no trading wallet"
+    );
+
+    continue;
+  }
+
+  try {
+    const wallet =
+      restoreTradingWallet(user);
+
+    const tokenAccounts =
+      await connection.getParsedTokenAccountsByOwner(
+        wallet.publicKey,
+        {
+          programId:
+            TOKEN_PROGRAM_ID,
+        }
+      );
 
         for (const acc of tokenAccounts.value) {
           const info =
