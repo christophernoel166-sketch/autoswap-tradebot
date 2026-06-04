@@ -2838,8 +2838,26 @@ LOG.warn(
 );
 
 await scanWalletForMissingPositions();
-
 await rebuildPositionsFromBlockchain();
+
+LOG.info(
+  "♻️ Starting 15-minute recovery scheduler"
+);
+setInterval(
+  async () => {
+    try {
+      await scanWalletForMissingPositions();
+    } catch (err) {
+      LOG.error(
+        err,
+        "❌ Periodic missing-position scan failed"
+      );
+    }
+  },
+  15 * 60 * 1000
+);
+
+
 
 // LOG.warn("🧪 SCANNING WALLET FOR MISSING POSITIONS");
 
