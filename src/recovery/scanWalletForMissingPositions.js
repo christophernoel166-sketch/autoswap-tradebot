@@ -6,8 +6,7 @@ from "@solana/spl-token";
 import { redis }
 from "../utils/redis.js";
 
-import LOG
-from "../utils/logger.js";
+const LOG = console;
 
 import {
   positionKey,
