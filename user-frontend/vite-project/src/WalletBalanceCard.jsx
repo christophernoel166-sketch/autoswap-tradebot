@@ -2,6 +2,7 @@ import React from "react";
 
 export default function WalletBalanceCard({
   availableSol = 0,
+  availableUsd = 0,
   lockedSol = 0,
   onDeposit,
   onWithdraw,
@@ -18,9 +19,15 @@ export default function WalletBalanceCard({
           <span className="text-gray-600 dark:text-gray-400">
             Available
           </span>
-          <span className="font-mono text-gray-900 dark:text-gray-100">
-            {Number(availableSol).toFixed(6)} SOL
-          </span>
+          <div className="text-right">
+  <div className="font-mono text-gray-900 dark:text-gray-100">
+    {Number(availableSol).toFixed(6)} SOL
+  </div>
+
+  <div className="text-xs text-green-600 dark:text-green-400">
+    ${Number(availableUsd).toFixed(2)}
+  </div>
+</div>
         </div>
 
         <div className="flex justify-between">

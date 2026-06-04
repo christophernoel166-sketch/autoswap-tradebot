@@ -1,36 +1,90 @@
 import express from "express";
-import { Connection, PublicKey, LAMPORTS_PER_SOL } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+
+import {
+  getDexScreenerPrice,
+} from "../services/priceFeed.js";
 
 const router = express.Router();
 
 const RPC_URL = process.env.RPC_URL;
-if (!RPC_URL) throw new Error("RPC_URL missing");
 
-const connection = new Connection(RPC_URL, "confirmed");
+if (!RPC_URL) {
+  throw new Error("RPC_URL missing");
+}
+
+const connection =
+  new Connection(
+    RPC_URL,
+    "confirmed"
+  );
 
 /**
  * GET /api/onchain-balance/:wallet
  */
 router.get("/:wallet", async (req, res) => {
   try {
-    const wallet = String(req.params.wallet || "").trim();
+    const wallet =
+      String(
+        req.params.wallet || ""
+      ).trim();
 
     if (!wallet) {
-      return res.status(400).json({ error: "wallet_required" });
+      return res.status(400).json({
+        error: "wallet_required",
+      });
     }
 
-    const pubkey = new PublicKey(wallet);
-  console.log("RPC:getBalance", wallet);
-    const lamports = await connection.getBalance(pubkey);
+    const pubkey =
+      new PublicKey(wallet);
+
+    console.log(
+      "RPC:getBalance",
+      wallet
+    );
+
+    const lamports =
+      await connection.getBalance(
+        pubkey
+      );
+
+    const sol =
+      lamports /
+      LAMPORTS_PER_SOL;
+
+    // Wrapped SOL mint
+    const solPriceUsd =
+      await getDexScreenerPrice(
+        "So11111111111111111111111111111111111111112"
+      );
+
+    const usdValue =
+      Number(sol || 0) *
+      Number(solPriceUsd || 0);
 
     return res.json({
       wallet,
       lamports,
-      sol: lamports / LAMPORTS_PER_SOL,
+      sol,
+
+      solPriceUsd:
+        Number(solPriceUsd || 0),
+
+      usdValue,
     });
   } catch (err) {
-    console.error("onchain-balance error:", err);
-    return res.status(500).json({ error: "internal_error" });
+    console.error(
+      "onchain-balance error:",
+      err
+    );
+
+    return res.status(500).json({
+      error: "internal_error",
+    });
   }
 });
 

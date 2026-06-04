@@ -42,6 +42,9 @@ const [showWithdrawModal, setShowWithdrawModal] = useState(false);
 const [maxSlippagePercent, setMaxSlippagePercent] = useState(2);
 const [mevProtection, setMevProtection] = useState(true);
 const [onChainBalance, setOnChainBalance] = useState(0);
+
+const [onChainBalanceUsd, setOnChainBalanceUsd] =
+  useState(0);
 const [showTradingSettings, setShowTradingSettings] = useState(true);
 
 const [withdrawLoading, setWithdrawLoading] = useState(false);
@@ -284,6 +287,7 @@ useEffect(() => {
     try {
       if (!user?.tradingWalletPublicKey) {
         setOnChainBalance(0);
+        setOnChainBalanceUsd(0);
         return;
       }
 
@@ -296,10 +300,18 @@ useEffect(() => {
       }
 
       const data = await r.json();
-      setOnChainBalance(Number(data.sol || 0));
+
+setOnChainBalance(
+  Number(data.sol || 0)
+);
+
+setOnChainBalanceUsd(
+  Number(data.usdValue || 0)
+);
     } catch (err) {
       console.warn("Failed to fetch on-chain balance", err);
       setOnChainBalance(0);
+      setOnChainBalanceUsd(0);
     }
   }
 
@@ -1480,6 +1492,7 @@ async function reRequestChannel(channelId) {
 
 <WalletBalanceCard
   availableSol={onChainBalance}
+  availableUsd={onChainBalanceUsd}
   lockedSol={0}
   onDeposit={() => setShowDepositModal(true)}
   onWithdraw={() => setShowWithdrawModal(true)}
