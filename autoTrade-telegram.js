@@ -54,7 +54,13 @@ import {
   getDexScreenerPrice,
   getDexScreenerPrices,
 } from "./src/services/priceFeed.js";
+import {
+  scanWalletForMissingPositions,
+} from "./src/recovery/scanWalletForMissingPositions.js";
 
+import {
+  rebuildPositionsFromBlockchain,
+} from "./src/recovery/rebuildPositionsFromBlockchain.js";
 // import {
 //  restoreWalletBalances,
 // } from "./src/recovery/restoreWalletBalances.js";
@@ -2831,110 +2837,114 @@ LOG.warn(
   "🧪 SHOULD BLOCKCHAIN RECOVERY RUN?"
 );
 
-LOG.warn("🧪 SCANNING WALLET FOR MISSING POSITIONS");
+await scanWalletForMissingPositions();
 
-const wallet = restoreTradingWallet(myUser);
+await rebuildPositionsFromBlockchain();
 
-const tokenAccounts =
-  await connection.getParsedTokenAccountsByOwner(
-    wallet.publicKey,
-    {
-      programId: TOKEN_PROGRAM_ID,
-    }
-  );
+// LOG.warn("🧪 SCANNING WALLET FOR MISSING POSITIONS");
 
-for (const acc of tokenAccounts.value) {
-  const info =
-    acc.account.data.parsed.info;
+// const wallet = restoreTradingWallet(myUser);
 
-  const mint = info.mint;
+// const tokenAccounts =
+ // await connection.getParsedTokenAccountsByOwner(
+   // wallet.publicKey,
+   // {
+     // programId: TOKEN_PROGRAM_ID,
+  //  }
+ // );
 
-  const balance = Number(
-    info.tokenAmount.uiAmount || 0
-  );
+// for (const acc of tokenAccounts.value) {
+//  const info =
+   // acc.account.data.parsed.info;
 
-  if (balance <= 0) {
-    continue;
-  }
+ // const mint = info.mint;
 
-  const posKey =
-    positionKey(
-      myUser.walletAddress,
-      mint
-    );
+ // const balance = Number(
+  //  info.tokenAmount.uiAmount || 0
+//  );
 
-  const exists =
-    await redis.exists(posKey);
+ // if (balance <= 0) {
+   // continue;
+ // }
 
-  if (!exists) {
-    const price =
-      await getDexScreenerPrice(mint);
+ // const posKey =
+   // positionKey(
+     // myUser.walletAddress,
+     // mint
+   // );
 
-    LOG.warn(
-      {
-        mint,
-        balance,
-        currentPrice: price,
-      },
+ // const exists =
+   // await redis.exists(posKey);
+
+ // if (!exists) {
+   // const price =
+     // await getDexScreenerPrice(mint);
+
+   // LOG.warn(
+     // {
+       // mint,
+       // balance,
+       // currentPrice: price,
+     // },
       "🚨 RECREATING MISSING POSITION"
-    );
+   // );
 
-    await redis.hset(
-      posKey,
-      {
-        walletAddress:
-          myUser.walletAddress,
+   // await redis.hset(
+     // posKey,
+     // {
+       // walletAddress:
+         // myUser.walletAddress,
 
-        mint,
+       // mint,
 
-        status: "open",
+       // status: "open",
 
-        tokenAmount:
-          String(balance),
+       // tokenAmount:
+         // String(balance),
 
-        entryPrice:
-          String(price || 0),
+       // entryPrice:
+         // String(price || 0),
 
-        highestPrice:
-          String(price || 0),
+       // highestPrice:
+         // String(price || 0),
 
-        openedAt:
-          String(Date.now()),
+       // openedAt:
+         // String(Date.now()),
 
-        tpStage: "0",
+       // tpStage: "0",
 
-        sourceChannel:
-          "recovered"
-      }
-    );
+       // sourceChannel:
+         // "recovered"
+     // }
+   // );
 
-    await redis.sadd(
-      walletPositionsKey(
-        myUser.walletAddress
-      ),
-      mint
-    );
+   // await redis.sadd(
+     // walletPositionsKey(
+      //  myUser.walletAddress
+    //  ),
+    //  mint
+   // );
 
-const verify =
-  await redis.hgetall(posKey);
+// const verify =
+ // await redis.hgetall(posKey);
 
-LOG.warn(
-  {
-    mint,
-    verify,
-  },
-  "🧪 VERIFY POSITION SAVED"
-);
+// LOG.warn(
+ // {
+   // mint,
+  //  verify,
+ // },
+//  "🧪 VERIFY POSITION SAVED"
+// );
 
-    LOG.warn(
-      {
-        mint,
-        posKey,
-      },
-      "✅ POSITION RESTORED"
-    );
-  }
-}
+   // LOG.warn(
+     // {
+       // mint,
+       // posKey,
+     // },
+    //  "✅ POSITION RESTORED"
+  //  );
+ // }
+// }
 // REBUILD FROM BLOCKCHAIN
 if (!walletKeys.length) {
   LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
