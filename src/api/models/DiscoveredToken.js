@@ -24,12 +24,53 @@ const discoveredTokenSchema = new mongoose.Schema(
     pairCreatedAt: Number,
 
     ageMinutes: Number,
-    liquidityUsd: Number,
-    marketCapUsd: Number,
-    volume5mUsd: Number,
 
-    buys5m: Number,
-    sells5m: Number,
+    // Current metrics
+    liquidityUsd: {
+      type: Number,
+      default: 0,
+    },
+
+    marketCapUsd: {
+      type: Number,
+      default: 0,
+    },
+
+    volume5mUsd: {
+      type: Number,
+      default: 0,
+    },
+
+    buys5m: {
+      type: Number,
+      default: 0,
+    },
+
+    sells5m: {
+      type: Number,
+      default: 0,
+    },
+
+    // Previous metrics (used for forecasting)
+    previousLiquidityUsd: {
+      type: Number,
+      default: 0,
+    },
+
+    previousVolume5mUsd: {
+      type: Number,
+      default: 0,
+    },
+
+    previousBuys5m: {
+      type: Number,
+      default: 0,
+    },
+
+    previousSells5m: {
+      type: Number,
+      default: 0,
+    },
 
     boosted: Boolean,
 
