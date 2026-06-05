@@ -372,28 +372,54 @@ const chartActionColor =
   </Section>
 ) : null}
 
-{forecast ? (
-  <Section title="Forecast Analysis">
+{liquidityAnalysis ? (
+  <Section title="Liquidity Analysis">
     <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-      <div className="text-xs text-gray-500 dark:text-gray-400">
-        Forecast Score
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+        Liquidity Score
       </div>
 
-      <div className="text-3xl font-bold">
-        {forecast.forecastScore}
-      </div>
-
-      <div className="mt-2">
-        {forecast.verdict}
-      </div>
-
-      <div className="text-sm text-gray-500">
-        Confidence: {forecast.confidence}%
+      <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        {liquidityAnalysis.liquidityScore ?? "—"}
       </div>
     </div>
   </Section>
 ) : null}
 
+
+{forecast ? (
+  <Section title="Forecast Analysis">
+    <MetricRow
+      label="Trend Score"
+      value={forecast.trendScore}
+    />
+
+    <MetricRow
+      label="Volume Score"
+      value={forecast.volumeScore}
+    />
+
+    <MetricRow
+      label="Liquidity Score"
+      value={forecast.liquidityScore}
+    />
+
+    <MetricRow
+      label="Forecast Score"
+      value={forecast.forecastScore}
+    />
+
+    <MetricRow
+      label="Verdict"
+      value={forecast.verdict}
+    />
+
+    <MetricRow
+      label="Confidence"
+      value={`${forecast.confidence}%`}
+    />
+  </Section>
+) : null}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <Section title="Market">
