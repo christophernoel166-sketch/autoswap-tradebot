@@ -63,6 +63,20 @@ const [showChartConfirm, setShowChartConfirm] = useState(false);
 const [newTokens, setNewTokens] = useState([]);
 const [loadingNewTokens, setLoadingNewTokens] = useState(false);
 
+const positionsValueUsd =
+  positions.reduce(
+    (sum, p) =>
+      sum +
+      (
+        Number(p.tokenAmount || 0) *
+        Number(p.currentPrice || 0)
+      ),
+    0
+  );
+
+const totalPortfolioUsd =
+  Number(onChainBalanceUsd || 0) +
+  positionsValueUsd;
 
 // ================================
 // CUSTOM CONDITION MODE STATE
@@ -1493,6 +1507,8 @@ async function reRequestChannel(channelId) {
 <WalletBalanceCard
   availableSol={onChainBalance}
   availableUsd={onChainBalanceUsd}
+  positionsUsd={positionsValueUsd}
+  portfolioUsd={totalPortfolioUsd}
   lockedSol={0}
   onDeposit={() => setShowDepositModal(true)}
   onWithdraw={() => setShowWithdrawModal(true)}
