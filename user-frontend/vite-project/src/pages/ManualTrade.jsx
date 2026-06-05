@@ -358,57 +358,54 @@ const chartActionColor =
   MetricRow={MetricRow}
 />
 
-{volumeAnalysis ? (
-  <Section title="Volume Analysis">
-    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-        Volume Score
-      </div>
+{volumeAnalysis &&
+ liquidityAnalysis &&
+ forecast ? (
+  <Section title="Forecast Snapshot">
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+      <div className="flex flex-wrap items-center gap-6 text-sm">
 
-      <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-        {volumeAnalysis.volumeScore ?? "—"}
-      </div>
-    </div>
-  </Section>
-) : null}
+        <div>
+          <span className="text-gray-500 dark:text-gray-400">
+            Volume:
+          </span>{" "}
+          <span className="font-semibold">
+            {volumeAnalysis.volumeScore}
+          </span>
+        </div>
 
-{liquidityAnalysis ? (
-  <Section title="Liquidity Analysis">
-    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-        Liquidity Score
-      </div>
+        <div>
+          <span className="text-gray-500 dark:text-gray-400">
+            Liquidity:
+          </span>{" "}
+          <span className="font-semibold">
+            {liquidityAnalysis.liquidityScore}
+          </span>
+        </div>
 
-      <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-        {liquidityAnalysis.liquidityScore ?? "—"}
-      </div>
-    </div>
-  </Section>
-) : null}
+        <div>
+          <span className="text-gray-500 dark:text-gray-400">
+            Forecast:
+          </span>{" "}
+          <span className="font-semibold">
+            {forecast.forecastScore}
+          </span>
+        </div>
 
+        <div>
+          <span className="font-semibold">
+            {forecast.verdict}
+          </span>
+        </div>
 
-{forecast ? (
-  <Section title="Forecast Analysis">
-    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-      <div className="text-xs text-gray-500 dark:text-gray-400">
-        Forecast Score
-      </div>
+        <div className="text-gray-500 dark:text-gray-400">
+          Confidence: {forecast.confidence}%
+        </div>
 
-      <div className="text-3xl font-bold">
-        {forecast.forecastScore}
-      </div>
-
-      <div className="mt-2">
-        {forecast.verdict}
-      </div>
-
-      <div className="text-sm text-gray-500">
-        Confidence: {forecast.confidence}%
       </div>
     </div>
   </Section>
 ) : null}
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <Section title="Market">
