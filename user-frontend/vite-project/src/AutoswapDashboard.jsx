@@ -78,6 +78,11 @@ const totalPortfolioUsd =
   Number(onChainBalanceUsd || 0) +
   positionsValueUsd;
 
+const solPriceUsd =
+  onChainBalance > 0
+    ? onChainBalanceUsd / onChainBalance
+    : 0;
+
 // ================================
 // CUSTOM CONDITION MODE STATE
 // ================================
@@ -1577,6 +1582,7 @@ async function reRequestChannel(channelId) {
     <div className="mt-4">
       <TradingSettings
         solPerTrade={solPerTrade}
+        solPriceUsd={solPriceUsd}
         setSolPerTrade={setSolPerTrade}
         stopLoss={stopLoss}
         setStopLoss={setStopLoss}

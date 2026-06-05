@@ -2,6 +2,7 @@ import { useState } from "react";
 
 export default function TradingSettings({
   solPerTrade,
+solPriceUsd = 0,
   setSolPerTrade,
   stopLoss,
   setStopLoss,
@@ -24,6 +25,9 @@ export default function TradingSettings({
   saveSettings,
 }) {
   const [saving, setSaving] = useState(false);
+const solTradeUsd =
+  Number(solPerTrade || 0) *
+  Number(solPriceUsd || 0);
 
   async function handleSave() {
     setSaving(true);
@@ -49,6 +53,10 @@ export default function TradingSettings({
         value={solPerTrade}
         onChange={(e) => setSolPerTrade(e.target.value)}
       />
+<div className="text-xs text-green-600 dark:text-green-400 mb-3">
+  ≈ ${Number(solTradeUsd).toFixed(2)} USD
+</div>
+
 
       <label className="block text-sm mb-1 text-gray-700 dark:text-gray-300">
         Stop Loss (%)
