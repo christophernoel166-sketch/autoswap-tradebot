@@ -723,6 +723,12 @@ const momentumData = await fetchMomentumData({
   context: {},
 });
 
+// VOLUME ANALYSIS
+const discoveredToken =
+  await DiscoveredToken.findOne({
+    mintAddress: tokenMint.trim(),
+  }).lean();
+
 const volumeAnalysis =
 await fetchVolumeAnalysisData({
   volume5mUsd:
@@ -733,12 +739,28 @@ await fetchVolumeAnalysisData({
 
   sells5m:
     market.metrics.sells5m,
+
+  previousVolume5mUsd:
+    discoveredToken
+      ?.previousVolume5mUsd || 0,
+
+  previousBuys5m:
+    discoveredToken
+      ?.previousBuys5m || 0,
+
+  previousSells5m:
+    discoveredToken
+      ?.previousSells5m || 0,
 });
 
 const liquidityAnalysis =
 await fetchLiquidityAnalysisData({
   liquidityUsd:
     market.metrics.liquidityUsd,
+
+  previousLiquidityUsd:
+    discoveredToken
+      ?.previousLiquidityUsd || 0,
 });
 
 const riskStructureData = await fetchRiskStructureData({
