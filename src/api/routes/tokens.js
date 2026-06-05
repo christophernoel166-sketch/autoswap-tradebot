@@ -27,6 +27,8 @@ import User from "../../../models/User.js";
 import { analyzeChartEntry } from "../../services/chartEntryService.js";
 import { fetchLiquidityLockStatus } from "../../scanner/fetchLiquidityLockStatus.js";
 import DiscoveredToken from "../models/DiscoveredToken.js";
+import { fetchVolumeAnalysisData }
+from "../../scanner/fetchVolumeAnalysisData.js";
 
 
 const router = express.Router();
@@ -720,12 +722,26 @@ const momentumData = await fetchMomentumData({
   context: {},
 });
 
+const volumeAnalysis =
+await fetchVolumeAnalysisData({
+  volume5mUsd:
+    market.metrics.volume5mUsd,
+
+  buys5m:
+    market.metrics.buys5m,
+
+  sells5m:
+    market.metrics.sells5m,
+});
+
 const riskStructureData = await fetchRiskStructureData({
   tokenMint: tokenMint.trim(),
   market,
   holderData,
   context: {},
 });
+
+
 
 const profitWalletData = await fetchProfitWalletData({
   tokenMint: tokenMint.trim(),
@@ -820,11 +836,91 @@ velocityBreakoutScore: momentumData.velocityBreakoutScore,
 let chartEntry = null;
 
 try {
-  if (response?.evaluation?.showBuy) {
-    chartEntry = await analyzeChartEntry(tokenMint.trim());
-  }
+  chartEntry = await analyzeChartEntry(
+    tokenMint.trim()
+  );
 } catch (err) {
   console.warn("Chart analysis failed:", err?.message);
+}
+
+let forecast = null;
+
+if (chartEntry?.ok) {
+  const trendScore =
+    Number(
+      chartEntry.metrics
+        ?.trendStrength || 0
+    );
+
+  const volumeScore =
+    Number(
+      volumeAnalysis
+        ?.volumeScore || 0
+    );
+
+  const liquidityUsd =
+    Number(
+      market.metrics
+        ?.liquidityUsd || 0
+    );
+
+  let liquidityScore = 20;
+
+  if (liquidityUsd >= 100000)
+    liquidityScore = 100;
+  else if (liquidityUsd >= 50000)
+    liquidityScore = 80;
+  else if (liquidityUsd >= 20000)
+    liquidityScore = 60;
+  else if (liquidityUsd >= 10000)
+    liquidityScore = 40;
+
+  const forecastScore =
+    Math.round(
+      trendScore * 0.4 +
+      volumeScore * 0.35 +
+      liquidityScore * 0.25
+    );
+
+  let verdict =
+    "STRONG_BEARISH";
+
+  if (forecastScore >= 90)
+    verdict =
+      "VERY_STRONG_BULLISH";
+  else if (
+    forecastScore >= 75
+  )
+    verdict =
+      "STRONG_BULLISH";
+  else if (
+    forecastScore >= 60
+  )
+    verdict = "BULLISH";
+  else if (
+    forecastScore >= 40
+  )
+    verdict = "NEUTRAL";
+  else if (
+    forecastScore >= 25
+  )
+    verdict = "BEARISH";
+
+  forecast = {
+    trendScore,
+    volumeScore,
+    liquidityScore,
+    forecastScore,
+    verdict,
+    confidence:
+      Math.round(
+        (
+          trendScore +
+          volumeScore +
+          liquidityScore
+        ) / 3
+      ),
+  };
 }
 
 return res.status(200).json({
@@ -844,6 +940,8 @@ return res.status(200).json({
   momentum: momentumData,
   riskStructure: riskStructureData,
   profitWallets: profitWalletData,
+volumeAnalysis,
+forecast,
   ...response,
   evaluation: {
     ...response.evaluation,
