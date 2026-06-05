@@ -389,37 +389,26 @@ const chartActionColor =
 
 {forecast ? (
   <Section title="Forecast Analysis">
-    <MetricRow
-      label="Trend Score"
-      value={forecast.trendScore}
-    />
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        Forecast Score
+      </div>
 
-    <MetricRow
-      label="Volume Score"
-      value={forecast.volumeScore}
-    />
+      <div className="text-3xl font-bold">
+        {forecast.forecastScore}
+      </div>
 
-    <MetricRow
-      label="Liquidity Score"
-      value={forecast.liquidityScore}
-    />
+      <div className="mt-2">
+        {forecast.verdict}
+      </div>
 
-    <MetricRow
-      label="Forecast Score"
-      value={forecast.forecastScore}
-    />
-
-    <MetricRow
-      label="Verdict"
-      value={forecast.verdict}
-    />
-
-    <MetricRow
-      label="Confidence"
-      value={`${forecast.confidence}%`}
-    />
+      <div className="text-sm text-gray-500">
+        Confidence: {forecast.confidence}%
+      </div>
+    </div>
   </Section>
 ) : null}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <Section title="Market">
