@@ -112,6 +112,11 @@ setShowChartConfirm,
   const profitWallets = scanResult?.profitWallets || null;
 const volumeAnalysis =
   scanResult?.volumeAnalysis || null;
+const liquidityAnalysis =
+  scanResult?.liquidityAnalysis || null;
+
+const forecast =
+  scanResult?.forecast || null;
 
 
   const topHolders =
@@ -362,6 +367,28 @@ const chartActionColor =
 
       <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
         {volumeAnalysis.volumeScore ?? "—"}
+      </div>
+    </div>
+  </Section>
+) : null}
+
+{forecast ? (
+  <Section title="Forecast Analysis">
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        Forecast Score
+      </div>
+
+      <div className="text-3xl font-bold">
+        {forecast.forecastScore}
+      </div>
+
+      <div className="mt-2">
+        {forecast.verdict}
+      </div>
+
+      <div className="text-sm text-gray-500">
+        Confidence: {forecast.confidence}%
       </div>
     </div>
   </Section>
