@@ -110,6 +110,8 @@ setShowChartConfirm,
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
+const volumeAnalysis =
+  scanResult?.volumeAnalysis || null;
 
 
   const topHolders =
@@ -350,6 +352,14 @@ const chartActionColor =
   Section={Section}
   MetricRow={MetricRow}
 />
+{volumeAnalysis ? (
+  <Section title="Volume Analysis">
+    <MetricRow
+      label="Volume Score"
+      value={volumeAnalysis.volumeScore}
+    />
+  </Section>
+) : null}
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
