@@ -29,7 +29,8 @@ import { fetchLiquidityLockStatus } from "../../scanner/fetchLiquidityLockStatus
 import DiscoveredToken from "../models/DiscoveredToken.js";
 import { fetchVolumeAnalysisData }
 from "../../scanner/fetchVolumeAnalysisData.js";
-
+import { fetchLiquidityAnalysisData }
+from "../../scanner/fetchLiquidityAnalysisData.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -734,6 +735,12 @@ await fetchVolumeAnalysisData({
     market.metrics.sells5m,
 });
 
+const liquidityAnalysis =
+await fetchLiquidityAnalysisData({
+  liquidityUsd:
+    market.metrics.liquidityUsd,
+});
+
 const riskStructureData = await fetchRiskStructureData({
   tokenMint: tokenMint.trim(),
   market,
@@ -848,32 +855,18 @@ let forecast = null;
 if (chartEntry?.ok) {
   const trendScore =
     Number(
-      chartEntry.metrics
-        ?.trendStrength || 0
+      chartEntry.metrics?.trendStrength || 0
     );
 
   const volumeScore =
     Number(
-      volumeAnalysis
-        ?.volumeScore || 0
+      volumeAnalysis?.volumeScore || 0
     );
 
-  const liquidityUsd =
+  const liquidityScore =
     Number(
-      market.metrics
-        ?.liquidityUsd || 0
+      liquidityAnalysis?.liquidityScore || 0
     );
-
-  let liquidityScore = 20;
-
-  if (liquidityUsd >= 100000)
-    liquidityScore = 100;
-  else if (liquidityUsd >= 50000)
-    liquidityScore = 80;
-  else if (liquidityUsd >= 20000)
-    liquidityScore = 60;
-  else if (liquidityUsd >= 10000)
-    liquidityScore = 40;
 
   const forecastScore =
     Math.round(
@@ -882,28 +875,17 @@ if (chartEntry?.ok) {
       liquidityScore * 0.25
     );
 
-  let verdict =
-    "STRONG_BEARISH";
+  let verdict = "STRONG_BEARISH";
 
   if (forecastScore >= 90)
-    verdict =
-      "VERY_STRONG_BULLISH";
-  else if (
-    forecastScore >= 75
-  )
-    verdict =
-      "STRONG_BULLISH";
-  else if (
-    forecastScore >= 60
-  )
+    verdict = "VERY_STRONG_BULLISH";
+  else if (forecastScore >= 75)
+    verdict = "STRONG_BULLISH";
+  else if (forecastScore >= 60)
     verdict = "BULLISH";
-  else if (
-    forecastScore >= 40
-  )
+  else if (forecastScore >= 40)
     verdict = "NEUTRAL";
-  else if (
-    forecastScore >= 25
-  )
+  else if (forecastScore >= 25)
     verdict = "BEARISH";
 
   forecast = {
@@ -912,14 +894,13 @@ if (chartEntry?.ok) {
     liquidityScore,
     forecastScore,
     verdict,
-    confidence:
-      Math.round(
-        (
-          trendScore +
-          volumeScore +
-          liquidityScore
-        ) / 3
-      ),
+    confidence: Math.round(
+      (
+        trendScore +
+        volumeScore +
+        liquidityScore
+      ) / 3
+    ),
   };
 }
 
@@ -941,6 +922,7 @@ return res.status(200).json({
   riskStructure: riskStructureData,
   profitWallets: profitWalletData,
 volumeAnalysis,
+liquidityAnalysis,
 forecast,
   ...response,
   evaluation: {
