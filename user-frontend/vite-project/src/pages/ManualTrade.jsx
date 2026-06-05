@@ -352,12 +352,18 @@ const chartActionColor =
   Section={Section}
   MetricRow={MetricRow}
 />
+
 {volumeAnalysis ? (
   <Section title="Volume Analysis">
-    <MetricRow
-      label="Volume Score"
-      value={volumeAnalysis.volumeScore}
-    />
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
+        Volume Score
+      </div>
+
+      <div className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        {volumeAnalysis.volumeScore ?? "—"}
+      </div>
+    </div>
   </Section>
 ) : null}
 
