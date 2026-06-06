@@ -484,47 +484,79 @@ const chartActionColor =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <Section title="Market">
-              <MetricRow
-  label="Age"
-  value={formatTokenAge(metrics?.ageMinutes)}
-/>
-              <MetricRow
-                label="Liquidity"
-                value={formatUsd(metrics?.liquidityUsd)}
-              />
-             <div className="flex justify-between border-b border-gray-700 py-2">
-  <span className="text-gray-400">Liquidity Locked</span>
-  <span
-    className={
-      metrics?.liquidityLocked === true
-        ? "text-green-400"
+             <div className="grid grid-cols-2 gap-3">
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      AGE
+    </div>
+    <div className="font-semibold text-gray-900 dark:text-gray-100">
+      {formatTokenAge(metrics?.ageMinutes)}
+    </div>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      LIQ
+    </div>
+    <div className="font-semibold text-gray-900 dark:text-gray-100">
+      {formatUsd(metrics?.liquidityUsd)}
+    </div>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      MCAP
+    </div>
+    <div className="font-semibold text-gray-900 dark:text-gray-100">
+      {formatUsd(metrics?.marketCapUsd)}
+    </div>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      VOL
+    </div>
+    <div className="font-semibold text-gray-900 dark:text-gray-100">
+      {formatUsd(metrics?.volume5mUsd)}
+    </div>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      LOCKED
+    </div>
+    <div
+      className={`font-semibold ${
+        metrics?.liquidityLocked === true
+          ? "text-green-400"
+          : metrics?.liquidityLocked === false
+          ? "text-red-400"
+          : "text-yellow-400"
+      }`}
+    >
+      {metrics?.liquidityLocked === true
+        ? "YES"
         : metrics?.liquidityLocked === false
-        ? "text-red-400"
-        : "text-yellow-400"
-    }
-  >
-    {metrics?.liquidityLocked === true
-      ? "Yes"
-      : metrics?.liquidityLocked === false
-      ? "No"
-      : "Unknown"}
-  </span>
+        ? "NO"
+        : "UNKNOWN"}
+    </div>
+  </div>
+
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+    <div className="text-xs text-gray-400">
+      B / S
+    </div>
+    <div className="font-semibold text-gray-900 dark:text-gray-100">
+      {formatValue(metrics?.buys5m)} / {formatValue(metrics?.sells5m)}
+    </div>
+  </div>
+
 </div>
-             
-              <MetricRow
-                label="Market Cap"
-                value={formatUsd(metrics?.marketCapUsd)}
-              />
-              <MetricRow
-                label="Volume (5m)"
-                value={formatUsd(metrics?.volume5mUsd)}
-              />
-              <MetricRow
-                label="Buys / Sells"
-                value={`${formatValue(metrics?.buys5m)} / ${formatValue(
-                  metrics?.sells5m
-                )}`}
-              />
+
+
+
+
             </Section>
 
             <Section title="Holder Safety">
