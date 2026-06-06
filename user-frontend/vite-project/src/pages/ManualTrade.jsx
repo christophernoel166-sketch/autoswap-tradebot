@@ -483,8 +483,9 @@ const chartActionColor =
   MetricRow={MetricRow}
 />
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
+<Section title="">
 <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
   <div className="flex items-center justify-between gap-4 text-xs overflow-x-auto whitespace-nowrap">
 
@@ -545,6 +546,7 @@ const chartActionColor =
 
   </div>
 </div>
+</Section>
 
             <Section title="Holder Safety">
 
