@@ -258,11 +258,7 @@ const chartActionColor =
                   </span>
                 ) : null}
 
-                <span
-                  className={`px-3 py-1 rounded-full text-xs font-semibold ${verdictColor}`}
-                >
-                  {verdict || "UNKNOWN"}
-                </span>
+               
               </div>
             </div>
 
@@ -279,20 +275,22 @@ const chartActionColor =
       </span>
     </div>
 
-    <div>
-      <span className="text-gray-400">
-        BUY
-      </span>{" "}
-      <span
-        className={`font-bold ${
-          showBuy
-            ? "text-green-400"
-            : "text-red-400"
-        }`}
-      >
-        {showBuy ? "YES" : "NO"}
-      </span>
-    </div>
+   <div>
+  <span className="text-gray-400">
+    STATUS
+  </span>{" "}
+  <span
+    className={`font-bold ${
+      verdict === "SAFE"
+        ? "text-green-400"
+        : verdict === "CAUTION"
+        ? "text-yellow-400"
+        : "text-red-400"
+    }`}
+  >
+    {verdict}
+  </span>
+</div>
 
     <div>
       <span className="text-gray-400">
@@ -307,99 +305,60 @@ const chartActionColor =
       </span>
     </div>
 
-    <div>
-      <span
-        className={`font-bold ${
-          verdict === "SAFE"
-            ? "text-green-400"
-            : verdict === "CAUTION"
-            ? "text-yellow-400"
-            : "text-red-400"
-        }`}
-      >
-        {verdict || "UNKNOWN"}
-      </span>
-    </div>
 
-    <div>
-      <span
-        className={`font-bold ${
-          chartEntry?.ok
-            ? "text-green-400"
-            : "text-gray-400"
-        }`}
-      >
-        {chartEntry?.ok
-          ? "CHART READY"
-          : "CHART OFF"}
-      </span>
-    </div>
+
+
+   
+
+   <div className="ml-auto flex items-center gap-2">
+  {!chartEntry ? (
+    <button
+      type="button"
+      onClick={() => setShowChartConfirm(true)}
+      disabled={chartLoading || !walletAddress}
+      className="px-3 py-1 rounded-md text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
+    >
+      {chartLoading
+        ? "Loading..."
+        : "Chart Analysis"}
+    </button>
+  ) : (
+    <span className="text-green-400 text-xs font-semibold">
+      ✓ Chart Ready
+    </span>
+  )}
+
+  <button
+    type="button"
+    onClick={handleManualBuy}
+    disabled={!showBuy || !walletAddress}
+    className={`px-3 py-1 rounded-md text-xs font-medium ${buyButtonClass}`}
+  >
+    {buyConfidence === "MEDIUM"
+      ? "Buy (Caution)"
+      : "Buy"}
+  </button>
+</div> 
 
   </div>
 </div>
 
 
 
-            {showBuy ? (
-  <div className="mt-4 space-y-3">
-    {!chartEntry ? (
-      <button
-        type="button"
-        onClick={() => setShowChartConfirm(true)}
-        disabled={chartLoading || !walletAddress}
-        className="px-5 py-3 rounded-lg font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
-      >
-        {chartLoading
-  ? "Activating Chart Analysis..."
-  : "Activate Chart Analysis"}
-      </button>
-    ) : (
-      <div className="text-sm text-green-700 dark:text-green-400">
-        ✅ Chart analysis activated
-      </div>
-    )}
-
-    {chartError ? (
-      <div className="text-sm text-red-600 dark:text-red-400">
-        {chartError}
-      </div>
-    ) : null}
-
-    <button
-      type="button"
-      onClick={handleManualBuy}
-      disabled={!showBuy || !walletAddress}
-      className={`px-5 py-3 rounded-lg font-medium ${buyButtonClass} disabled:opacity-50 disabled:cursor-not-allowed`}
-    >
-      {buyConfidence === "MEDIUM"
-        ? "Buy Token (Caution)"
-        : "Buy Token"}
-    </button>
-
-    {buyConfidence === "MEDIUM" ? (
-      <div className="text-sm text-yellow-700 dark:text-yellow-400">
-        ⚠️ Caution trade: buy is allowed, but this token is not in
-        the safest category.
-      </div>
-    ) : null}
+{!showBuy ? (
+  <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
+    Buy is unavailable for this token right now.
   </div>
-) : (
+) : buyConfidence === "MEDIUM" ? (
+  <div className="mt-3 text-xs text-yellow-700 dark:text-yellow-400">
+    ⚠️ Caution trade: token is tradable but not in the safest category.
+  </div>
+) : null}
 
-
-
-              <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
-                Buy is unavailable for this token right now.
-              </div>
-            )}
+              
           </Section>
 
-<ChartEntrySection
-  chartEntry={chartEntry}
-  chartActionColor={chartActionColor}
-  formatValue={formatValue}
-  Section={Section}
-  MetricRow={MetricRow}
-/>
+
 
 {volumeAnalysis &&
  liquidityAnalysis &&
@@ -514,6 +473,13 @@ const chartActionColor =
   </Section>
 ) : null}
 
+<ChartEntrySection
+  chartEntry={chartEntry}
+  chartActionColor={chartActionColor}
+  formatValue={formatValue}
+  Section={Section}
+  MetricRow={MetricRow}
+/>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
