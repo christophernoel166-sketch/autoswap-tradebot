@@ -884,55 +884,54 @@ const chartActionColor =
 </Section>
 
 
-            <Section title="Wallet Intelligence">
-              <MetricRow
-                label="Smart Degens"
-                value={formatValue(metrics?.smartDegenCount)}
-              />
-              <MetricRow
-                label="Bot Degens"
-                value={formatValue(metrics?.botDegenCount)}
-              />
-              <MetricRow
-                label="Rat Traders"
-                value={formatValue(metrics?.ratTraderCount)}
-              />
-              <MetricRow
-                label="Alpha Callers"
-                value={formatValue(metrics?.alphaCallerCount)}
-              />
-              <MetricRow
-                label="Sniper Wallets"
-                value={formatValue(metrics?.sniperWalletCount)}
-              />
-            </Section>
+           <div className="flex flex-wrap items-center gap-6 text-sm">
 
-            <Section title="Profit Wallet Intelligence">
-              <MetricRow
-                label="Profitable Wallet Count"
-                value={
-                  profitWallets?.profitableWalletCount != null
-                    ? profitWallets.profitableWalletCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Wallet Quality Score"
-                value={
-                  profitWallets?.walletQualityScore != null
-                    ? profitWallets.walletQualityScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Profit Wallet Confidence"
-                value={
-                  profitWallets?.profitWalletConfidence != null
-                    ? profitWallets.profitWalletConfidence
-                    : "Not Available"
-                }
-              />
-            </Section>
+  <div>
+    <span className="text-gray-400">
+      SMART
+    </span>{" "}
+    <span className="font-semibold text-gray-900 dark:text-gray-100">
+      {walletIntelligence?.smartDegens ?? 0}
+    </span>
+  </div>
+
+  <div>
+    <span className="text-gray-400">
+      BOT
+    </span>{" "}
+    <span className="font-semibold text-gray-900 dark:text-gray-100">
+      {walletIntelligence?.botDegens ?? 0}
+    </span>
+  </div>
+
+  <div>
+    <span className="text-gray-400">
+      RAT
+    </span>{" "}
+    <span className="font-semibold text-gray-900 dark:text-gray-100">
+      {walletIntelligence?.ratTraders ?? 0}
+    </span>
+  </div>
+
+  <div>
+    <span className="text-gray-400">
+      ALPHA
+    </span>{" "}
+    <span className="font-semibold text-gray-900 dark:text-gray-100">
+      {walletIntelligence?.alphaCallers ?? 0}
+    </span>
+  </div>
+
+  <div>
+    <span className="text-gray-400">
+      SNIPER
+    </span>{" "}
+    <span className="font-semibold text-gray-900 dark:text-gray-100">
+      {walletIntelligence?.sniperWallets ?? 0}
+    </span>
+  </div>
+
+</div>
 
             <Section title="Risk / Structure">
               <MetricRow
