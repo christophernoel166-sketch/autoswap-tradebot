@@ -483,10 +483,10 @@ const chartActionColor =
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            // MARKET 
+             
 <Section title="">
              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
-  <div className="flex flex-wrap items-center gap-6 text-sm">
+  <div className="flex flex-wrap items-center gap-5 text-sm">
 
     <div>
       <span className="text-gray-400">AGE</span>{" "}
@@ -520,18 +520,12 @@ const chartActionColor =
       <span className="text-gray-400">LOCK</span>{" "}
       <span
         className={`font-semibold ${
-          metrics?.liquidityLocked === true
+          metrics?.liquidityLocked
             ? "text-green-400"
-            : metrics?.liquidityLocked === false
-            ? "text-red-400"
-            : "text-yellow-400"
+            : "text-red-400"
         }`}
       >
-        {metrics?.liquidityLocked === true
-          ? "YES"
-          : metrics?.liquidityLocked === false
-          ? "NO"
-          : "UNKNOWN"}
+        {metrics?.liquidityLocked ? "YES" : "NO"}
       </span>
     </div>
 
