@@ -800,68 +800,89 @@ const chartActionColor =
 
 </Section>
 
-            <Section title="Market Integrity">
-              <MetricRow
-                label="Buy / Sell Ratio"
-                value={
-                  integrity?.buySellRatio5m != null
-                    ? integrity.buySellRatio5m
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Wallet Participation Score"
-                value={
-                  integrity?.walletParticipationScore != null
-                    ? integrity.walletParticipationScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Velocity Sanity Score"
-                value={
-                  integrity?.velocitySanityScore != null
-                    ? integrity.velocitySanityScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Wash Trading Risk"
-                value={
-                  integrity?.washTradingRiskScore != null
-                    ? integrity.washTradingRiskScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Bundle Suspicion"
-                value={
-                  integrity?.bundleSuspicionScore != null
-                    ? integrity.bundleSuspicionScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Fake Momentum"
-                value={
-                  integrity?.fakeMomentumFlag === true
-                    ? "Yes"
-                    : integrity?.fakeMomentumFlag === false
-                    ? "No"
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Artificial Volume"
-                value={
-                  integrity?.artificialVolumeFlag === true
-                    ? "Yes"
-                    : integrity?.artificialVolumeFlag === false
-                    ? "No"
-                    : "Not Available"
-                }
-              />
-            </Section>
+           <Section title="Market Integrity">
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        BSR
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {integrity?.buySellRatio5m ?? "N/A"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        PART
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {integrity?.walletParticipationScore ?? "N/A"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        VEL
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {integrity?.velocitySanityScore ?? "N/A"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        WASH
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {integrity?.washTradingRiskScore ?? "N/A"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        BUNDLE
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {integrity?.bundleSuspicionScore ?? "N/A"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        FAKE
+      </span>{" "}
+      <span
+        className={`font-semibold ${
+          integrity?.fakeMomentumFlag
+            ? "text-red-400"
+            : "text-green-400"
+        }`}
+      >
+        {integrity?.fakeMomentumFlag ? "YES" : "NO"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        AVOL
+      </span>{" "}
+      <span
+        className={`font-semibold ${
+          integrity?.artificialVolumeFlag
+            ? "text-red-400"
+            : "text-green-400"
+        }`}
+      >
+        {integrity?.artificialVolumeFlag ? "YES" : "NO"}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
+
 
             <Section title="Wallet Intelligence">
               <MetricRow
