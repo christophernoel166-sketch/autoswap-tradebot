@@ -734,83 +734,71 @@ const chartActionColor =
 </Section>
 
 
+<Section title="Activity / Alpha">
 
-            <Section title="Activity / Alpha">
-              <MetricRow
-                label="Alpha Callers"
-                value={formatValue(scanResult?.activity?.alphaCallerCount)}
-              />
-              <MetricRow
-                label="X Replies"
-                value={
-                  scanResult?.activity?.xReplyCount != null
-                    ? scanResult.activity.xReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Telegram Replies"
-                value={
-                  scanResult?.activity?.telegramReplyCount != null
-                    ? scanResult.activity.telegramReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Alpha Caller Score"
-                value={
-                  scanResult?.activity?.alphaCallerScore != null
-                    ? scanResult.activity.alphaCallerScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Buy Confidence"
-                value={
-                  scanResult?.evaluation?.buyConfidence === "HIGH"
-                    ? "🟢 High (Safe Trade)"
-                    : scanResult?.evaluation?.buyConfidence === "MEDIUM"
-                    ? "🟡 Medium (Caution Trade)"
-                    : "🔴 Not Allowed"
-                }
-              />
-              <MetricRow
-                label="X Activity Score"
-                value={
-                  scanResult?.activity?.xActivityScore != null
-                    ? scanResult.activity.xActivityScore
-                    : scanResult?.social?.hasTwitter
-                    ? "Low (placeholder)"
-                    : "No X"
-                }
-              />
-              <MetricRow
-                label="X Pump Reply Score"
-                value={
-                  scanResult?.activity?.xPumpReplyScore != null
-                    ? scanResult.activity.xPumpReplyScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="X Pump Replies"
-                value={
-                  scanResult?.activity?.xReplyCount != null
-                    ? scanResult.activity.xReplyCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Telegram Activity Score"
-                value={
-                  scanResult?.activity?.telegramActivityScore != null
-                    ? scanResult.activity.telegramActivityScore
-                    : scanResult?.social?.hasTelegram
-                    ? "Low (placeholder)"
-                    : "No Telegram"
-                }
-              />
-            </Section>
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">ALPHA</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.alphaCallerCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">A-SCORE</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.alphaCallerScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">X-ACT</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.xActivityScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">TG-ACT</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.telegramActivityScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">X-REPLY</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.xReplyCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">TG-REPLY</span>{" "}
+      <span className="font-semibold text-white">
+        {activity?.telegramReplyCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">BUY</span>{" "}
+      <span
+        className={`font-semibold ${
+          buyConfidence === "HIGH"
+            ? "text-green-400"
+            : buyConfidence === "MEDIUM"
+            ? "text-yellow-400"
+            : "text-red-400"
+        }`}
+      >
+        {buyConfidence || "UNKNOWN"}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
+
 
             <Section title="Market Integrity">
               <MetricRow
