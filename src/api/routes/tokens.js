@@ -610,6 +610,49 @@ profitWallets: {
       throw err;
     }
 
+
+
+// ================= DEX HORIZON DEBUG =================
+console.log(
+  "DEX HORIZON DATA",
+  {
+    volume5m:
+      market.metrics?.volume5mUsd ?? 0,
+
+    volume1h:
+      market.metrics?.volume1hUsd ?? 0,
+
+    volume6h:
+      market.metrics?.volume6hUsd ?? 0,
+
+    volume24h:
+      market.metrics?.volume24hUsd ?? 0,
+
+    buys5m:
+      market.metrics?.buys5m ?? 0,
+
+    buys1h:
+      market.metrics?.buys1h ?? 0,
+
+    sells1h:
+      market.metrics?.sells1h ?? 0,
+
+    priceChange5m:
+      market.metrics?.priceChange5m ?? 0,
+
+    priceChange1h:
+      market.metrics?.priceChange1h ?? 0,
+
+    priceChange6h:
+      market.metrics?.priceChange6h ?? 0,
+
+    priceChange24h:
+      market.metrics?.priceChange24h ?? 0,
+  }
+);
+
+
+
     // ================= SOCIAL =================
     const socialData = fetchTokenSocialData(market.rawPair);
     let enrichedSocialData = { ...socialData };

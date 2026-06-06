@@ -63,15 +63,125 @@ export async function fetchTokenMarketData(tokenMint) {
       boosted: safeNumber(bestPair?.boosts?.active, 0) > 0,
     },
 
+
     metrics: {
-      ageMinutes,
-      liquidityUsd: safeNumber(bestPair?.liquidity?.usd, 0),
-      marketCapUsd: safeNumber(bestPair?.marketCap, 0),
-      volume5mUsd: safeNumber(bestPair?.volume?.m5, 0),
-      buys5m: safeNumber(bestPair?.txns?.m5?.buys, 0),
-      sells5m: safeNumber(bestPair?.txns?.m5?.sells, 0),
-      boosted: safeNumber(bestPair?.boosts?.active, 0) > 0,
-    },
+  ageMinutes,
+
+  liquidityUsd:
+    safeNumber(
+      bestPair?.liquidity?.usd,
+      0
+    ),
+
+  marketCapUsd:
+    safeNumber(
+      bestPair?.marketCap,
+      0
+    ),
+
+  // =====================
+  // Volume
+  // =====================
+
+  volume5mUsd:
+    safeNumber(
+      bestPair?.volume?.m5,
+      0
+    ),
+
+  volume1hUsd:
+    safeNumber(
+      bestPair?.volume?.h1,
+      0
+    ),
+
+  volume6hUsd:
+    safeNumber(
+      bestPair?.volume?.h6,
+      0
+    ),
+
+  volume24hUsd:
+    safeNumber(
+      bestPair?.volume?.h24,
+      0
+    ),
+
+  // =====================
+  // Transactions
+  // =====================
+
+  buys5m:
+    safeNumber(
+      bestPair?.txns?.m5?.buys,
+      0
+    ),
+
+  sells5m:
+    safeNumber(
+      bestPair?.txns?.m5?.sells,
+      0
+    ),
+
+  buys1h:
+    safeNumber(
+      bestPair?.txns?.h1?.buys,
+      0
+    ),
+
+  sells1h:
+    safeNumber(
+      bestPair?.txns?.h1?.sells,
+      0
+    ),
+
+  buys24h:
+    safeNumber(
+      bestPair?.txns?.h24?.buys,
+      0
+    ),
+
+  sells24h:
+    safeNumber(
+      bestPair?.txns?.h24?.sells,
+      0
+    ),
+
+  // =====================
+  // Price Change
+  // =====================
+
+  priceChange5m:
+    safeNumber(
+      bestPair?.priceChange?.m5,
+      0
+    ),
+
+  priceChange1h:
+    safeNumber(
+      bestPair?.priceChange?.h1,
+      0
+    ),
+
+  priceChange6h:
+    safeNumber(
+      bestPair?.priceChange?.h6,
+      0
+    ),
+
+  priceChange24h:
+    safeNumber(
+      bestPair?.priceChange?.h24,
+      0
+    ),
+
+  boosted:
+    safeNumber(
+      bestPair?.boosts?.active,
+      0
+    ) > 0,
+},
+
 
     rawPair: bestPair,
   };
