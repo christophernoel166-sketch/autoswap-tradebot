@@ -483,77 +483,67 @@ const chartActionColor =
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <Section title="Market">
-             <div className="grid grid-cols-2 gap-3">
+            // MARKET 
+             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
+  <div className="flex flex-wrap items-center gap-6 text-sm">
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      AGE
+    <div>
+      <span className="text-gray-400">AGE</span>{" "}
+      <span className="font-semibold text-white">
+        {formatTokenAge(metrics?.ageMinutes)}
+      </span>
     </div>
-    <div className="font-semibold text-gray-900 dark:text-gray-100">
-      {formatTokenAge(metrics?.ageMinutes)}
-    </div>
-  </div>
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      LIQ
+    <div>
+      <span className="text-gray-400">LIQ</span>{" "}
+      <span className="font-semibold text-white">
+        {formatUsd(metrics?.liquidityUsd)}
+      </span>
     </div>
-    <div className="font-semibold text-gray-900 dark:text-gray-100">
-      {formatUsd(metrics?.liquidityUsd)}
-    </div>
-  </div>
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      MCAP
+    <div>
+      <span className="text-gray-400">MCAP</span>{" "}
+      <span className="font-semibold text-white">
+        {formatUsd(metrics?.marketCapUsd)}
+      </span>
     </div>
-    <div className="font-semibold text-gray-900 dark:text-gray-100">
-      {formatUsd(metrics?.marketCapUsd)}
-    </div>
-  </div>
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      VOL
+    <div>
+      <span className="text-gray-400">VOL</span>{" "}
+      <span className="font-semibold text-white">
+        {formatUsd(metrics?.volume5mUsd)}
+      </span>
     </div>
-    <div className="font-semibold text-gray-900 dark:text-gray-100">
-      {formatUsd(metrics?.volume5mUsd)}
-    </div>
-  </div>
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      LOCKED
-    </div>
-    <div
-      className={`font-semibold ${
-        metrics?.liquidityLocked === true
-          ? "text-green-400"
+    <div>
+      <span className="text-gray-400">LOCK</span>{" "}
+      <span
+        className={`font-semibold ${
+          metrics?.liquidityLocked === true
+            ? "text-green-400"
+            : metrics?.liquidityLocked === false
+            ? "text-red-400"
+            : "text-yellow-400"
+        }`}
+      >
+        {metrics?.liquidityLocked === true
+          ? "YES"
           : metrics?.liquidityLocked === false
-          ? "text-red-400"
-          : "text-yellow-400"
-      }`}
-    >
-      {metrics?.liquidityLocked === true
-        ? "YES"
-        : metrics?.liquidityLocked === false
-        ? "NO"
-        : "UNKNOWN"}
+          ? "NO"
+          : "UNKNOWN"}
+      </span>
     </div>
-  </div>
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-    <div className="text-xs text-gray-400">
-      B / S
+    <div>
+      <span className="text-gray-400">B/S</span>{" "}
+      <span className="font-semibold text-white">
+        {formatValue(metrics?.buys5m)}/
+        {formatValue(metrics?.sells5m)}
+      </span>
     </div>
-    <div className="font-semibold text-gray-900 dark:text-gray-100">
-      {formatValue(metrics?.buys5m)} / {formatValue(metrics?.sells5m)}
-    </div>
-  </div>
 
+  </div>
 </div>
-
 
 
 
