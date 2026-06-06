@@ -393,19 +393,48 @@ const chartActionColor =
         </div>
 
         <div>
-          <span className="font-semibold">
-            {forecast.verdict}
-          </span>
-        </div>
+  <span className="font-semibold">
+    {forecast.verdict}
+  </span>
+</div>
 
-        <div className="text-gray-500 dark:text-gray-400">
-          Confidence: {forecast.confidence}%
-        </div>
+<div>
+  <span className="text-gray-500 dark:text-gray-400">
+    1H:
+  </span>{" "}
+  <span className="font-semibold">
+    {forecast.shortTerm?.verdict || "-"}
+  </span>
+</div>
+
+<div>
+  <span className="text-gray-500 dark:text-gray-400">
+    24H:
+  </span>{" "}
+  <span className="font-semibold">
+    {forecast.midTerm?.verdict || "-"}
+  </span>
+</div>
+
+<div>
+  <span className="text-gray-500 dark:text-gray-400">
+    7D:
+  </span>{" "}
+  <span className="font-semibold">
+    {forecast.longTerm?.verdict || "-"}
+  </span>
+</div>
+
+<div className="text-gray-500 dark:text-gray-400">
+  Confidence: {forecast.confidence}%
+</div>
 
       </div>
     </div>
   </Section>
 ) : null}
+
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             <Section title="Market">
