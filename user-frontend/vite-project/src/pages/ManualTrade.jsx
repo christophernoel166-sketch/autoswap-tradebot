@@ -484,6 +484,7 @@ const chartActionColor =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             // MARKET 
+<Section title="">
              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
   <div className="flex flex-wrap items-center gap-6 text-sm">
 
