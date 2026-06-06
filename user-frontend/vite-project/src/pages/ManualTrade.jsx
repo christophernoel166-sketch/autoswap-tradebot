@@ -107,6 +107,7 @@ setShowChartConfirm,
   const metrics = scanResult?.metrics || null;
   const token = scanResult?.token || null;
   const social = scanResult?.social || null;
+const activity = scanResult?.activity || null;
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
@@ -798,7 +799,6 @@ const chartActionColor =
   </div>
 
 </Section>
-
 
             <Section title="Market Integrity">
               <MetricRow
