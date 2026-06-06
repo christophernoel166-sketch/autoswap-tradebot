@@ -1071,6 +1071,16 @@ if (chartEntry?.ok) {
       ),
   };
 }
+
+console.log(
+  "FORECAST RESPONSE",
+  JSON.stringify(
+    forecast,
+    null,
+    2
+  )
+);
+
 return res.status(200).json({
   ok: true,
   walletAddress: walletAddress || null,
