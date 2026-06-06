@@ -1073,12 +1073,19 @@ if (chartEntry?.ok) {
 }
 
 console.log(
-  "FORECAST RESPONSE",
+  "🚀 FORECAST RESPONSE START"
+);
+
+console.log(
   JSON.stringify(
     forecast,
     null,
     2
   )
+);
+
+console.log(
+  "🚀 FORECAST RESPONSE END"
 );
 
 return res.status(200).json({
