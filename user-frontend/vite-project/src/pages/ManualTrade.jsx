@@ -266,36 +266,79 @@ const chartActionColor =
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Score
-                </div>
-                <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {formatValue(evaluation?.score)}
-                </div>
-              </div>
 
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Buy Available
-                </div>
-                <div className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                  {showBuy ? "Yes" : "No"}
-                </div>
-              </div>
+<div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
+  <div className="flex flex-wrap items-center gap-5 text-sm">
 
-              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">
-                  Expires At
-                </div>
-                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {scanResult?.expiresAt
-                    ? new Date(scanResult.expiresAt).toLocaleTimeString()
-                    : "—"}
-                </div>
-              </div>
-            </div>
+    <div>
+      <span className="text-gray-400">
+        SCORE
+      </span>{" "}
+      <span className="font-bold text-white">
+        {formatValue(evaluation?.score)}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        BUY
+      </span>{" "}
+      <span
+        className={`font-bold ${
+          showBuy
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {showBuy ? "YES" : "NO"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        EXPIRES
+      </span>{" "}
+      <span className="font-semibold text-white">
+        {scanResult?.expiresAt
+          ? new Date(
+              scanResult.expiresAt
+            ).toLocaleTimeString()
+          : "—"}
+      </span>
+    </div>
+
+    <div>
+      <span
+        className={`font-bold ${
+          verdict === "SAFE"
+            ? "text-green-400"
+            : verdict === "CAUTION"
+            ? "text-yellow-400"
+            : "text-red-400"
+        }`}
+      >
+        {verdict || "UNKNOWN"}
+      </span>
+    </div>
+
+    <div>
+      <span
+        className={`font-bold ${
+          chartEntry?.ok
+            ? "text-green-400"
+            : "text-gray-400"
+        }`}
+      >
+        {chartEntry?.ok
+          ? "CHART READY"
+          : "CHART OFF"}
+      </span>
+    </div>
+
+  </div>
+</div>
+
+
 
             {showBuy ? (
   <div className="mt-4 space-y-3">
