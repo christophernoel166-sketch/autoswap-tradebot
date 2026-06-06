@@ -362,72 +362,109 @@ const chartActionColor =
  liquidityAnalysis &&
  forecast ? (
   <Section title="Forecast Snapshot">
-    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
-      <div className="flex flex-wrap items-center gap-6 text-sm">
+    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
+      <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
 
         <div>
-          <span className="text-gray-500 dark:text-gray-400">
-            Volume:
+          <span className="text-gray-400">
+            VOL
           </span>{" "}
-          <span className="font-semibold">
+          <span className="font-semibold text-white">
             {volumeAnalysis.volumeScore}
           </span>
         </div>
 
         <div>
-          <span className="text-gray-500 dark:text-gray-400">
-            Liquidity:
+          <span className="text-gray-400">
+            LIQ
           </span>{" "}
-          <span className="font-semibold">
+          <span className="font-semibold text-white">
             {liquidityAnalysis.liquidityScore}
           </span>
         </div>
 
         <div>
-          <span className="text-gray-500 dark:text-gray-400">
-            Forecast:
+          <span className="text-gray-400">
+            FC
           </span>{" "}
-          <span className="font-semibold">
+          <span className="font-semibold text-white">
             {forecast.forecastScore}
           </span>
         </div>
 
         <div>
-  <span className="font-semibold">
-    {forecast.verdict}
-  </span>
-</div>
+          <span
+            className={`font-semibold ${
+              forecast.verdict.includes("BULLISH")
+                ? "text-green-400"
+                : forecast.verdict.includes("BEARISH")
+                ? "text-red-400"
+                : "text-yellow-400"
+            }`}
+          >
+            {forecast.verdict}
+          </span>
+        </div>
 
-<div>
-  <span className="text-gray-500 dark:text-gray-400">
-    1H:
-  </span>{" "}
-  <span className="font-semibold">
-    {forecast.shortTerm?.verdict || "-"}
-  </span>
-</div>
+        <div>
+          <span className="text-gray-400">
+            1H
+          </span>{" "}
+          <span
+            className={`font-semibold ${
+              forecast.shortTerm?.verdict?.includes("BULLISH")
+                ? "text-green-400"
+                : forecast.shortTerm?.verdict?.includes("BEARISH")
+                ? "text-red-400"
+                : "text-yellow-400"
+            }`}
+          >
+            {forecast.shortTerm?.verdict || "-"}
+          </span>
+        </div>
 
-<div>
-  <span className="text-gray-500 dark:text-gray-400">
-    24H:
-  </span>{" "}
-  <span className="font-semibold">
-    {forecast.midTerm?.verdict || "-"}
-  </span>
-</div>
+        <div>
+          <span className="text-gray-400">
+            24H
+          </span>{" "}
+          <span
+            className={`font-semibold ${
+              forecast.midTerm?.verdict?.includes("BULLISH")
+                ? "text-green-400"
+                : forecast.midTerm?.verdict?.includes("BEARISH")
+                ? "text-red-400"
+                : "text-yellow-400"
+            }`}
+          >
+            {forecast.midTerm?.verdict || "-"}
+          </span>
+        </div>
 
-<div>
-  <span className="text-gray-500 dark:text-gray-400">
-    7D:
-  </span>{" "}
-  <span className="font-semibold">
-    {forecast.longTerm?.verdict || "-"}
-  </span>
-</div>
+        <div>
+          <span className="text-gray-400">
+            7D
+          </span>{" "}
+          <span
+            className={`font-semibold ${
+              forecast.longTerm?.verdict?.includes("BULLISH")
+                ? "text-green-400"
+                : forecast.longTerm?.verdict?.includes("BEARISH")
+                ? "text-red-400"
+                : "text-yellow-400"
+            }`}
+          >
+            {forecast.longTerm?.verdict || "-"}
+          </span>
+        </div>
 
-<div className="text-gray-500 dark:text-gray-400">
-  Confidence: {forecast.confidence}%
-</div>
+        <div>
+          <span className="text-gray-400">
+            CONF
+          </span>{" "}
+          <span className="font-semibold text-white">
+            {forecast.confidence}%
+          </span>
+        </div>
 
       </div>
     </div>
