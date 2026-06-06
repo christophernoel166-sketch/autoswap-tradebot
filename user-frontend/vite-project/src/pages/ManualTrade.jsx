@@ -647,58 +647,93 @@ const chartActionColor =
 </Section>
 
             
+<Section title="Social / Presence">
 
-            <Section title="Social / Presence">
-              <LinkRow
-                label="Website"
-                url={social?.websiteUrl}
-                exists={social?.hasWebsite}
-              />
-              <LinkRow
-                label="Telegram"
-                url={social?.telegramUrl}
-                exists={social?.hasTelegram}
-              />
-              <LinkRow
-                label="X Account"
-                url={social?.twitterUrl}
-                exists={social?.hasTwitter}
-              />
-              <MetricRow
-                label="Website Status"
-                value={
-                  social?.websiteWorking === true
-                    ? "Working"
-                    : social?.websiteWorking === false
-                    ? "Not Working"
-                    : "Not Checked Yet"
-                }
-              />
-              <MetricRow
-                label="Telegram Status"
-                value={
-                  social?.telegramWorking === true
-                    ? "Working"
-                    : social?.telegramWorking === false
-                    ? "Not Working"
-                    : social?.hasTelegram
-                    ? "Not Checked Yet"
-                    : "Missing"
-                }
-              />
-              <MetricRow
-                label="X Status"
-                value={
-                  social?.twitterWorking === true
-                    ? "Working"
-                    : social?.twitterWorking === false
-                    ? "Not Working"
-                    : social?.hasTwitter
-                    ? "Not Checked Yet"
-                    : "Missing"
-                }
-              />
-            </Section>
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">WEB</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.hasWebsite
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.hasWebsite ? "OPEN" : "NONE"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">TG</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.hasTelegram
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.hasTelegram ? "OPEN" : "NONE"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">X</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.hasTwitter
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.hasTwitter ? "OPEN" : "NONE"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">WEB✓</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.websiteWorking
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.websiteWorking ? "LIVE" : "DOWN"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">TG✓</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.telegramWorking
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.telegramWorking ? "LIVE" : "DOWN"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">X✓</span>{" "}
+      <span
+        className={`font-semibold ${
+          social?.twitterWorking
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+        {social?.twitterWorking ? "LIVE" : "DOWN"}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
+
+
 
             <Section title="Activity / Alpha">
               <MetricRow
