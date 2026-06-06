@@ -486,38 +486,38 @@ const chartActionColor =
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
 <Section title="">
-<div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
-  <div className="flex items-center justify-between gap-4 text-xs overflow-x-auto whitespace-nowrap">
 
-    <div className="shrink-0">
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
       <span className="text-gray-400">AGE</span>{" "}
       <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatTokenAge(metrics?.ageMinutes)}
       </span>
     </div>
 
-    <div className="shrink-0">
+    <div>
       <span className="text-gray-400">LIQ</span>{" "}
       <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.liquidityUsd)}
       </span>
     </div>
 
-    <div className="shrink-0">
+    <div>
       <span className="text-gray-400">MCAP</span>{" "}
       <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.marketCapUsd)}
       </span>
     </div>
 
-    <div className="shrink-0">
+    <div>
       <span className="text-gray-400">VOL</span>{" "}
       <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.volume5mUsd)}
       </span>
     </div>
 
-    <div className="shrink-0">
+    <div>
       <span className="text-gray-400">LOCK</span>{" "}
       <span
         className={`font-semibold ${
@@ -536,7 +536,7 @@ const chartActionColor =
       </span>
     </div>
 
-    <div className="shrink-0">
+    <div>
       <span className="text-gray-400">B/S</span>{" "}
       <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatValue(metrics?.buys5m)}/
@@ -545,62 +545,60 @@ const chartActionColor =
     </div>
 
   </div>
-</div>
+
 </Section>
 
-            <Section title="Holder Safety">
+         <Section title="Holder Safety">
 
-  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
-    <div className="flex flex-wrap items-center gap-4 text-xs">
+  <div className="flex flex-wrap items-center gap-6 text-sm">
 
-      <div>
-        <span className="text-gray-400">
-          LH
-        </span>{" "}
-        <span className="font-semibold text-gray-900 dark:text-gray-100">
-          {formatValue(
-            metrics?.largestHolderPercent,
-            "%"
-          )}
-        </span>
-      </div>
-
-      <div>
-        <span className="text-gray-400">
-          TOP10
-        </span>{" "}
-        <span className="font-semibold text-gray-900 dark:text-gray-100">
-          {formatValue(
-            metrics?.top10HoldingPercent,
-            "%"
-          )}
-        </span>
-      </div>
-
-      <div>
-        <span className="text-gray-400">
-          HOLDERS
-        </span>{" "}
-        <span className="font-semibold text-gray-900 dark:text-gray-100">
-          {topHolders.length}
-        </span>
-      </div>
-
-      <button
-        type="button"
-        onClick={() =>
-          setShowTopHolders(
-            !showTopHolders
-          )
-        }
-        className="ml-auto text-blue-500 hover:text-blue-400 font-semibold"
-      >
-        {showTopHolders
-          ? "Hide ▼"
-          : "Show ▼"}
-      </button>
-
+    <div>
+      <span className="text-gray-400">
+        LH
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {formatValue(
+          metrics?.largestHolderPercent,
+          "%"
+        )}
+      </span>
     </div>
+
+    <div>
+      <span className="text-gray-400">
+        TOP10
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {formatValue(
+          metrics?.top10HoldingPercent,
+          "%"
+        )}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        HOLDERS
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {topHolders.length}
+      </span>
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        setShowTopHolders(
+          !showTopHolders
+        )
+      }
+      className="ml-auto text-blue-500 hover:text-blue-400 font-semibold"
+    >
+      {showTopHolders
+        ? "Hide ▲"
+        : "Show ▼"}
+    </button>
+
   </div>
 
   {showTopHolders && (
@@ -618,7 +616,7 @@ const chartActionColor =
                 <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {shortAddress(
                     holder.address ||
-                      holder.owner
+                    holder.owner
                   )}
                 </div>
 
@@ -647,7 +645,6 @@ const chartActionColor =
   )}
 
 </Section>
-
 
             
 
