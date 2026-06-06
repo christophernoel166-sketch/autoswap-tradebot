@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import ChartEntrySection from "../components/ChartEntrySection";
 
 function formatValue(value, suffix = "") {
@@ -110,6 +110,8 @@ setShowChartConfirm,
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
+const [showTopHolders, setShowTopHolders] =
+  useState(false);
 const volumeAnalysis =
   scanResult?.volumeAnalysis || null;
 const liquidityAnalysis =
@@ -483,55 +485,59 @@ const chartActionColor =
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-             
-<Section title="">
-             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
-  <div className="flex flex-wrap items-center gap-5 text-sm">
+<div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
+  <div className="flex items-center justify-between gap-4 text-xs overflow-x-auto whitespace-nowrap">
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">AGE</span>{" "}
-      <span className="font-semibold text-white">
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatTokenAge(metrics?.ageMinutes)}
       </span>
     </div>
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">LIQ</span>{" "}
-      <span className="font-semibold text-white">
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.liquidityUsd)}
       </span>
     </div>
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">MCAP</span>{" "}
-      <span className="font-semibold text-white">
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.marketCapUsd)}
       </span>
     </div>
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">VOL</span>{" "}
-      <span className="font-semibold text-white">
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatUsd(metrics?.volume5mUsd)}
       </span>
     </div>
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">LOCK</span>{" "}
       <span
         className={`font-semibold ${
-          metrics?.liquidityLocked
+          metrics?.liquidityLocked === true
             ? "text-green-400"
-            : "text-red-400"
+            : metrics?.liquidityLocked === false
+            ? "text-red-400"
+            : "text-yellow-400"
         }`}
       >
-        {metrics?.liquidityLocked ? "YES" : "NO"}
+        {metrics?.liquidityLocked === true
+          ? "YES"
+          : metrics?.liquidityLocked === false
+          ? "NO"
+          : "UNK"}
       </span>
     </div>
 
-    <div>
+    <div className="shrink-0">
       <span className="text-gray-400">B/S</span>{" "}
-      <span className="font-semibold text-white">
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
         {formatValue(metrics?.buys5m)}/
         {formatValue(metrics?.sells5m)}
       </span>
@@ -540,71 +546,108 @@ const chartActionColor =
   </div>
 </div>
 
-
-
-            </Section>
-
             <Section title="Holder Safety">
-              <MetricRow
-                label="Largest Holder"
-                value={formatValue(metrics?.largestHolderPercent, "%")}
-              />
-              <MetricRow
-                label="Top 10 Holding"
-                value={formatValue(metrics?.top10HoldingPercent, "%")}
-              />
 
-              <div className="mt-4">
-                <div className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-3">
-                  Top 5 Holders
+  <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
+    <div className="flex flex-wrap items-center gap-4 text-xs">
+
+      <div>
+        <span className="text-gray-400">
+          LH
+        </span>{" "}
+        <span className="font-semibold text-gray-900 dark:text-gray-100">
+          {formatValue(
+            metrics?.largestHolderPercent,
+            "%"
+          )}
+        </span>
+      </div>
+
+      <div>
+        <span className="text-gray-400">
+          TOP10
+        </span>{" "}
+        <span className="font-semibold text-gray-900 dark:text-gray-100">
+          {formatValue(
+            metrics?.top10HoldingPercent,
+            "%"
+          )}
+        </span>
+      </div>
+
+      <div>
+        <span className="text-gray-400">
+          HOLDERS
+        </span>{" "}
+        <span className="font-semibold text-gray-900 dark:text-gray-100">
+          {topHolders.length}
+        </span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>
+          setShowTopHolders(
+            !showTopHolders
+          )
+        }
+        className="ml-auto text-blue-500 hover:text-blue-400 font-semibold"
+      >
+        {showTopHolders
+          ? "Hide ▼"
+          : "Show ▼"}
+      </button>
+
+    </div>
+  </div>
+
+  {showTopHolders && (
+    <div className="mt-3 space-y-2">
+
+      {topHolders.length ? (
+        topHolders
+          .slice(0, 5)
+          .map((holder, idx) => (
+            <div
+              key={`${holder.address || holder.owner || idx}-${idx}`}
+              className="flex justify-between items-center border-b border-gray-200 dark:border-gray-700 py-2"
+            >
+              <div>
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {shortAddress(
+                    holder.address ||
+                      holder.owner
+                  )}
                 </div>
 
-                {topHolders.length ? (
-                  <div className="space-y-2">
-                    {topHolders.slice(0, 5).map((holder, idx) => (
-                      <div
-                        key={`${holder.address || holder.owner || idx}-${idx}`}
-                        className="flex items-start justify-between gap-3 py-2 border-b border-gray-100 dark:border-gray-700 last:border-b-0"
-                      >
-                        <div className="min-w-0 flex-1">
-                          <div className="text-sm font-medium text-gray-900 dark:text-gray-100 break-all">
-                            {shortAddress(holder.address || holder.owner)}
-                          </div>
-
-                          <div className="text-xs text-gray-500 dark:text-gray-400 break-all mt-1">
-                            {holder.address || holder.owner || "Unknown"}
-                          </div>
-
-                          {holder.reason ? (
-                            <div className="text-xs text-yellow-700 dark:text-yellow-400 mt-1">
-                              {holder.reason}
-                            </div>
-                          ) : null}
-                        </div>
-
-                        <div className="text-right shrink-0">
-                          <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-                            {holder.percent != null
-                              ? `${Number(holder.percent).toFixed(2)}%`
-                              : "—"}
-                          </div>
-
-                          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                            {holder.amount != null
-                              ? Number(holder.amount).toLocaleString()
-                              : "—"}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No top holders available.
-                  </div>
-                )}
+                <div className="text-xs text-gray-500">
+                  {holder.address ||
+                    holder.owner}
+                </div>
               </div>
-            </Section>
+
+              <div className="text-sm font-semibold text-gray-900 dark:text-gray-100">
+                {holder.percent != null
+                  ? `${Number(
+                      holder.percent
+                    ).toFixed(2)}%`
+                  : "—"}
+              </div>
+            </div>
+          ))
+      ) : (
+        <div className="text-sm text-gray-500 dark:text-gray-400">
+          No top holders available.
+        </div>
+      )}
+
+    </div>
+  )}
+
+</Section>
+
+
+            
 
             <Section title="Social / Presence">
               <LinkRow
