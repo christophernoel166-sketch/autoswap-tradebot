@@ -917,6 +917,25 @@ try {
 
 let forecast = null;
 
+function getForecastVerdict(score) {
+  if (score >= 90)
+    return "VERY_STRONG_BULLISH";
+
+  if (score >= 75)
+    return "STRONG_BULLISH";
+
+  if (score >= 60)
+    return "BULLISH";
+
+  if (score >= 40)
+    return "NEUTRAL";
+
+  if (score >= 25)
+    return "BEARISH";
+
+  return "STRONG_BEARISH";
+}
+
 if (chartEntry?.ok) {
   const trendScore =
     Number(
@@ -933,42 +952,125 @@ if (chartEntry?.ok) {
       liquidityAnalysis?.liquidityScore || 0
     );
 
-  const forecastScore =
+  const momentumScore =
+    Number(
+      momentumData?.momentumScore || 0
+    );
+
+  const walletQualityScore =
+    Number(
+      profitWalletData?.walletQualityScore || 0
+    );
+
+  const fundingClusterScore =
+    Number(
+      riskStructureData?.fundingClusterScore || 0
+    );
+
+  const priceChange24h =
+    Number(
+      market.metrics?.priceChange24h || 0
+    );
+
+  const momentum24h =
+    Math.min(
+      100,
+      Math.abs(priceChange24h) / 20
+    );
+
+  // =========================
+  // SHORT TERM (0-1H)
+  // =========================
+
+  const shortTermScore =
     Math.round(
       trendScore * 0.4 +
       volumeScore * 0.35 +
       liquidityScore * 0.25
     );
 
-  let verdict = "STRONG_BEARISH";
+  // =========================
+  // MID TERM (0-24H)
+  // =========================
 
-  if (forecastScore >= 90)
-    verdict = "VERY_STRONG_BULLISH";
-  else if (forecastScore >= 75)
-    verdict = "STRONG_BULLISH";
-  else if (forecastScore >= 60)
-    verdict = "BULLISH";
-  else if (forecastScore >= 40)
-    verdict = "NEUTRAL";
-  else if (forecastScore >= 25)
-    verdict = "BEARISH";
+  const midTermScore =
+    Math.round(
+      trendScore * 0.25 +
+      volumeScore * 0.30 +
+      liquidityScore * 0.25 +
+      momentum24h * 0.20
+    );
+
+  // =========================
+  // LONG TERM (1-7D)
+  // =========================
+
+  const longTermScore =
+    Math.round(
+      liquidityScore * 0.30 +
+      walletQualityScore * 0.25 +
+      (100 - fundingClusterScore) * 0.20 +
+      momentumScore * 0.25
+    );
+
+  const shortTermVerdict =
+    getForecastVerdict(
+      shortTermScore
+    );
+
+  const midTermVerdict =
+    getForecastVerdict(
+      midTermScore
+    );
+
+  const longTermVerdict =
+    getForecastVerdict(
+      longTermScore
+    );
+
+  // Backward compatibility
+  const forecastScore =
+    shortTermScore;
+
+  const verdict =
+    shortTermVerdict;
 
   forecast = {
     trendScore,
     volumeScore,
     liquidityScore,
+
     forecastScore,
     verdict,
-    confidence: Math.round(
-      (
-        trendScore +
-        volumeScore +
-        liquidityScore
-      ) / 3
-    ),
+
+    shortTerm: {
+      score: shortTermScore,
+      verdict:
+        shortTermVerdict,
+    },
+
+    midTerm: {
+      score: midTermScore,
+      verdict:
+        midTermVerdict,
+    },
+
+    longTerm: {
+      score: longTermScore,
+      verdict:
+        longTermVerdict,
+    },
+
+    confidence:
+      Math.round(
+        (
+          shortTermScore +
+          midTermScore +
+          longTermScore
+        ) / 3
+      ),
   };
 }
-
 return res.status(200).json({
   ok: true,
   walletAddress: walletAddress || null,
