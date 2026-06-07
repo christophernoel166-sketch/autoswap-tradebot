@@ -1004,17 +1004,31 @@ const chartActionColor =
 
   </div>
 
+<Section title="Momentum">
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        MOM
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.momentumScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        V-BREAK
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.velocityBreakoutScore ?? 0}
+      </span>
+    </div>
+
+  </div>
+
 </Section>
-            <Section title="Momentum">
-              <MetricRow
-                label="Momentum Score"
-                value={formatValue(metrics?.momentumScore)}
-              />
-              <MetricRow
-                label="Velocity Breakout Score"
-                value={formatValue(metrics?.velocityBreakoutScore)}
-              />
-            </Section>
 
             <Section title="Rug Risk Analysis">
               <MetricRow
