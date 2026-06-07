@@ -1003,7 +1003,7 @@ const chartActionColor =
     </div>
 
   </div>
-
+</Section>
 
 <Section title="Momentum">
 
