@@ -1033,47 +1033,65 @@ const chartActionColor =
 
 
             <Section title="Rug Risk Analysis">
-              <MetricRow
-                label="Rug Risk Score"
-                value={
-                  rugRisk?.rugRiskScore != null
-                    ? rugRisk.rugRiskScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Risk Level"
-                value={
-                  rugRisk?.rugRiskLevel != null
-                    ? rugRisk.rugRiskLevel
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Dev Dump Risk"
-                value={
-                  rugRisk?.devDumpRiskScore != null
-                    ? rugRisk.devDumpRiskScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Liquidity Pull Risk"
-                value={
-                  rugRisk?.liquidityPullRiskScore != null
-                    ? rugRisk.liquidityPullRiskScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Insider Control Risk"
-                value={
-                  rugRisk?.insiderRiskScore != null
-                    ? rugRisk.insiderRiskScore
-                    : "Not Available"
-                }
-              />
-            </Section>
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        RUG
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.rugRiskScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        LEVEL
+      </span>{" "}
+      <span
+        className={`font-semibold ${
+          metrics?.riskLevel === "LOW"
+            ? "text-green-400"
+            : metrics?.riskLevel === "MEDIUM"
+            ? "text-yellow-400"
+            : "text-red-400"
+        }`}
+      >
+        {metrics?.riskLevel || "LOW"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        DEV
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.devDumpRisk ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        LPULL
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.liquidityPullRisk ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        INSIDER
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.insiderControlRisk ?? 0}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
 
             <Section title="Evaluation">
               <MetricRow label="Verdict" value={formatValue(verdict)} />
