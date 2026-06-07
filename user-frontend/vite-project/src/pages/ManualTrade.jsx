@@ -1093,26 +1093,61 @@ const chartActionColor =
 
 </Section>
 
-            <Section title="Evaluation">
-              <MetricRow label="Verdict" value={formatValue(verdict)} />
-              <MetricRow label="Score" value={formatValue(evaluation?.score)} />
-              <MetricRow
-                label="Scanned At"
-                value={
-                  scanResult?.scannedAt
-                    ? new Date(scanResult.scannedAt).toLocaleString()
-                    : "—"
-                }
-              />
-              <MetricRow
-                label="Expires At"
-                value={
-                  scanResult?.expiresAt
-                    ? new Date(scanResult.expiresAt).toLocaleString()
-                    : "—"
-                }
-              />
-            </Section>
+<Section title="Evaluation">
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        VERDICT
+      </span>{" "}
+      <span
+        className={`font-semibold ${
+          verdict === "SAFE"
+            ? "text-green-400"
+            : verdict === "CAUTION"
+            ? "text-yellow-400"
+            : "text-red-400"
+        }`}
+      >
+        {evaluation?.verdict || verdict || "UNKNOWN"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        SCORE
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {evaluation?.score ?? "—"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        SCANNED
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {evaluation?.scannedAt
+          ? new Date(evaluation.scannedAt).toLocaleTimeString()
+          : "—"}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        EXPIRES
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {evaluation?.expiresAt
+          ? new Date(evaluation.expiresAt).toLocaleTimeString()
+          : "—"}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
           </div>
 
           {(evaluation?.reasons?.length > 0 ||
