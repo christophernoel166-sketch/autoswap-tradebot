@@ -962,25 +962,49 @@ const chartActionColor =
 
 </Section>
 
-            <Section title="Risk / Structure">
-              <MetricRow
-                label="Bundle Score"
-                value={formatValue(metrics?.bundleScore)}
-              />
-              <MetricRow
-                label="Bundled Wallets"
-                value={formatValue(metrics?.bundledWalletCount)}
-              />
-              <MetricRow
-                label="Funding Cluster Score"
-                value={formatValue(metrics?.fundingClusterScore)}
-              />
-              <MetricRow
-                label="Largest Funding Cluster"
-                value={formatValue(metrics?.largestFundingCluster)}
-              />
-            </Section>
+           <Section title="Risk / Structure">
 
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        BUNDLE
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.bundleScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        B-WALLET
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.bundledWallets ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        FUND
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.fundingClusterScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        L-FUND
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.largestFundingCluster ?? 0}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
             <Section title="Momentum">
               <MetricRow
                 label="Momentum Score"
