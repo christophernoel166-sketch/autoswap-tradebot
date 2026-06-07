@@ -928,31 +928,39 @@ const chartActionColor =
 </Section>
 
             <Section title="Profit Wallet Intelligence">
-              <MetricRow
-                label="Profitable Wallet Count"
-                value={
-                  profitWallets?.profitableWalletCount != null
-                    ? profitWallets.profitableWalletCount
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Wallet Quality Score"
-                value={
-                  profitWallets?.walletQualityScore != null
-                    ? profitWallets.walletQualityScore
-                    : "Not Available"
-                }
-              />
-              <MetricRow
-                label="Profit Wallet Confidence"
-                value={
-                  profitWallets?.profitWalletConfidence != null
-                    ? profitWallets.profitWalletConfidence
-                    : "Not Available"
-                }
-              />
-            </Section>
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">
+        P-WALLET
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.profitableWalletCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        QUALITY
+      </span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.walletQualityScore ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">
+        CONF
+      </span>{" "}
+      <span className="font-semibold text-green-400">
+        {metrics?.profitWalletConfidence ?? 0}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
 
             <Section title="Risk / Structure">
               <MetricRow
