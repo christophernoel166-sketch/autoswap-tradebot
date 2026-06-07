@@ -885,27 +885,47 @@ const chartActionColor =
 
 
             <Section title="Wallet Intelligence">
-              <MetricRow
-                label="Smart Degens"
-                value={formatValue(metrics?.smartDegenCount)}
-              />
-              <MetricRow
-                label="Bot Degens"
-                value={formatValue(metrics?.botDegenCount)}
-              />
-              <MetricRow
-                label="Rat Traders"
-                value={formatValue(metrics?.ratTraderCount)}
-              />
-              <MetricRow
-                label="Alpha Callers"
-                value={formatValue(metrics?.alphaCallerCount)}
-              />
-              <MetricRow
-                label="Sniper Wallets"
-                value={formatValue(metrics?.sniperWalletCount)}
-              />
-            </Section>
+
+  <div className="flex flex-wrap items-center gap-6 text-sm">
+
+    <div>
+      <span className="text-gray-400">SMART</span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.smartDegenCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">BOT</span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.botDegenCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">RAT</span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.ratTraderCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">ALPHA</span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.alphaCallerCount ?? 0}
+      </span>
+    </div>
+
+    <div>
+      <span className="text-gray-400">SNIPER</span>{" "}
+      <span className="font-semibold text-gray-900 dark:text-gray-100">
+        {metrics?.sniperWalletCount ?? 0}
+      </span>
+    </div>
+
+  </div>
+
+</Section>
 
             <Section title="Profit Wallet Intelligence">
               <MetricRow
