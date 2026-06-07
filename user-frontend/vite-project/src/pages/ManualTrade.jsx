@@ -1004,6 +1004,7 @@ const chartActionColor =
 
   </div>
 
+
 <Section title="Momentum">
 
   <div className="flex flex-wrap items-center gap-6 text-sm">
@@ -1029,6 +1030,7 @@ const chartActionColor =
   </div>
 
 </Section>
+
 
             <Section title="Rug Risk Analysis">
               <MetricRow
