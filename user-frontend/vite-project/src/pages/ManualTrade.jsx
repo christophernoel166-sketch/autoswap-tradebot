@@ -111,6 +111,31 @@ const activity = scanResult?.activity || null;
   const integrity = scanResult?.integrity || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
+
+const allWarnings = [
+  ...(evaluation?.warnings || []),
+
+  ...(social?.socialWarning
+    ? [social.socialWarning]
+    : []),
+
+  ...(activity?.activityWarning
+    ? [activity.activityWarning]
+    : []),
+
+  ...(integrity?.integrityWarning
+    ? [integrity.integrityWarning]
+    : []),
+
+  ...(rugRisk?.rugWarning
+    ? [rugRisk.rugWarning]
+    : []),
+
+  ...(profitWallets?.profitWalletWarning
+    ? [profitWallets.profitWalletWarning]
+    : []),
+];
+
 const [showTopHolders, setShowTopHolders] =
   useState(false);
 const volumeAnalysis =
@@ -120,7 +145,8 @@ const liquidityAnalysis =
 
 const forecast =
   scanResult?.forecast || null;
-
+const [showAnalysisSummary, setShowAnalysisSummary] =
+  useState(false);
 
   const topHolders =
     scanResult?.holderSafety?.topHolders ||
@@ -1150,81 +1176,127 @@ const chartActionColor =
 </Section>
           </div>
 
-          {(evaluation?.reasons?.length > 0 ||
-            evaluation?.warnings?.length > 0 ||
-            evaluation?.failedRules?.length > 0 ||
-            social?.socialWarning ||
-            scanResult?.activity?.activityWarning ||
-            integrity?.integrityWarning ||
-            rugRisk?.rugWarning ||
-            profitWallets?.profitWalletWarning) ? (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Section title="Reasons">
-                {evaluation?.reasons?.length ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation.reasons.map((item, idx) => (
-                      <li key={idx}>• {item}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No reasons available.
-                  </div>
-                )}
-              </Section>
+          {(
+  evaluation?.reasons?.length > 0 ||
+  allWarnings.length > 0 ||
+  evaluation?.failedRules?.length > 0 ||
+  social?.socialWarning ||
+  scanResult?.activity?.activityWarning ||
+  integrity?.integrityWarning ||
+  rugRisk?.rugWarning ||
+  profitWallets?.profitWalletWarning
+) ? (
 
-              <Section title="Warnings">
-                {evaluation?.warnings?.length ||
-                social?.socialWarning ||
-                scanResult?.activity?.activityWarning ||
-                integrity?.integrityWarning ||
-                rugRisk?.rugWarning ||
-                profitWallets?.profitWalletWarning ? (
-                  <ul className="space-y-2 text-sm text-gray-800 dark:text-gray-200">
-                    {evaluation?.warnings?.map((item, idx) => (
-                      <li key={`warn-${idx}`}>• {item}</li>
-                    ))}
+            <div className="grid grid-cols-1 gap-6">
 
-                    {social?.socialWarning ? (
-                      <li>• {social.socialWarning}</li>
-                    ) : null}
+             <Section title="Analysis Summary">
 
-                    {scanResult?.activity?.activityWarning ? (
-                      <li>• {scanResult.activity.activityWarning}</li>
-                    ) : null}
+  <div className="flex items-center justify-between">
 
-                    {integrity?.integrityWarning ? (
-                      <li>• {integrity.integrityWarning}</li>
-                    ) : null}
+    <div className="flex gap-6 text-sm">
 
-                    {rugRisk?.rugWarning ? (
-                      <li>• {rugRisk.rugWarning}</li>
-                    ) : null}
+      <div>
+        <span className="text-green-400 font-semibold">
+          ✓ {evaluation?.reasons?.length || 0}
+        </span>{" "}
+        Reasons
+      </div>
 
-                    {profitWallets?.profitWalletWarning ? (
-                      <li>• {profitWallets.profitWalletWarning}</li>
-                    ) : null}
-                  </ul>
-                ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No warnings.
-                  </div>
-                )}
-              </Section>
+      <div>
+        <span className="text-yellow-400 font-semibold">
+          ⚠ {allWarnings.length}
+        </span>{" "}
+        Warnings
+      </div>
 
-              <Section title="Failed Rules">
-                {evaluation?.failedRules?.length ? (
-                  <ul className="space-y-2 text-sm text-red-600 dark:text-red-400">
-                    {evaluation.failedRules.map((item, idx) => (
-                      <li key={`fail-${idx}`}>• {item}</li>
-                    ))}
-                  </ul>
-                               ) : (
-                  <div className="text-sm text-gray-500 dark:text-gray-400">
-                    No failed rules.
-                  </div>
-                )}
-              </Section>
+      <div>
+        <span className="text-red-400 font-semibold">
+          ✕ {evaluation?.failedRules?.length || 0}
+        </span>{" "}
+        Failed
+      </div>
+
+    </div>
+
+    <button
+      type="button"
+      onClick={() =>
+        setShowAnalysisSummary(
+          !showAnalysisSummary
+        )
+      }
+      className="text-blue-500 hover:text-blue-400 font-semibold"
+    >
+      {showAnalysisSummary
+        ? "Hide ▲"
+        : "Show ▼"}
+    </button>
+
+  </div>
+
+  {showAnalysisSummary && (
+    <div className="mt-4 space-y-4">
+
+      {(evaluation?.reasons?.length ?? 0) > 0 && (
+        <div>
+          <div className="text-green-400 font-semibold mb-2">
+            Reasons
+          </div>
+
+          <div className="space-y-1 text-sm">
+            {evaluation.reasons.map((reason, idx) => (
+              <div key={idx}>
+                ✓ {reason}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {allWarnings.length > 0 && (
+        <div>
+          <div className="text-yellow-400 font-semibold mb-2">
+            Warnings
+          </div>
+
+          <div className="space-y-1 text-sm">
+            {allWarnings.map((warning, idx) => (
+              <div key={idx}>
+                ⚠ {warning}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(evaluation?.failedRules?.length ?? 0) > 0 && (
+        <div>
+          <div className="text-red-400 font-semibold mb-2">
+            Failed Rules
+          </div>
+
+          <div className="space-y-1 text-sm">
+            {evaluation.failedRules.map((rule, idx) => (
+              <div key={idx}>
+                ✕ {rule}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {!evaluation?.reasons?.length &&
+       !allWarnings.length &&
+       !evaluation?.failedRules?.length && (
+        <div className="text-gray-500 text-sm">
+          No analysis details available.
+        </div>
+      )}
+
+    </div>
+  )}
+
+</Section>
             </div>
           ) : null}
         </>
