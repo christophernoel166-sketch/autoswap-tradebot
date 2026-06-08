@@ -59,6 +59,10 @@ import {
 } from "./src/recovery/scanWalletForMissingPositions.js";
 
 import {
+  createNotification,
+} from "./src/services/notificationService.js";
+
+import {
   rebuildPositionsFromBlockchain,
 } from "./src/recovery/rebuildPositionsFromBlockchain.js";
 // import {
@@ -2491,6 +2495,20 @@ LOG.info(
   },
   "✅ BUY executed (user wallet)"
 );
+
+await createNotification({
+  walletAddress:
+    user.walletAddress,
+
+  type: "success",
+
+  title: "Buy Executed",
+
+  message:
+    `Successfully purchased ${Number(
+      tokenAmount || 0
+    ).toFixed(4)} tokens`,
+});
 
 // 💸 Charge platform BUY fee (INSERT THIS HERE)
 await chargeBuyFee(wallet, buyTxid, mint);
