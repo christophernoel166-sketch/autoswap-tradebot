@@ -2685,12 +2685,28 @@ if (entryPrice) {
       "📈 Position registered for monitoring"
     );
 
-  } catch (err) {
-    LOG.error(
-      { err, wallet: user?.walletAddress },
-      "❌ executeUserTrade error"
-    );
-  }
+} catch (err) {
+  LOG.error(
+    {
+      err,
+      wallet: user?.walletAddress,
+    },
+    "❌ executeUserTrade error"
+  );
+
+  await createNotification({
+    walletAddress:
+      user?.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      err?.message ||
+      "Unknown trade error",
+  });
+}
 }
 
 
