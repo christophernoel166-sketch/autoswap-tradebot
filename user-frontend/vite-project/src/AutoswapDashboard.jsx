@@ -710,6 +710,11 @@ async function fetchNotifications() {
 
     const data = await r.json();
 
+    console.log(
+      "NOTIFICATIONS RECEIVED",
+      data.notifications
+    );
+
     setNotifications(
       data.notifications || []
     );
