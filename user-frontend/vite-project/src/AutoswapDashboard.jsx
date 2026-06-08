@@ -5,7 +5,7 @@ import "@solana/wallet-adapter-react-ui/styles.css";
 import MobileHeader from "./layout/MobileHeader";
 import MobileTabs from "./layout/MobileTabs";
 import PerformanceSummary from "./analytics/PerformanceSummary";
-import EliteAnalytics from "./analytics/EliteAnalytics";
+
 import AddChannel from "./channels/AddChannel";
 import Subscriptions from "./channels/Subscriptions";
 import TradingSettings from "./settings/TradingSettings";
@@ -1443,14 +1443,7 @@ async function reRequestChannel(channelId) {
   setShowChartConfirm={setShowChartConfirm}
 />
 
-    <EliteAnalytics
-      historyLoading={historyLoading}
-      filteredTradesCount={filteredHistory.length}
-      metrics={metrics}
-      distribution={distribution}
-      renderCumulativePath={renderCumulativePath}
-      fmt={fmt}
-    />
+   
 
    <div className="bg-gray-800 rounded-xl p-4">
   <button
