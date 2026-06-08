@@ -1,30 +1,73 @@
 import express from "express";
-import Notification from "../models/Notification.js";
+import UserNotification from "../models/UserNotification.js";
 
 const router = express.Router();
 
-// GET all notifications
-router.get("/", async (req, res) => {
+/**
+ * GET notifications for wallet
+ */
+router.get("/:walletAddress", async (req, res) => {
   try {
-    const list = await Notification.find({})
-      .sort({ createdAt: -1 })
-      .limit(100)
-      .lean();
+    const walletAddress =
+      String(
+        req.params.walletAddress || ""
+      ).trim();
 
-    res.json({ ok: true, notifications: list });
+    if (!walletAddress) {
+      return res.status(400).json({
+        ok: false,
+        error: "wallet_required",
+      });
+    }
+
+    const notifications =
+      await UserNotification.find({
+        walletAddress,
+      })
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .lean();
+
+    return res.json({
+      ok: true,
+      notifications,
+    });
   } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    return res.status(500).json({
+      ok: false,
+      error:
+        err?.message ||
+        "internal_error",
+    });
   }
 });
 
-// Mark as read
-router.post("/read/:id", async (req, res) => {
-  try {
-    await Notification.findByIdAndUpdate(req.params.id, { read: true });
-    res.json({ ok: true });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+/**
+ * Mark notification read
+ */
+router.post(
+  "/read/:id",
+  async (req, res) => {
+    try {
+      await UserNotification.findByIdAndUpdate(
+        req.params.id,
+        {
+          read: true,
+        }
+      );
+
+      return res.json({
+        ok: true,
+      });
+    } catch (err) {
+      return res.status(500).json({
+        ok: false,
+        error:
+          err?.message ||
+          "internal_error",
+      });
+    }
   }
-});
+);
 
 export default router;
