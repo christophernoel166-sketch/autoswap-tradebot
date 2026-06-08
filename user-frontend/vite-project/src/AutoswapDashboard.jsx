@@ -32,6 +32,7 @@ export default function AutoswapDashboard() {
 
   const [walletAddress, setWalletAddress] = useState("");
 const [positions, setPositions] = useState([]);
+const [notifications, setNotifications] = useState([]);
 const [history, setHistory] = useState([]);
 const [showTradeHistory, setShowTradeHistory] = useState(false);
 const [availableChannels, setAvailableChannels] = useState([]);
@@ -345,13 +346,20 @@ useEffect(() => {
   if (!walletAddress) return;
 
   fetchUserSettings();
-refreshUser();
-
-    ensureUserExists();   // 👈 ADD THIS
+  refreshUser();
+fetchWalletHistory();
+  ensureUserExists();
   fetchUserChannels();
   fetchPositions();
+  fetchNotifications();
   fetchHistory();
 }, [walletAddress]);
+
+useEffect(() => {
+  if (!user?.walletAddress) return;
+
+  fetchNotifications();
+}, [user?.walletAddress]);
 
 /* --- AUTO-REFRESH CHANNEL STATUS --- */
 useEffect(() => {
@@ -365,6 +373,16 @@ useEffect(() => {
 }, [walletAddress]);
 
 // fetch on-chain balance
+
+useEffect(() => {
+  const timer = setInterval(
+    fetchNotifications,
+    5000
+  );
+
+  return () =>
+    clearInterval(timer);
+}, [user]);
 
 // FETCH NEW TOKENS
 useEffect(() => {
@@ -677,6 +695,29 @@ async function handleChartAnalysis() {
     setChartError(err.message || "Chart analysis failed");
   } finally {
     setChartLoading(false);
+  }
+}
+
+async function fetchNotifications() {
+  try {
+    if (!user?.walletAddress) {
+      return;
+    }
+
+    const r = await fetch(
+      `${API_BASE}/api/notifications/${user.walletAddress}`
+    );
+
+    const data = await r.json();
+
+    setNotifications(
+      data.notifications || []
+    );
+  } catch (err) {
+    console.error(
+      "Failed to load notifications",
+      err
+    );
   }
 }
 
@@ -1513,7 +1554,40 @@ async function reRequestChannel(channelId) {
   withdrawDisabled={onChainBalance < 0.001}
 />
 
+<div className="bg-gray-800 rounded-xl p-4">
+  <h3 className="text-lg font-semibold text-white mb-3">
+    Notifications ({notifications.length})
+  </h3>
 
+  <div className="space-y-2 max-h-64 overflow-y-auto">
+    {notifications.length === 0 ? (
+      <div className="text-sm text-gray-400">
+        No notifications
+      </div>
+    ) : (
+      notifications.map((n) => (
+        <div
+          key={n._id}
+          className={`p-2 rounded text-sm ${
+            n.type === "error"
+              ? "bg-red-500/10 border border-red-500/20"
+              : n.type === "success"
+              ? "bg-green-500/10 border border-green-500/20"
+              : "bg-blue-500/10 border border-blue-500/20"
+          }`}
+        >
+          <div className="font-semibold text-white">
+            {n.title}
+          </div>
+
+          <div className="text-gray-300">
+            {n.message}
+          </div>
+        </div>
+      ))
+    )}
+  </div>
+</div>
 
 <div className="bg-gray-800 rounded-xl p-4">
   <button
