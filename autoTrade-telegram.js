@@ -2431,6 +2431,19 @@ if (balance < REQUIRED_LAMPORTS) {
     },
     "⛔ Skipping BUY: insufficient SOL for trade+fee+buffer"
   );
+
+  await createNotification({
+    walletAddress:
+      user.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      "Insufficient SOL balance for trade, fees and buffer.",
+  });
+
   return;
 }
 
@@ -2465,13 +2478,26 @@ if (balance < REQUIRED_LAMPORTS) {
       slippageBps
     );
 
-    if (!quote) {
-      LOG.warn(
-        { wallet: user.walletAddress },
-        "Quote failed"
-      );
-      return;
-    }
+   if (!quote) {
+  LOG.warn(
+    { wallet: user.walletAddress },
+    "Quote failed"
+  );
+
+  await createNotification({
+    walletAddress:
+      user.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      "Unable to obtain swap quote.",
+  });
+
+  return;
+}
 
    // 🚀 Execute BUY from USER wallet
 // ===================================================
@@ -2659,12 +2685,27 @@ if (entryPrice) {
       "📈 Position registered for monitoring"
     );
 
-  } catch (err) {
-    LOG.error(
-      { err, wallet: user?.walletAddress },
-      "❌ executeUserTrade error"
-    );
-  }
+} catch (err) {
+  LOG.error(
+    {
+      err,
+      wallet: user?.walletAddress,
+    },
+    "❌ executeUserTrade error"
+  );
+
+  await createNotification({
+    walletAddress:
+      user?.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      err?.message ||
+      "Unknown trade error",
+  });
 }
 
 
