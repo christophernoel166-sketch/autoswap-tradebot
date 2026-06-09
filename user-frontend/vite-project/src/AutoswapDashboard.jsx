@@ -700,6 +700,11 @@ async function handleChartAnalysis() {
 
 async function fetchNotifications() {
   try {
+console.log(
+  "Fetching notifications for:",
+  user?.walletAddress
+);
+
     if (!user?.walletAddress) {
       return;
     }
