@@ -1330,6 +1330,11 @@ async function reRequestChannel(channelId) {
     return Number(n).toFixed(d);
   };
 
+console.log(
+  "Dashboard notifications state:",
+  notifications
+);
+
   /* === UI === */
   return (
     <div className="p-4 lg:px-4 lg:py-6 max-w-8xl mx-auto space-y-6
