@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState, useEffect } from "react";
 import ChartEntrySection from "../components/ChartEntrySection";
 
 function formatValue(value, suffix = "") {
@@ -102,6 +102,7 @@ export default function ManualTrade({
   handleChartAnalysis,
 showChartConfirm,
 setShowChartConfirm,
+ notifications,
 }) {
   const evaluation = scanResult?.evaluation || null;
   const metrics = scanResult?.metrics || null;
@@ -142,6 +143,10 @@ const volumeAnalysis =
   scanResult?.volumeAnalysis || null;
 const liquidityAnalysis =
   scanResult?.liquidityAnalysis || null;
+const [buyToast, setBuyToast] =
+  useState(null);
+const [lastNotificationId, setLastNotificationId] =
+  useState(null);
 
 const forecast =
   scanResult?.forecast || null;
@@ -153,6 +158,41 @@ const [showAnalysisSummary, setShowAnalysisSummary] =
     scanResult?.topHolders ||
     metrics?.topHolders ||
     [];
+
+
+useEffect(() => {
+  if (!notifications?.length) {
+    return;
+  }
+
+  const latest = notifications[0];
+
+  if (!latest?._id) {
+    return;
+  }
+
+  if (latest._id === lastNotificationId) {
+    return;
+  }
+
+  if (
+    latest.title === "Buy Executed" ||
+    latest.title === "Buy Failed"
+  ) {
+    setLastNotificationId(latest._id);
+
+    setBuyToast({
+      type: latest.type,
+      title: latest.title,
+      message: latest.message,
+    });
+
+    setTimeout(() => {
+      setBuyToast(null);
+    }, 3000);
+  }
+}, [notifications, lastNotificationId]);
+
 
   const verdict = evaluation?.verdict || null;
   const showBuy = Boolean(evaluation?.showBuy);
@@ -213,7 +253,16 @@ const chartActionColor =
         throw new Error(data?.error || "Failed to queue manual buy");
       }
 
-      alert("Manual buy queued successfully");
+      setBuyToast({
+  type: "info",
+  title: "Buy Queued",
+  message:
+    "Trade submitted successfully",
+});
+
+setTimeout(() => {
+  setBuyToast(null);
+}, 3000);
     } catch (err) {
       alert(err.message || "Manual buy failed");
     }
@@ -339,7 +388,7 @@ const chartActionColor =
 
    
 
-   <div className="ml-auto flex items-center gap-2">
+   <div className="ml-auto flex items-center gap-2 relative">
   {!chartEntry ? (
     <button
       type="button"
@@ -367,6 +416,27 @@ const chartActionColor =
       ? "Buy (Caution)"
       : "Buy"}
   </button>
+
+{buyToast && (
+  <div
+    className={`absolute top-full right-0 mt-2 z-50 w-64 rounded-lg border p-3 shadow-lg ${
+      buyToast.type === "success"
+        ? "bg-green-900 border-green-500"
+        : buyToast.type === "error"
+        ? "bg-red-900 border-red-500"
+        : "bg-blue-900 border-blue-500"
+    }`}
+  >
+    <div className="font-semibold text-white">
+      {buyToast.title}
+    </div>
+
+    <div className="text-xs text-gray-200 mt-1">
+      {buyToast.message}
+    </div>
+  </div>
+)}
+
 </div> 
 
   </div>

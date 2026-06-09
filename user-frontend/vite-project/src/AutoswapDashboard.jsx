@@ -1483,7 +1483,7 @@ console.log(
       fmt={fmt}
     />
 
-    <ManualTrade
+<ManualTrade
   manualTokenMint={manualTokenMint}
   setManualTokenMint={setManualTokenMint}
   scanManualToken={scanManualToken}
@@ -1497,6 +1497,7 @@ console.log(
   handleChartAnalysis={handleChartAnalysis}
   showChartConfirm={showChartConfirm}
   setShowChartConfirm={setShowChartConfirm}
+  notifications={notifications}
 />
 
    
