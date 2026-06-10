@@ -1573,6 +1573,7 @@ LOG.info(
     );
   }
 
+// notification
   LOG.info(
     { walletAddress, mint, percent, sellTxid },
     "✅ Manual partial sell executed"
