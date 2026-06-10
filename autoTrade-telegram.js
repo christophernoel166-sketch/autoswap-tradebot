@@ -1435,12 +1435,17 @@ console.log("SELL RES RAW =", sellRes);
 console.log("SELL RES TYPE =", typeof sellRes);
 console.log("SELL RES TXID =", sellRes?.txid);
 
-    const sellTxid =
-      sellRes?.txid ||
-      sellRes?.signature ||
-      sellRes?.sig ||
-      sellRes ||
-      null;
+    let sellTxid = null;
+
+if (typeof sellRes?.txid === "object") {
+  sellTxid = sellRes.txid.txid;
+} else {
+  sellTxid =
+    sellRes?.txid ||
+    sellRes?.signature ||
+    sellRes?.sig ||
+    null;
+}
 
 LOG.info(
   {
