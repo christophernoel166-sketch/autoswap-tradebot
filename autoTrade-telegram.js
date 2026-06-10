@@ -1435,6 +1435,16 @@ redisSub.on("message", async (channel, message) => {
       sellRes ||
       null;
 
+LOG.info(
+  {
+    sellRes,
+    sellTxid,
+    sellTxidType: typeof sellTxid,
+  },
+  "🧪 SELL TX DEBUG"
+);
+
+
     // 💸 Charge platform SELL fee
     await chargeSellFee(
       wallet,
