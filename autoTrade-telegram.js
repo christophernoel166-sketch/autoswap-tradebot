@@ -1512,16 +1512,72 @@ LOG.info(
       state.entryPrices.delete(walletAddress);
       state.highestPrices?.delete?.(walletAddress);
 
-      LOG.info(
-        { walletAddress, mint, percent, sellTxid },
-        "✅ Manual sell all executed"
-      );
-    } else {
-      LOG.info(
-        { walletAddress, mint, percent, sellTxid },
-        "✅ Manual partial sell executed"
-      );
-    }
+
+try {
+  await createNotification({
+    walletAddress,
+    type: "success",
+    title: "Sell Executed",
+    message: "Position sold successfully",
+  });
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      percent,
+    },
+    "🧪 MANUAL SELL NOTIFICATION CREATED"
+  );
+} catch (err) {
+  LOG.error(
+    {
+      err,
+      walletAddress,
+      mint,
+    },
+    "❌ Failed to create manual sell notification"
+  );
+}
+
+LOG.info(
+  { walletAddress, mint, percent, sellTxid },
+  "✅ Manual sell all executed"
+);
+} else {
+
+  try {
+    await createNotification({
+      walletAddress,
+      type: "success",
+      title: "Sell Executed",
+      message: `Successfully sold ${percent}% of position`,
+    });
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        percent,
+      },
+      "🧪 MANUAL SELL NOTIFICATION CREATED"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        err,
+        walletAddress,
+        mint,
+      },
+      "❌ Failed to create manual sell notification"
+    );
+  }
+
+  LOG.info(
+    { walletAddress, mint, percent, sellTxid },
+    "✅ Manual partial sell executed"
+  );
+}
   } catch (err) {
     LOG.error(
       { err, walletAddress, mint, percent },
@@ -2218,6 +2274,7 @@ LOG.info(
   "🧪 ABOUT TO CREATE SELL NOTIFICATION"
 );
 
+
 await createNotification({
   walletAddress,
 
@@ -2230,6 +2287,9 @@ await createNotification({
       ? "Position sold successfully"
       : `Successfully sold ${percent}% of position`,
 });
+
+
+
 
 LOG.info(
   {
