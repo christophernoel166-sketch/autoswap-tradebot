@@ -2275,16 +2275,33 @@ LOG.info(
   "🧪 ABOUT TO CREATE SELL NOTIFICATION"
 );
 
+LOG.info(
+  {
+    sellRes,
+    soldTokens,
+    solReceived,
+  },
+  "SELL RESULT FOR NOTIFICATION"
+);
+
+const soldTokens = Number(
+  sellRes?.txid?.tokenAmount ||
+  sellRes?.tokenAmount ||
+  0
+).toLocaleString();
+
+const solReceived = Number(
+  sellRes?.solReceived || 0
+).toFixed(6);
 
 await createNotification({
   walletAddress,
-
   type: "success",
-
   title: "Sell Executed",
-
   message:
-    percent === 100
+    soldTokens !== "0"
+      ? `Sold ${soldTokens} tokens for ${solReceived} SOL`
+      : percent === 100
       ? "Position sold successfully"
       : `Successfully sold ${percent}% of position`,
 });
