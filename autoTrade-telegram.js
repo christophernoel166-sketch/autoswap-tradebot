@@ -2185,20 +2185,53 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
       state.entryPrices.delete(walletAddress);
       state.highestPrices.delete(walletAddress);
     }
-    LOG.info(
-      {
-        walletAddress,
-        mint,
-        reason,
-        percent,
-      },
-      "✅ Queued trade finalized"
-    );
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "🧪 ABOUT TO CREATE SELL NOTIFICATION"
+);
+
+await createNotification({
+  walletAddress,
+
+  type: "success",
+
+  title: "Sell Executed",
+
+  message:
+    percent === 100
+      ? "Position sold successfully"
+      : `Successfully sold ${percent}% of position`,
+});
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "🧪 SELL NOTIFICATION CREATED"
+);
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "✅ Queued trade finalized"
+);
   }
 
   await finalizeTrade({ reason, percent });
 }
-
 
 // ========= Safe wrappers =========
 async function safeExecuteSwap(
