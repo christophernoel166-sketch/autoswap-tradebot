@@ -1417,7 +1417,10 @@ redisSub.on("message", async (channel, message) => {
 
       sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
     } else {
-      // ✅ Partial sell: keep position open
+     
+
+
+ // ✅ Partial sell: keep position open
       sellRes = await safeSellPartial(
         wallet,
         mint,
@@ -1427,6 +1430,10 @@ redisSub.on("message", async (channel, message) => {
         traceId
       );
     }
+
+console.log("SELL RES RAW =", sellRes);
+console.log("SELL RES TYPE =", typeof sellRes);
+console.log("SELL RES TXID =", sellRes?.txid);
 
     const sellTxid =
       sellRes?.txid ||
