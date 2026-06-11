@@ -2209,12 +2209,28 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
         sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 4, traceId);
       }
 
-      sellTxid =
-        sellRes?.txid ||
-        sellRes?.signature ||
-        sellRes?.sig ||
-        sellRes ||
-        null;
+      
+
+if (typeof sellRes?.txid === "object") {
+  sellTxid = sellRes.txid.txid;
+} else {
+  sellTxid =
+    sellRes?.txid ||
+    sellRes?.signature ||
+    sellRes?.sig ||
+    null;
+}
+
+LOG.info(
+  {
+    sellRes,
+    sellTxid,
+    sellTxidType: typeof sellTxid,
+    reason,
+    percent,
+  },
+  "🧪 QUEUED SELL TX DEBUG"
+);
 
       await chargeSellFee(wallet, sellTxid, mint, reason);
     } catch (err) {
