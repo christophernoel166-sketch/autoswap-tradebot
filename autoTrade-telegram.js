@@ -1512,13 +1512,34 @@ LOG.info(
       state.entryPrices.delete(walletAddress);
       state.highestPrices?.delete?.(walletAddress);
 
-
 try {
+  const soldTokens = Number(
+    sellRes?.txid?.tokenAmount ||
+    sellRes?.tokenAmount ||
+    0
+  ).toLocaleString();
+
+  const solReceived = Number(
+    sellRes?.solReceived || 0
+  ).toFixed(6);
+
+  LOG.info(
+    {
+      sellRes,
+      soldTokens,
+      solReceived,
+    },
+    "SELL RESULT FOR NOTIFICATION"
+  );
+
   await createNotification({
     walletAddress,
     type: "success",
     title: "Sell Executed",
-    message: "Position sold successfully",
+    message:
+      soldTokens !== "0"
+        ? `Sold ${soldTokens} tokens for ${solReceived} SOL`
+        : "Position sold successfully",
   });
 
   LOG.info(
@@ -1539,40 +1560,6 @@ try {
     "❌ Failed to create manual sell notification"
   );
 }
-
-LOG.info(
-  { walletAddress, mint, percent, sellTxid },
-  "✅ Manual sell all executed"
-);
-} else {
-
-  try {
-    await createNotification({
-      walletAddress,
-      type: "success",
-      title: "Sell Executed",
-      message: `Successfully sold ${percent}% of position`,
-    });
-
-    LOG.info(
-      {
-        walletAddress,
-        mint,
-        percent,
-      },
-      "🧪 MANUAL SELL NOTIFICATION CREATED"
-    );
-  } catch (err) {
-    LOG.error(
-      {
-        err,
-        walletAddress,
-        mint,
-      },
-      "❌ Failed to create manual sell notification"
-    );
-  }
-
 // notification
   LOG.info(
     { walletAddress, mint, percent, sellTxid },
