@@ -1562,9 +1562,14 @@ try {
 }
 // notification
   LOG.info(
-    { walletAddress, mint, percent, sellTxid },
-    "✅ Manual partial sell executed"
-  );
+  {
+    walletAddress,
+    mint,
+    percent,
+    reason,
+  },
+  `✅ Sell executed (${percent}%)`
+);
 }
   } catch (err) {
     LOG.error(
