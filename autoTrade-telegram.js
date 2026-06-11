@@ -2275,14 +2275,7 @@ LOG.info(
   "🧪 ABOUT TO CREATE SELL NOTIFICATION"
 );
 
-LOG.info(
-  {
-    sellRes,
-    soldTokens,
-    solReceived,
-  },
-  "SELL RESULT FOR NOTIFICATION"
-);
+
 
 const soldTokens = Number(
   sellRes?.txid?.tokenAmount ||
@@ -2293,6 +2286,15 @@ const soldTokens = Number(
 const solReceived = Number(
   sellRes?.solReceived || 0
 ).toFixed(6);
+
+LOG.info(
+  {
+    sellRes,
+    soldTokens,
+    solReceived,
+  },
+  "SELL RESULT FOR NOTIFICATION"
+);
 
 await createNotification({
   walletAddress,
