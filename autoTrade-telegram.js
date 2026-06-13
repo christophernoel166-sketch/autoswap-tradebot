@@ -1056,7 +1056,7 @@ setInterval(() => {
      LOG.error({ err }, "Initial subscription poll failed")
    );
 
-     periodic poll
+     // periodic poll
     setInterval(() => {
      pollPendingSubscriptions().catch((err) =>
        LOG.error({ err }, "Periodic subscription poll failed")
