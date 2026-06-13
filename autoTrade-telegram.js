@@ -1069,12 +1069,12 @@ setInterval(() => {
       10
     );
 
-    // initial run
+     initial run
     expireOldPendingRequests().catch((err) =>
       LOG.error({ err }, "Initial expiry sweep failed")
     );
 
-    // periodic sweep
+     periodic sweep
     setInterval(() => {
       expireOldPendingRequests().catch((err) =>
         LOG.error({ err }, "Periodic expiry sweep failed")
