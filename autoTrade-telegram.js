@@ -1046,7 +1046,11 @@ setInterval(() => {
 }, 3000);
 
     // ========= STEP 3B — Start subscription watcher =========
-     const SUBSCRIPTION_POLL_MS = 43200000;
+     const SUBSCRIPTION_POLL_MS = parseInt(
+  process.env.SUBSCRIPTION_POLL_MS ||
+  String(12 * 60 * 60 * 1000), // 12 hours
+  10
+);
 
     // initial kick
    pollPendingSubscriptions().catch((err) =>
