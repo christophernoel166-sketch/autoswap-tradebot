@@ -1051,7 +1051,7 @@ setInterval(() => {
       10
      );
 
-     initial kick
+    // initial kick
    pollPendingSubscriptions().catch((err) =>
      LOG.error({ err }, "Initial subscription poll failed")
    );
@@ -1069,12 +1069,12 @@ setInterval(() => {
       10
     );
 
-     initial run
+    // initial run
     expireOldPendingRequests().catch((err) =>
       LOG.error({ err }, "Initial expiry sweep failed")
     );
 
-     periodic sweep
+    // periodic sweep
     setInterval(() => {
       expireOldPendingRequests().catch((err) =>
         LOG.error({ err }, "Periodic expiry sweep failed")
