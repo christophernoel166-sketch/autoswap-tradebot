@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import pino from "pino";
 import { createApiServer } from "./src/api/server.js";
 import { processTokenOutcomes } from "./src/services/tokenOutcomeTracker.js";
+import { runPatternStatsRebuild } from "./src/services/patternStatsScheduler.js";
 
 dotenv.config();
 
@@ -113,6 +114,30 @@ setInterval(() => {
     log.error("❌ Scheduled outcome tracker run failed:", err);
   });
 }, 5 * 60 * 1000);
+
+// --------------------------------------------------
+// PATTERN LEARNING SCHEDULER
+// --------------------------------------------------
+
+// Run once 5 minutes after startup
+setTimeout(() => {
+  runPatternStatsRebuild().catch((err) => {
+    log.error(
+      "❌ Initial pattern rebuild failed:",
+      err
+    );
+  });
+}, 5 * 60 * 1000);
+
+// Rebuild every hour
+setInterval(() => {
+  runPatternStatsRebuild().catch((err) => {
+    log.error(
+      "❌ Scheduled pattern rebuild failed:",
+      err
+    );
+  });
+}, 60 * 60 * 1000);
 
 
     // --------------------------------------------------

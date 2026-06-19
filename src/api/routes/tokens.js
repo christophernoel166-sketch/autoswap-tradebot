@@ -32,6 +32,7 @@ from "../../scanner/fetchVolumeAnalysisData.js";
 import { fetchLiquidityAnalysisData }
 from "../../scanner/fetchLiquidityAnalysisData.js";
 import TokenOutcome from "../../../models/TokenOutcome.js";
+import { scoreSignal } from "../../services/signalScoringService.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -1085,6 +1086,34 @@ console.log(
 console.log(
   "🚀 FORECAST RESPONSE END"
 );
+
+// =====================================================
+// HISTORICAL PATTERN SCORING
+// =====================================================
+
+const signalScore = await scoreSignal({
+  momentumScore:
+    momentumData?.momentumScore,
+
+  walletQualityScore:
+    profitWalletData?.walletQualityScore,
+
+  rugRiskScore:
+    rugRiskData?.rugRiskScore,
+
+  forecastScore:
+    forecast?.forecastScore,
+});
+
+console.log(
+  "🧠 SIGNAL SCORE",
+  JSON.stringify(
+    signalScore,
+    null,
+    2
+  )
+);
+
 // =====================================================
 // SAVE HISTORICAL OUTCOME
 // =====================================================
@@ -1219,6 +1248,7 @@ return res.status(200).json({
 volumeAnalysis,
 liquidityAnalysis,
 forecast,
+signalScore,
   ...response,
   evaluation: {
     ...response.evaluation,
