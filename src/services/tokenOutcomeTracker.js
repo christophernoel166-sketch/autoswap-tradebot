@@ -1,12 +1,18 @@
 import TokenOutcome from "../../models/TokenOutcome.js";
 import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 
+// =====================================================
+// DEVELOPMENT MODE
+// Final outcome is evaluated after 3 hours instead of
+// 24 hours for faster AI learning.
+// Later you can switch THREE_HOURS back to 24 hours.
+// =====================================================
+
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
 const ONE_HOUR = 60 * 60 * 1000;
-const SIX_HOURS = 6 * 60 * 60 * 1000;
-const TWENTY_FOUR_HOURS = 24 * 60 * 60 * 1000;
+const THREE_HOURS = 3 * 60 * 60 * 1000;
 
-const BATCH_SIZE = 10;
+const BATCH_SIZE = 50;
 const REQUEST_DELAY_MS = 500;
 
 function sleep(ms) {
@@ -25,15 +31,15 @@ function calculateReturn(entryPrice, currentPrice) {
   return ((currentPrice - entryPrice) / entryPrice) * 100;
 }
 
-function determineLabel(return24h) {
-  if (!Number.isFinite(return24h)) {
+function determineLabel(returnValue) {
+  if (!Number.isFinite(returnValue)) {
     return "PENDING";
   }
 
-  if (return24h >= 100) return "MOONSHOT";
-  if (return24h >= 30) return "WINNER";
-  if (return24h > -20) return "NEUTRAL";
-  if (return24h > -50) return "LOSER";
+  if (returnValue >= 100) return "MOONSHOT";
+  if (returnValue >= 30) return "WINNER";
+  if (returnValue > -20) return "NEUTRAL";
+  if (returnValue > -50) return "LOSER";
 
   return "RUG_OR_FAILURE";
 }
@@ -41,8 +47,6 @@ function determineLabel(return24h) {
 export async function processTokenOutcomes() {
   const now = Date.now();
 
-  // Only process records that are old enough for at least the
-  // first checkpoint, oldest first, in small batches.
   const pending = await TokenOutcome.find({
     trackingComplete: false,
     scannedAt: {
@@ -68,6 +72,12 @@ export async function processTokenOutcomes() {
         !Number.isFinite(outcome.entryPriceUsd) ||
         outcome.entryPriceUsd <= 0
       ) {
+        console.log("❌ TRACKER SKIPPED", {
+          mint: outcome.mintAddress,
+          entryPrice: outcome.entryPriceUsd,
+          currentPrice,
+        });
+
         continue;
       }
 
@@ -75,6 +85,12 @@ export async function processTokenOutcomes() {
         now - new Date(outcome.scannedAt).getTime();
 
       let updated = false;
+
+      console.log("📈 Tracking", {
+        mint: outcome.mintAddress,
+        ageMinutes: Math.floor(ageMs / 60000),
+        currentPrice,
+      });
 
       // ============================================
       // 15 MINUTES
@@ -84,11 +100,17 @@ export async function processTokenOutcomes() {
         ageMs >= FIFTEEN_MINUTES
       ) {
         outcome.price15m = currentPrice;
+
         outcome.return15m = calculateReturn(
           outcome.entryPriceUsd,
           currentPrice
         );
+
         updated = true;
+
+        console.log(
+          `✅ Saved 15m checkpoint for ${outcome.mintAddress}`
+        );
       }
 
       // ============================================
@@ -99,36 +121,28 @@ export async function processTokenOutcomes() {
         ageMs >= ONE_HOUR
       ) {
         outcome.price1h = currentPrice;
+
         outcome.return1h = calculateReturn(
           outcome.entryPriceUsd,
           currentPrice
         );
-        updated = true;
-      }
 
-      // ============================================
-      // 6 HOURS
-      // ============================================
-      if (
-        outcome.price6h == null &&
-        ageMs >= SIX_HOURS
-      ) {
-        outcome.price6h = currentPrice;
-        outcome.return6h = calculateReturn(
-          outcome.entryPriceUsd,
-          currentPrice
+        updated = true;
+
+        console.log(
+          `✅ Saved 1h checkpoint for ${outcome.mintAddress}`
         );
-        updated = true;
       }
 
       // ============================================
-      // 24 HOURS
+      // FINAL CHECKPOINT (3 HOURS)
       // ============================================
       if (
         outcome.price24h == null &&
-        ageMs >= TWENTY_FOUR_HOURS
+        ageMs >= THREE_HOURS
       ) {
         outcome.price24h = currentPrice;
+
         outcome.return24h = calculateReturn(
           outcome.entryPriceUsd,
           currentPrice
@@ -139,18 +153,31 @@ export async function processTokenOutcomes() {
         );
 
         outcome.trackingComplete = true;
+
         updated = true;
+
+        console.log(
+          `🎯 Finalized tracking for ${outcome.mintAddress}`
+        );
+
+        console.log({
+          return24h: outcome.return24h,
+          label: outcome.label,
+        });
       }
 
       if (updated) {
         await outcome.save();
+
+        console.log(
+          `💾 Outcome updated for ${outcome.mintAddress}`
+        );
       }
 
-      // Small pause to reduce API pressure
       await sleep(REQUEST_DELAY_MS);
     } catch (err) {
       console.error(
-        `Outcome tracking failed for ${outcome.mintAddress}:`,
+        `❌ Outcome tracking failed for ${outcome.mintAddress}:`,
         err?.message || err
       );
     }
