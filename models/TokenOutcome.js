@@ -1,4 +1,3 @@
-```javascript
 import mongoose from "mongoose";
 
 const TokenOutcomeSchema = new mongoose.Schema(
@@ -10,6 +9,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
       type: String,
       required: true,
       index: true,
+      trim: true,
     },
 
     pairAddress: {
@@ -85,7 +85,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     sniperWalletCount: Number,
 
     // =====================================================
-    // PROFITABLE WALLET METRICS
+    // PROFIT WALLET METRICS
     // =====================================================
     profitableWalletCount: Number,
     walletQualityScore: Number,
@@ -132,7 +132,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     rugRiskScore: Number,
 
     // =====================================================
-    // FORECAST GENERATED AT SCAN TIME
+    // FORECAST
     // =====================================================
     forecastScore: Number,
 
@@ -142,7 +142,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // PRICE SNAPSHOTS
+    // FUTURE PRICE SNAPSHOTS
     // =====================================================
     price15m: {
       type: Number,
@@ -170,7 +170,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // PERFORMANCE (% RETURN FROM ENTRY)
+    // RETURNS
     // =====================================================
     return15m: {
       type: Number,
@@ -198,7 +198,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // FINAL OUTCOME LABEL
+    // LABEL
     // =====================================================
     label: {
       type: String,
@@ -215,7 +215,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // OPTIONAL METADATA
+    // OPTIONAL
     // =====================================================
     scannerVersion: {
       type: String,
@@ -229,40 +229,19 @@ const TokenOutcomeSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
+    collection: "tokenoutcomes",
   }
 );
 
-// =====================================================
-// INDEXES
-// =====================================================
+TokenOutcomeSchema.index({ mintAddress: 1, scannedAt: -1 });
+TokenOutcomeSchema.index({ label: 1 });
+TokenOutcomeSchema.index({ forecastScore: -1 });
+TokenOutcomeSchema.index({ rugRiskScore: 1 });
+TokenOutcomeSchema.index({ source: 1 });
+TokenOutcomeSchema.index({ walletAddress: 1 });
 
-TokenOutcomeSchema.index({
-  mintAddress: 1,
-  scannedAt: -1,
-});
+const TokenOutcome =
+  mongoose.models.TokenOutcome ||
+  mongoose.model("TokenOutcome", TokenOutcomeSchema);
 
-TokenOutcomeSchema.index({
-  label: 1,
-});
-
-TokenOutcomeSchema.index({
-  forecastScore: -1,
-});
-
-TokenOutcomeSchema.index({
-  rugRiskScore: 1,
-});
-
-TokenOutcomeSchema.index({
-  source: 1,
-});
-
-TokenOutcomeSchema.index({
-  walletAddress: 1,
-});
-
-export default mongoose.model(
-  "TokenOutcome",
-  TokenOutcomeSchema
-);
-```
+export default TokenOutcome;
