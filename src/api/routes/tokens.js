@@ -31,6 +31,7 @@ import { fetchVolumeAnalysisData }
 from "../../scanner/fetchVolumeAnalysisData.js";
 import { fetchLiquidityAnalysisData }
 from "../../scanner/fetchLiquidityAnalysisData.js";
+import TokenOutcome from "../../../models/TokenOutcome.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -279,10 +280,7 @@ router.get("/discover-new", async (req, res) => {
   try {
     const type = String(req.query.type || "newest").toLowerCase();
 
-    
-
-  
-
+   
 const cachedTokens = await DiscoveredToken.find({
   lastSeenAt: {
     $gte: new Date(Date.now() - 72 * 60 * 60 * 1000),
@@ -1087,6 +1085,121 @@ console.log(
 console.log(
   "🚀 FORECAST RESPONSE END"
 );
+// =====================================================
+// SAVE HISTORICAL OUTCOME
+// =====================================================
+
+try {
+  await TokenOutcome.create({
+    // Identification
+    mintAddress: tokenMint.trim(),
+    pairAddress: market.token?.pairAddress || null,
+    symbol: market.token?.symbol || null,
+    name: market.token?.name || null,
+
+    // Source
+    source: "manual_scan",
+    walletAddress: walletAddress || null,
+
+    // Timing
+    scannedAt: new Date(),
+
+    // Entry price
+    entryPriceUsd:
+      market.metrics?.priceUsd ??
+      market.rawPair?.priceUsd ??
+      null,
+
+    // Market
+    ageMinutes: market.metrics?.ageMinutes,
+    liquidityUsd: market.metrics?.liquidityUsd,
+    marketCapUsd: market.metrics?.marketCapUsd,
+    volume5mUsd: market.metrics?.volume5mUsd,
+    buys5m: market.metrics?.buys5m,
+    sells5m: market.metrics?.sells5m,
+
+    // Holder metrics
+    largestHolderPercent:
+      holderData?.largestHolderPercent,
+    top10HoldingPercent:
+      holderData?.top10HoldingPercent,
+
+    // Wallet intelligence
+    smartDegenCount:
+      walletIntel?.smartDegenCount,
+    botDegenCount:
+      walletIntel?.botDegenCount,
+    ratTraderCount:
+      walletIntel?.ratTraderCount,
+    alphaCallerCount:
+      walletIntel?.alphaCallerCount,
+    sniperWalletCount:
+      walletIntel?.sniperWalletCount,
+
+    // Profit wallet metrics
+    profitableWalletCount:
+      profitWalletData?.profitableWalletCount,
+    walletQualityScore:
+      profitWalletData?.walletQualityScore,
+    profitWalletConfidence:
+      profitWalletData?.profitWalletConfidence,
+
+    // Momentum
+    momentumScore:
+      momentumData?.momentumScore,
+    velocityBreakoutScore:
+      momentumData?.velocityBreakoutScore,
+
+    // Market integrity
+    walletParticipationScore:
+      integrityData?.walletParticipationScore,
+    velocitySanityScore:
+      integrityData?.velocitySanityScore,
+    washTradingRiskScore:
+      integrityData?.washTradingRiskScore,
+    bundleSuspicionScore:
+      integrityData?.bundleSuspicionScore,
+    artificialVolumeFlag:
+      integrityData?.artificialVolumeFlag,
+    fakeMomentumFlag:
+      integrityData?.fakeMomentumFlag,
+
+    // Risk structure
+    bundleScore:
+      riskStructureData?.bundleScore,
+    bundledWalletCount:
+      riskStructureData?.bundledWalletCount,
+    fundingClusterScore:
+      riskStructureData?.fundingClusterScore,
+    largestFundingCluster:
+      riskStructureData?.largestFundingCluster,
+
+    // Rug risk
+    devDumpRiskScore:
+      rugRiskData?.devDumpRiskScore,
+    liquidityPullRiskScore:
+      rugRiskData?.liquidityPullRiskScore,
+    insiderRiskScore:
+      rugRiskData?.insiderRiskScore,
+    rugRiskScore:
+      rugRiskData?.rugRiskScore,
+
+    // Forecast
+    forecastScore:
+      forecast?.forecastScore ?? null,
+    forecastVerdict:
+      forecast?.verdict ?? null,
+
+    // Initial state
+    label: "PENDING",
+  });
+} catch (err) {
+  console.error(
+    "Failed to save TokenOutcome:",
+    err
+  );
+}
+
 
 return res.status(200).json({
   ok: true,
