@@ -8,7 +8,6 @@ const TokenOutcomeSchema = new mongoose.Schema(
     mintAddress: {
       type: String,
       required: true,
-      index: true,
       trim: true,
     },
 
@@ -242,7 +241,8 @@ TokenOutcomeSchema.index({
 });
 
 TokenOutcomeSchema.index({
-  label: 1,
+  trackingComplete: 1,
+  scannedAt: 1,
 });
 
 TokenOutcomeSchema.index({
@@ -253,17 +253,7 @@ TokenOutcomeSchema.index({
   rugRiskScore: 1,
 });
 
-TokenOutcomeSchema.index({
-  source: 1,
-});
 
-TokenOutcomeSchema.index({
-  walletAddress: 1,
-});
-
-TokenOutcomeSchema.index({
-  trackingComplete: 1,
-});
 
 const TokenOutcome =
   mongoose.models.TokenOutcome ||
