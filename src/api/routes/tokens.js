@@ -33,6 +33,7 @@ import { fetchLiquidityAnalysisData }
 from "../../scanner/fetchLiquidityAnalysisData.js";
 import TokenOutcome from "../../../models/TokenOutcome.js";
 import { scoreSignal } from "../../services/signalScoringService.js";
+import { buildAIRecommendation } from "../../services/aiRecommendationService.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -1105,6 +1106,17 @@ const signalScore = await scoreSignal({
     forecast?.forecastScore,
 });
 
+const aiRecommendation =
+  buildAIRecommendation({
+    forecast,
+    signalScore,
+    momentumData,
+    profitWalletData,
+    rugRiskData,
+    volumeAnalysis,
+    liquidityAnalysis,
+  });
+
 console.log(
   "🧠 SIGNAL SCORE",
   JSON.stringify(
@@ -1113,6 +1125,9 @@ console.log(
     2
   )
 );
+
+
+
 
 // =====================================================
 // SAVE HISTORICAL OUTCOME
@@ -1227,6 +1242,7 @@ try {
   );
 }
 
+const scanTimestamp = new Date().toISOString();
 
 return res.status(200).json({
   ok: true,
@@ -1235,9 +1251,11 @@ return res.status(200).json({
   pairAddress: market.token.pairAddress,
   dexId: market.token.dexId,
   chainId: market.token.chainId,
+
   topHolders: holderData.topHolders || [],
   excludedAccounts: holderData.excludedAccounts || [],
   holderWarning: holderData.holderWarning || null,
+
   social: enrichedSocialData,
   activity: activityData,
   integrity: integrityData,
@@ -1245,16 +1263,28 @@ return res.status(200).json({
   momentum: momentumData,
   riskStructure: riskStructureData,
   profitWallets: profitWalletData,
-volumeAnalysis,
-liquidityAnalysis,
-forecast,
-signalScore,
+
+  volumeAnalysis,
+  liquidityAnalysis,
+
+  ai: {
+    version: "v2",
+    generatedAt: scanTimestamp,
+
+    forecast,
+    signalScore,
+    recommendation: aiRecommendation,
+  },
+
   ...response,
+
   evaluation: {
     ...response.evaluation,
     warnings: mergedWarnings,
   },
 });
+
+
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
 
