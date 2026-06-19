@@ -5,7 +5,6 @@ import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 // DEVELOPMENT MODE
 // Final outcome is evaluated after 3 hours instead of
 // 24 hours for faster AI learning.
-// Later you can switch THREE_HOURS back to 24 hours.
 // =====================================================
 
 const FIFTEEN_MINUTES = 15 * 60 * 1000;
@@ -31,17 +30,35 @@ function calculateReturn(entryPrice, currentPrice) {
   return ((currentPrice - entryPrice) / entryPrice) * 100;
 }
 
-function determineLabel(returnValue) {
-  if (!Number.isFinite(returnValue)) {
+// =====================================================
+// Label based on BEST observed return, not final return
+// =====================================================
+
+function determineLabelFromPeak(peakReturn, finalReturn) {
+  if (!Number.isFinite(peakReturn)) {
     return "PENDING";
   }
 
-  if (returnValue >= 100) return "MOONSHOT";
-  if (returnValue >= 30) return "WINNER";
-  if (returnValue > -20) return "NEUTRAL";
-  if (returnValue > -50) return "LOSER";
+  if (peakReturn >= 200) {
+    return "MOONSHOT";
+  }
 
-  return "RUG_OR_FAILURE";
+  if (peakReturn >= 50) {
+    return "WINNER";
+  }
+
+  if (
+    Number.isFinite(finalReturn) &&
+    finalReturn <= -80
+  ) {
+    return "RUG_OR_FAILURE";
+  }
+
+  if (peakReturn >= 10) {
+    return "NEUTRAL";
+  }
+
+  return "LOSER";
 }
 
 export async function processTokenOutcomes() {
@@ -95,6 +112,7 @@ export async function processTokenOutcomes() {
       // ============================================
       // 15 MINUTES
       // ============================================
+
       if (
         outcome.price15m == null &&
         ageMs >= FIFTEEN_MINUTES
@@ -116,6 +134,7 @@ export async function processTokenOutcomes() {
       // ============================================
       // 1 HOUR
       // ============================================
+
       if (
         outcome.price1h == null &&
         ageMs >= ONE_HOUR
@@ -137,6 +156,7 @@ export async function processTokenOutcomes() {
       // ============================================
       // FINAL CHECKPOINT (3 HOURS)
       // ============================================
+
       if (
         outcome.price24h == null &&
         ageMs >= THREE_HOURS
@@ -148,7 +168,32 @@ export async function processTokenOutcomes() {
           currentPrice
         );
 
-        outcome.label = determineLabel(
+        const observedReturns = [
+          outcome.return15m,
+          outcome.return1h,
+          outcome.return6h,
+          outcome.return24h,
+        ].filter(Number.isFinite);
+
+        const peakReturn =
+          observedReturns.length > 0
+            ? Math.max(...observedReturns)
+            : null;
+
+        outcome.peakReturn = peakReturn;
+
+        if (peakReturn === outcome.return15m) {
+          outcome.peakCheckpoint = "15m";
+        } else if (peakReturn === outcome.return1h) {
+          outcome.peakCheckpoint = "1h";
+        } else if (peakReturn === outcome.return6h) {
+          outcome.peakCheckpoint = "6h";
+        } else {
+          outcome.peakCheckpoint = "3h";
+        }
+
+        outcome.label = determineLabelFromPeak(
+          peakReturn,
           outcome.return24h
         );
 
@@ -161,7 +206,11 @@ export async function processTokenOutcomes() {
         );
 
         console.log({
-          return24h: outcome.return24h,
+          peakReturn,
+          peakCheckpoint:
+            outcome.peakCheckpoint,
+          finalReturn:
+            outcome.return24h,
           label: outcome.label,
         });
       }

@@ -5,6 +5,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // TOKEN IDENTIFICATION
     // =====================================================
+
     mintAddress: {
       type: String,
       required: true,
@@ -29,6 +30,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // SOURCE INFORMATION
     // =====================================================
+
     source: {
       type: String,
       default: "manual_scan",
@@ -44,6 +46,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // SCAN TIMING
     // =====================================================
+
     scannedAt: {
       type: Date,
       default: Date.now,
@@ -53,6 +56,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // ENTRY PRICE
     // =====================================================
+
     entryPriceUsd: {
       type: Number,
       default: null,
@@ -61,6 +65,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // MARKET METRICS
     // =====================================================
+
     ageMinutes: Number,
     liquidityUsd: Number,
     marketCapUsd: Number,
@@ -71,12 +76,14 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // HOLDER METRICS
     // =====================================================
+
     largestHolderPercent: Number,
     top10HoldingPercent: Number,
 
     // =====================================================
     // WALLET INTELLIGENCE
     // =====================================================
+
     smartDegenCount: Number,
     botDegenCount: Number,
     ratTraderCount: Number,
@@ -86,6 +93,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // PROFIT WALLET METRICS
     // =====================================================
+
     profitableWalletCount: Number,
     walletQualityScore: Number,
     profitWalletConfidence: Number,
@@ -93,12 +101,14 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // MOMENTUM
     // =====================================================
+
     momentumScore: Number,
     velocityBreakoutScore: Number,
 
     // =====================================================
     // MARKET INTEGRITY
     // =====================================================
+
     walletParticipationScore: Number,
     velocitySanityScore: Number,
     washTradingRiskScore: Number,
@@ -117,6 +127,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // RISK STRUCTURE
     // =====================================================
+
     bundleScore: Number,
     bundledWalletCount: Number,
     fundingClusterScore: Number,
@@ -125,6 +136,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // RUG RISK
     // =====================================================
+
     devDumpRiskScore: Number,
     liquidityPullRiskScore: Number,
     insiderRiskScore: Number,
@@ -133,6 +145,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // FORECAST
     // =====================================================
+
     forecastScore: Number,
 
     forecastVerdict: {
@@ -143,6 +156,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // PRICE SNAPSHOTS
     // =====================================================
+
     price15m: {
       type: Number,
       default: null,
@@ -158,6 +172,9 @@ const TokenOutcomeSchema = new mongoose.Schema(
       default: null,
     },
 
+    // In development this currently stores the
+    // 3-hour checkpoint. Later it can be switched
+    // back to true 24-hour tracking.
     price24h: {
       type: Number,
       default: null,
@@ -166,6 +183,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // RETURNS (%)
     // =====================================================
+
     return15m: {
       type: Number,
       default: null,
@@ -187,8 +205,24 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
+    // AI LEARNING METRICS
+    // =====================================================
+
+    peakReturn: {
+      type: Number,
+      default: null,
+    },
+
+    peakCheckpoint: {
+      type: String,
+      enum: ["15m", "1h", "6h", "3h", "24h", null],
+      default: null,
+    },
+
+    // =====================================================
     // FINAL LABEL
     // =====================================================
+
     label: {
       type: String,
       enum: [
@@ -206,6 +240,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // TRACKING STATUS
     // =====================================================
+
     trackingComplete: {
       type: Boolean,
       default: false,
@@ -215,6 +250,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     // =====================================================
     // OPTIONAL METADATA
     // =====================================================
+
     scannerVersion: {
       type: String,
       default: "v1",
@@ -253,7 +289,9 @@ TokenOutcomeSchema.index({
   rugRiskScore: 1,
 });
 
-
+TokenOutcomeSchema.index({
+  peakReturn: -1,
+});
 
 const TokenOutcome =
   mongoose.models.TokenOutcome ||

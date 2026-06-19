@@ -5,7 +5,9 @@ import {
   rugRiskBucket,
 } from "../utils/patternBuckets.js";
 
-const MIN_PATTERN_SAMPLES = 20;
+// During development we keep this low so the AI
+// starts learning quickly.
+const MIN_PATTERN_SAMPLES = 5;
 
 function pct(a, b) {
   if (!b) return 0;
@@ -39,7 +41,7 @@ function median(values) {
 function buildConfidence({
   winRate,
   samples,
-  averageReturn24h,
+  averagePeakReturn,
 }) {
   const sampleWeight = Math.min(samples, 100) / 100;
 
@@ -47,7 +49,7 @@ function buildConfidence({
     winRate * 0.6 +
     sampleWeight * 100 * 0.3 +
     Math.min(
-      Math.max(averageReturn24h, 0),
+      Math.max(averagePeakReturn, 0),
       100
     ) *
       0.1;
@@ -84,24 +86,33 @@ async function updatePattern(
     (d) => d.label === "NEUTRAL"
   );
 
-  const returns = docs
-    .map((d) => Number(d.return24h))
+  // ==================================================
+  // LEARN FROM PEAK RETURN FIRST
+  // Fallback to return24h for legacy documents.
+  // ==================================================
+
+  const peakReturns = docs
+    .map((d) =>
+      Number.isFinite(d.peakReturn)
+        ? Number(d.peakReturn)
+        : Number(d.return24h)
+    )
     .filter(Number.isFinite);
 
-  const averageReturn24h = Number(
-    avg(returns).toFixed(2)
+  const averagePeakReturn = Number(
+    avg(peakReturns).toFixed(2)
   );
 
-  const medianReturn24h = Number(
-    median(returns).toFixed(2)
+  const medianPeakReturn = Number(
+    median(peakReturns).toFixed(2)
   );
 
-  const bestReturn24h = returns.length
-    ? Math.max(...returns)
+  const bestPeakReturn = peakReturns.length
+    ? Math.max(...peakReturns)
     : 0;
 
-  const worstReturn24h = returns.length
-    ? Math.min(...returns)
+  const worstPeakReturn = peakReturns.length
+    ? Math.min(...peakReturns)
     : 0;
 
   const winRate = pct(
@@ -118,7 +129,7 @@ async function updatePattern(
     buildConfidence({
       winRate,
       samples: docs.length,
-      averageReturn24h,
+      averagePeakReturn,
     });
 
   await PatternStats.findOneAndUpdate(
@@ -140,17 +151,19 @@ async function updatePattern(
 
       moonshotRate,
 
-      averageReturn24h,
-
-      medianReturn24h,
-
-      bestReturn24h,
-
-      worstReturn24h,
+      // Stored using existing field names so the
+      // rest of the system remains compatible.
+      averageReturn24h: averagePeakReturn,
+      medianReturn24h: medianPeakReturn,
+      bestReturn24h: bestPeakReturn,
+      worstReturn24h: worstPeakReturn,
 
       confidenceScore,
 
-      metadata,
+      metadata: {
+        ...metadata,
+        learningMode: "peak_return",
+      },
 
       lastComputedAt: new Date(),
     },
@@ -220,6 +233,10 @@ export async function rebuildPatternStats() {
   }
 
   console.log(
-    `✅ Rebuilt ${grouped.size + 1} pattern statistics`
+    `🧠 AI rebuilt ${
+      grouped.size + 1
+    } historical pattern groups from ${
+      completed.length
+    } completed outcomes`
   );
 }
