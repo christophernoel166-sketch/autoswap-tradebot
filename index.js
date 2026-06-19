@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import pino from "pino";
 import { createApiServer } from "./src/api/server.js";
+import { processTokenOutcomes } from "./src/services/tokenOutcomeTracker.js";
 
 dotenv.config();
 
@@ -73,6 +74,46 @@ async function main() {
     // Start HTTP server (Railway expects this)
     listen();
     log.info(`🌐 API Server listening on port ${PORT}`);
+
+// --------------------------------------------------
+// TOKEN OUTCOME TRACKER
+// --------------------------------------------------
+
+let outcomeTrackerRunning = false;
+
+async function runOutcomeTracker() {
+  if (outcomeTrackerRunning) {
+    log.warn("⏳ Token outcome tracker already running, skipping...");
+    return;
+  }
+
+  outcomeTrackerRunning = true;
+
+  try {
+    log.info("📊 Running token outcome tracker...");
+    await processTokenOutcomes();
+    log.info("✅ Token outcome tracker finished");
+  } catch (err) {
+    log.error("❌ Token outcome tracker failed:", err);
+  } finally {
+    outcomeTrackerRunning = false;
+  }
+}
+
+// Run once shortly after startup
+setTimeout(() => {
+  runOutcomeTracker().catch((err) => {
+    log.error("❌ Initial outcome tracker run failed:", err);
+  });
+}, 30 * 1000);
+
+// Then run every 5 minutes
+setInterval(() => {
+  runOutcomeTracker().catch((err) => {
+    log.error("❌ Scheduled outcome tracker run failed:", err);
+  });
+}, 5 * 60 * 1000);
+
 
     // --------------------------------------------------
     // 🚨 CRITICAL: keep Node process alive on Railway

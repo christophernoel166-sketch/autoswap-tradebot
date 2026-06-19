@@ -1106,9 +1106,7 @@ try {
 
     // Entry price
     entryPriceUsd:
-      market.metrics?.priceUsd ??
-      market.rawPair?.priceUsd ??
-      null,
+  market.metrics?.priceUsd ?? null,
 
     // Market
     ageMinutes: market.metrics?.ageMinutes,

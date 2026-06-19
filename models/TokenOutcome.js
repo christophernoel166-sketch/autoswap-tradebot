@@ -142,7 +142,7 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // FUTURE PRICE SNAPSHOTS
+    // PRICE SNAPSHOTS
     // =====================================================
     price15m: {
       type: Number,
@@ -164,13 +164,8 @@ const TokenOutcomeSchema = new mongoose.Schema(
       default: null,
     },
 
-    price7d: {
-      type: Number,
-      default: null,
-    },
-
     // =====================================================
-    // RETURNS
+    // RETURNS (%)
     // =====================================================
     return15m: {
       type: Number,
@@ -192,13 +187,8 @@ const TokenOutcomeSchema = new mongoose.Schema(
       default: null,
     },
 
-    return7d: {
-      type: Number,
-      default: null,
-    },
-
     // =====================================================
-    // LABEL
+    // FINAL LABEL
     // =====================================================
     label: {
       type: String,
@@ -215,7 +205,16 @@ const TokenOutcomeSchema = new mongoose.Schema(
     },
 
     // =====================================================
-    // OPTIONAL
+    // TRACKING STATUS
+    // =====================================================
+    trackingComplete: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    // =====================================================
+    // OPTIONAL METADATA
     // =====================================================
     scannerVersion: {
       type: String,
@@ -233,12 +232,38 @@ const TokenOutcomeSchema = new mongoose.Schema(
   }
 );
 
-TokenOutcomeSchema.index({ mintAddress: 1, scannedAt: -1 });
-TokenOutcomeSchema.index({ label: 1 });
-TokenOutcomeSchema.index({ forecastScore: -1 });
-TokenOutcomeSchema.index({ rugRiskScore: 1 });
-TokenOutcomeSchema.index({ source: 1 });
-TokenOutcomeSchema.index({ walletAddress: 1 });
+// =====================================================
+// INDEXES
+// =====================================================
+
+TokenOutcomeSchema.index({
+  mintAddress: 1,
+  scannedAt: -1,
+});
+
+TokenOutcomeSchema.index({
+  label: 1,
+});
+
+TokenOutcomeSchema.index({
+  forecastScore: -1,
+});
+
+TokenOutcomeSchema.index({
+  rugRiskScore: 1,
+});
+
+TokenOutcomeSchema.index({
+  source: 1,
+});
+
+TokenOutcomeSchema.index({
+  walletAddress: 1,
+});
+
+TokenOutcomeSchema.index({
+  trackingComplete: 1,
+});
 
 const TokenOutcome =
   mongoose.models.TokenOutcome ||

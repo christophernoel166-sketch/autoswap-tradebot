@@ -66,6 +66,10 @@ export async function fetchTokenMarketData(tokenMint) {
 
     metrics: {
   ageMinutes,
+priceUsd: safeNumber(
+  bestPair?.priceUsd,
+  0
+),
 
   liquidityUsd:
     safeNumber(
