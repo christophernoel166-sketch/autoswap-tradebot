@@ -21,6 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
+import AIIntelligencePanel from "./AIIntelligencePanel";
 
 
 
@@ -63,7 +64,7 @@ const [chartError, setChartError] = useState("");
 const [showChartConfirm, setShowChartConfirm] = useState(false);
 const [newTokens, setNewTokens] = useState([]);
 const [loadingNewTokens, setLoadingNewTokens] = useState(false);
-
+const [showAiPanel, setShowAiPanel] = useState(false);
 const positionsValueUsd =
   positions.reduce(
     (sum, p) =>
@@ -474,6 +475,18 @@ useEffect(() => {
 
   return () => clearTimeout(timer);
 }, [showLinkPopup]);
+
+useEffect(() => {
+  if (!scanResult?.ai) return;
+
+  setShowAiPanel(true);
+
+  const timer = setTimeout(() => {
+    setShowAiPanel(false);
+  }, 40000);
+
+  return () => clearTimeout(timer);
+}, [scanResult?.ai]);
 
 
 // ===================================================
@@ -1570,40 +1583,46 @@ console.log(
   withdrawDisabled={onChainBalance < 0.001}
 />
 
-<div className="bg-gray-800 rounded-xl p-4">
-  <h3 className="text-lg font-semibold text-white mb-3">
-    Notifications ({notifications.length})
-  </h3>
+{showAiPanel && scanResult?.ai ? (
+  // 🧠 AI Intelligence Panel
+  <AIIntelligencePanel ai={scanResult.ai} />
+) : (
+  // 🔔 Existing Notifications Panel
+  <div className="bg-gray-800 rounded-xl p-4">
+    <h3 className="text-lg font-semibold text-white mb-3">
+      Notifications ({notifications.length})
+    </h3>
 
-  <div className="space-y-2 max-h-64 overflow-y-auto">
-    {notifications.length === 0 ? (
-      <div className="text-sm text-gray-400">
-        No notifications
-      </div>
-    ) : (
-      notifications.map((n) => (
-        <div
-          key={n._id}
-          className={`p-2 rounded text-sm ${
-            n.type === "error"
-              ? "bg-red-500/10 border border-red-500/20"
-              : n.type === "success"
-              ? "bg-green-500/10 border border-green-500/20"
-              : "bg-blue-500/10 border border-blue-500/20"
-          }`}
-        >
-          <div className="font-semibold text-white">
-            {n.title}
-          </div>
-
-          <div className="text-gray-300">
-            {n.message}
-          </div>
+    <div className="space-y-2 max-h-64 overflow-y-auto">
+      {notifications.length === 0 ? (
+        <div className="text-sm text-gray-400">
+          No notifications
         </div>
-      ))
-    )}
+      ) : (
+        notifications.map((n) => (
+          <div
+            key={n._id}
+            className={`p-2 rounded text-sm ${
+              n.type === "error"
+                ? "bg-red-500/10 border border-red-500/20"
+                : n.type === "success"
+                ? "bg-green-500/10 border border-green-500/20"
+                : "bg-blue-500/10 border border-blue-500/20"
+            }`}
+          >
+            <div className="font-semibold text-white">
+              {n.title}
+            </div>
+
+            <div className="text-gray-300">
+              {n.message}
+            </div>
+          </div>
+        ))
+      )}
+    </div>
   </div>
-</div>
+)}
 
 <div className="bg-gray-800 rounded-xl p-4">
   <button
