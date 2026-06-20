@@ -29,6 +29,10 @@ export function buildAIRecommendation({
   const forecastScore =
     Number(forecast?.forecastScore) || 0;
 
+  // =====================================================
+  // MOMENTUM
+  // =====================================================
+
   pushReason(
     reasons,
     momentumScore >= 80,
@@ -41,6 +45,17 @@ export function buildAIRecommendation({
       momentumScore < 80,
     "Momentum is above average."
   );
+
+  pushReason(
+    reasons,
+    momentumScore > 0 &&
+      momentumScore < 60,
+    "Momentum is relatively weak."
+  );
+
+  // =====================================================
+  // WALLET QUALITY
+  // =====================================================
 
   pushReason(
     reasons,
@@ -57,6 +72,17 @@ export function buildAIRecommendation({
 
   pushReason(
     reasons,
+    walletQuality > 0 &&
+      walletQuality < 50,
+    "Wallet quality is below average."
+  );
+
+  // =====================================================
+  // RUG RISK
+  // =====================================================
+
+  pushReason(
+    reasons,
     Number.isFinite(rugRisk) &&
       rugRisk <= 20,
     "Rug risk appears very low."
@@ -65,9 +91,21 @@ export function buildAIRecommendation({
   pushReason(
     reasons,
     Number.isFinite(rugRisk) &&
+      rugRisk > 20 &&
+      rugRisk < 70,
+    "Rug risk is moderate."
+  );
+
+  pushReason(
+    reasons,
+    Number.isFinite(rugRisk) &&
       rugRisk >= 70,
     "Elevated rug risk detected."
   );
+
+  // =====================================================
+  // VOLUME
+  // =====================================================
 
   pushReason(
     reasons,
@@ -78,10 +116,32 @@ export function buildAIRecommendation({
 
   pushReason(
     reasons,
+    volumeAnalysis?.volumeVerdict ===
+      "BULLISH",
+    "Trading volume is healthy."
+  );
+
+  // =====================================================
+  // LIQUIDITY
+  // =====================================================
+
+  pushReason(
+    reasons,
     liquidityAnalysis?.liquidityVerdict ===
       "VERY_STRONG",
     "Liquidity is very healthy."
   );
+
+  pushReason(
+    reasons,
+    liquidityAnalysis?.liquidityVerdict ===
+      "STRONG",
+    "Liquidity conditions are healthy."
+  );
+
+  // =====================================================
+  // HISTORICAL PATTERN LEARNING
+  // =====================================================
 
   if (signalScore?.matched) {
     reasons.push(
@@ -93,7 +153,7 @@ export function buildAIRecommendation({
     );
 
     reasons.push(
-      `Historical samples: ${signalScore.historicalSamples}.`
+      `Based on ${signalScore.historicalSamples} historical samples.`
     );
   } else {
     reasons.push(
@@ -101,29 +161,46 @@ export function buildAIRecommendation({
     );
   }
 
-  let action = "WATCH";
+  // =====================================================
+  // DETERMINE RECOMMENDATION
+  // =====================================================
+
+  let recommendation = "WATCH";
 
   if (forecastScore >= 90) {
-    action = "STRONG_BUY";
+    recommendation = "STRONG_BUY";
   } else if (forecastScore >= 75) {
-    action = "BUY";
+    recommendation = "BUY";
   } else if (forecastScore >= 55) {
-    action = "WATCH";
+    recommendation = "WATCH";
   } else {
-    action = "AVOID";
+    recommendation = "AVOID";
   }
 
+  // Historical pattern learning can override
   if (signalScore?.recommendation) {
-    action = signalScore.recommendation;
+    recommendation =
+      signalScore.recommendation;
   }
+
+  // =====================================================
+  // RETURN OBJECT
+  // =====================================================
 
   return {
-    action,
+    // Used directly by the frontend
+    recommendation,
 
+    // Overall confidence score
     confidence:
       signalScore?.confidenceScore ??
       forecastScore,
 
+    // Human-readable explanation
+    explanation: reasons,
+
+    // Extra metadata (kept for compatibility)
     reasoning: reasons,
+    action: recommendation,
   };
 }
