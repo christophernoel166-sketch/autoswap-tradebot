@@ -148,8 +148,11 @@ const [buyToast, setBuyToast] =
 const [lastNotificationId, setLastNotificationId] =
   useState(null);
 
+// Support both new and legacy API responses
 const forecast =
-  scanResult?.forecast || null;
+  scanResult?.ai?.forecast ??
+  scanResult?.forecast ??
+  null;
 const [showAnalysisSummary, setShowAnalysisSummary] =
   useState(false);
 
