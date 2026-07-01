@@ -4,6 +4,26 @@ function pushReason(reasons, condition, text) {
   }
 }
 
+function getRecommendation(score) {
+  if (score >= 85) {
+    return "STRONG_BUY";
+  }
+
+  if (score >= 65) {
+    return "BUY";
+  }
+
+  if (score >= 55) {
+    return "CAUTION_BUY";
+  }
+
+  if (score >= 40) {
+    return "WATCH";
+  }
+
+  return "AVOID";
+}
+
 export function buildAIRecommendation({
   forecast,
   signalScore,
@@ -162,45 +182,44 @@ export function buildAIRecommendation({
   }
 
   // =====================================================
-  // DETERMINE RECOMMENDATION
+  // FINAL AI SCORE
   // =====================================================
 
-  let recommendation = "WATCH";
+  let finalScore = forecastScore;
 
-  if (forecastScore >= 90) {
-    recommendation = "STRONG_BUY";
-  } else if (forecastScore >= 75) {
-    recommendation = "BUY";
-  } else if (forecastScore >= 55) {
-    recommendation = "WATCH";
-  } else {
-    recommendation = "AVOID";
+  if (
+    signalScore?.matched &&
+    Number.isFinite(signalScore?.confidenceScore)
+  ) {
+    const historicalScore = Number(
+      signalScore.confidenceScore
+    );
+
+    // Live market carries more weight than historical patterns
+    finalScore = Math.round(
+      forecastScore * 0.7 +
+      historicalScore * 0.3
+    );
   }
 
-  // Historical pattern learning can override
-  if (signalScore?.recommendation) {
-    recommendation =
-      signalScore.recommendation;
-  }
+  const recommendation =
+    getRecommendation(finalScore);
 
   // =====================================================
   // RETURN OBJECT
   // =====================================================
 
   return {
-    // Used directly by the frontend
     recommendation,
 
-    // Overall confidence score
-    confidence:
-      signalScore?.confidenceScore ??
-      forecastScore,
+    confidence: finalScore,
 
-    // Human-readable explanation
     explanation: reasons,
 
-    // Extra metadata (kept for compatibility)
     reasoning: reasons,
+
     action: recommendation,
+
+    finalScore,
   };
 }

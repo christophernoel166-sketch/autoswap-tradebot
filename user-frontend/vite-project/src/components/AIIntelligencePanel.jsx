@@ -1,19 +1,25 @@
 export default function AIIntelligencePanel({ ai }) {
   if (!ai) return null;
 
-  const recommendation =
-    typeof ai.recommendation === "string"
-      ? ai.recommendation
-      : ai.recommendation?.recommendation ??
-        "WATCH";
+ const recommendation =
+  typeof ai.recommendation === "string"
+    ? ai.recommendation
+    : ai.recommendation?.recommendation ??
+      "WATCH";
 
-  const recommendationColor =
-    recommendation === "STRONG_BUY" ||
-    recommendation === "BUY"
-      ? "text-green-400"
-      : recommendation === "WATCH"
-      ? "text-yellow-400"
-      : "text-red-400";
+const recommendationLabel =
+  recommendation.replaceAll("_", " ");
+
+const recommendationColor =
+  recommendation === "STRONG_BUY"
+    ? "text-green-400"
+    : recommendation === "BUY"
+    ? "text-green-500"
+    : recommendation === "CAUTION_BUY"
+    ? "text-yellow-400"
+    : recommendation === "WATCH"
+    ? "text-blue-400"
+    : "text-red-400";
 
   const explanation =
     Array.isArray(
@@ -37,7 +43,7 @@ export default function AIIntelligencePanel({ ai }) {
           <span
             className={`font-bold ${recommendationColor}`}
           >
-            {recommendation}
+            {recommendationLabel}
           </span>
         </div>
 
