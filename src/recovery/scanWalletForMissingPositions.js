@@ -1,10 +1,8 @@
 import User from "../../models/User.js";
 
-import { TOKEN_PROGRAM_ID }
-from "@solana/spl-token";
+import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 
-import { redis }
-from "../utils/redis.js";
+import { redis } from "../utils/redis.js";
 
 const LOG = console;
 
@@ -27,101 +25,88 @@ import {
 
 export async function scanWalletForMissingPositions() {
   try {
-    const connection =
-      getConnection();
+    const connection = getConnection();
 
     LOG.warn(
       "🧪 SCANNING WALLETS FOR MISSING POSITIONS"
     );
 
+    // Only scan users that actually have a trading wallet
     const users = await User.find({
       tradingEnabled: true,
+      tradingWalletPublicKey: {
+        $exists: true,
+        $ne: "",
+      },
     });
 
     let restored = 0;
 
-    for (const user of users) {
+    const BATCH_SIZE = 5;
+    const BATCH_DELAY_MS = 2000;
 
-  if (!user.tradingWalletPublicKey) {
-    LOG.warn(
-      {
-        walletAddress:
-          user.walletAddress,
-      },
-      "⚠️ User has no trading wallet"
-    );
+    for (
+      let i = 0;
+      i < users.length;
+      i += BATCH_SIZE
+    ) {
+      const batch = users.slice(i, i + BATCH_SIZE);
 
-    continue;
-  }
+      for (const user of batch) {
+        try {
+          const wallet = restoreTradingWallet(user);
 
-  try {
-    const wallet =
-      restoreTradingWallet(user);
+          const tokenAccounts =
+            await connection.getParsedTokenAccountsByOwner(
+              wallet.publicKey,
+              {
+                programId: TOKEN_PROGRAM_ID,
+              }
+            );
 
-    const tokenAccounts =
-      await connection.getParsedTokenAccountsByOwner(
-        wallet.publicKey,
-        {
-          programId:
-            TOKEN_PROGRAM_ID,
-        }
-      );
+          for (const acc of tokenAccounts.value) {
+            const info =
+              acc.account.data.parsed.info;
 
-        for (const acc of tokenAccounts.value) {
-          const info =
-            acc.account.data.parsed.info;
+            const mint = info?.mint;
 
-          const mint =
-            info?.mint;
+            if (!mint) continue;
 
-          if (!mint) {
-            continue;
-          }
+            const balance = Number(
+              info.tokenAmount.uiAmount || 0
+            );
 
-          const balance = Number(
-            info.tokenAmount.uiAmount || 0
-          );
+            if (balance <= 0) continue;
 
-          if (balance <= 0) {
-            continue;
-          }
-
-          const posKey =
-            positionKey(
+            const posKey = positionKey(
               user.walletAddress,
               mint
             );
 
-          const exists =
-            await redis.exists(posKey);
+            const exists =
+              await redis.exists(posKey);
 
-          if (exists) {
-            continue;
-          }
+            if (exists) continue;
 
-          const price =
-            await getDexScreenerPrice(
-              mint
+            const price =
+              await getDexScreenerPrice(mint);
+
+            const estimatedSolAmount =
+              Number(balance) *
+              Number(price || 0);
+
+            LOG.warn(
+              {
+                walletAddress:
+                  user.walletAddress,
+                mint,
+                balance,
+                price,
+              },
+              "🚨 RECREATING MISSING POSITION"
             );
 
-          const estimatedSolAmount =
-            Number(balance || 0) *
-            Number(price || 0);
-
-          LOG.warn(
-            {
-              walletAddress:
-                user.walletAddress,
-              mint,
-              balance,
-              price,
-            },
-            "🚨 RECREATING MISSING POSITION"
-          );
-
-          await redis.hset(
-            posKey,
-            {
+            await redis.hset(posKey, {
               walletAddress:
                 user.walletAddress,
 
@@ -130,73 +115,89 @@ export async function scanWalletForMissingPositions() {
               sourceChannel:
                 "recovered",
 
-              recovered:
-                "true",
+              recovered: "true",
 
-              status:
-                "open",
+              status: "open",
 
-              solAmount:
-                String(
-                  estimatedSolAmount
-                ),
+              solAmount: String(
+                estimatedSolAmount
+              ),
 
-              tokenAmount:
-                String(balance),
+              tokenAmount: String(
+                balance
+              ),
 
-              entryPrice:
-                String(price || 0),
+              entryPrice: String(
+                price || 0
+              ),
 
-              currentPrice:
-                String(price || 0),
+              currentPrice: String(
+                price || 0
+              ),
 
-              changePercent:
-                "0",
+              changePercent: "0",
 
-              pnlSol:
-                "0",
+              pnlSol: "0",
 
-              tpStage:
-                "0",
+              tpStage: "0",
 
-              buyTxid:
-                "",
+              buyTxid: "",
 
-              highestPrice:
-                String(price || 0),
+              highestPrice: String(
+                price || 0
+              ),
 
-              openedAt:
-                String(Date.now()),
-            }
-          );
+              openedAt: String(
+                Date.now()
+              ),
+            });
 
-          await redis.sadd(
-            walletPositionsKey(
-              user.walletAddress
-            ),
-            mint
-          );
+            await redis.sadd(
+              walletPositionsKey(
+                user.walletAddress
+              ),
+              mint
+            );
 
-          restored++;
+            restored++;
 
-          LOG.warn(
+            LOG.warn(
+              {
+                walletAddress:
+                  user.walletAddress,
+                mint,
+                balance,
+              },
+              "✅ POSITION RESTORED"
+            );
+          }
+        } catch (err) {
+          LOG.error(
             {
+              err,
               walletAddress:
                 user.walletAddress,
-              mint,
-              balance,
             },
-            "✅ POSITION RESTORED"
+            "❌ Wallet scan failed"
           );
         }
-      } catch (err) {
-        LOG.error(
+      }
+
+      // Pause before scanning the next batch
+      if (i + BATCH_SIZE < users.length) {
+        LOG.info(
           {
-            err,
-            walletAddress:
-              user.walletAddress,
+            completedUsers: Math.min(
+              i + BATCH_SIZE,
+              users.length
+            ),
+            totalUsers: users.length,
           },
-          "❌ Wallet scan failed"
+          "⏳ Waiting before next wallet scan batch"
+        );
+
+        await new Promise((resolve) =>
+          setTimeout(resolve, BATCH_DELAY_MS)
         );
       }
     }
@@ -215,5 +216,4 @@ export async function scanWalletForMissingPositions() {
   }
 }
 
-export default
-  scanWalletForMissingPositions;
+export default scanWalletForMissingPositions;
