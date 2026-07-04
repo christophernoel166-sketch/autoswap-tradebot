@@ -7,6 +7,7 @@ import {
 import {
   analyzeChartEntry,
 } from "../services/chartEntryService.js";
+
 import {
   notifyChartWatch,
 } from "../services/chartWatchNotificationService.js";
@@ -22,6 +23,7 @@ let workerRunning = false;
 // =====================================================
 
 async function processCycle() {
+
   const watches = await ChartWatch.find({
     status: "ACTIVE",
   }).lean(false);
@@ -41,6 +43,7 @@ async function processCycle() {
   const grouped = new Map();
 
   for (const watch of watches) {
+
     const mint = watch.tokenMint;
 
     if (!grouped.has(mint)) {
@@ -48,6 +51,7 @@ async function processCycle() {
     }
 
     grouped.get(mint).push(watch);
+
   }
 
   LOG.info(
@@ -97,63 +101,47 @@ async function processCycle() {
             latestAnalysis
           );
 
-       if (result.changed) {
+        // ================================================
+        // DID THE SIGNAL CHANGE?
+        // ================================================
 
-  LOG.info(
-    `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
-  );
+        if (!result.changed) {
+          continue;
+        }
 
-  // ============================================
-  // Dashboard Notification
-  // ============================================
+        LOG.info(
+          `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
+        );
 
-  try {
+        // ================================================
+        // DASHBOARD NOTIFICATION
+        // ================================================
 
-    await notifyChartWatch(
-      watch,
-      result
-    );
+        try {
 
-  } catch (err) {
+          await notifyChartWatch(
+            watch,
+            result
+          );
 
-    LOG.error(
-      `Failed to notify user for watch ${watch._id}:`,
-      err.message
-    );
+        } catch (err) {
 
-  }
-
-  // ============================================
-  // Future Integrations
-  // ============================================
-  // Telegram Notification
-  // Auto Trade Trigger
-
-}
-
-    LOG.error(
-      `Failed to notify user for watch ${watch._id}:`,
-      err.message
-    );
-
-  }
-
-  // ===================================================
-  // NEXT STEPS
-  // ===================================================
-  // Telegram Notification
-  // Auto Trade Trigger
-
-}
-
-          // ===================================================
-          // NEXT STEP:
-          // Dashboard Notification
-          // Telegram Notification
-          // Auto Trade Trigger
-          // ===================================================
+          LOG.error(
+            `❌ Failed to notify user for watch ${watch._id}:`,
+            err.message
+          );
 
         }
+
+        // ================================================
+        // FUTURE INTEGRATIONS
+        // ================================================
+
+        // TODO:
+        // sendTelegramChartAlert(watch, result);
+
+        // TODO:
+        // triggerAutoTrade(watch, result);
 
       } catch (err) {
 
@@ -177,7 +165,13 @@ async function processCycle() {
 export function startChartWatchWorker() {
 
   if (workerRunning) {
+
+    LOG.info(
+      "⚠️ Chart Watch Worker already running."
+    );
+
     return;
+
   }
 
   workerRunning = true;
@@ -186,12 +180,23 @@ export function startChartWatchWorker() {
     "🚀 Chart Watch Worker started."
   );
 
-  // Run immediately once
+  // ================================================
+  // Run immediately
+  // ================================================
+
   processCycle().catch((err) => {
-    LOG.error(err);
+
+    LOG.error(
+      "Chart Watch Worker:",
+      err
+    );
+
   });
 
+  // ================================================
   // Continue every 30 seconds
+  // ================================================
+
   setInterval(async () => {
 
     try {
