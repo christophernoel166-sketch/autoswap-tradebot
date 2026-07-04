@@ -1,6 +1,8 @@
 import ChartWatch from "../../models/ChartWatch.js";
 
-
+import {
+  monitorExistingAnalysis,
+} from "../services/chartMonitorService.js";
 
 import {
   analyzeChartEntry,
