@@ -385,6 +385,69 @@ useEffect(() => {
     clearInterval(timer);
 }, [user]);
 
+// ===================================================
+// LIVE SOCKET NOTIFICATIONS
+// ===================================================
+
+useEffect(() => {
+
+  if (!walletAddress) {
+    return;
+  }
+
+  const socket = getSocket();
+
+  if (!socket) {
+    return;
+  }
+
+  const onNotification = (notification) => {
+
+    // Ignore notifications for other wallets
+    if (
+      notification.walletAddress !==
+      walletAddress
+    ) {
+      return;
+    }
+
+    setNotifications((previous) => {
+
+      // Prevent duplicates
+      const exists = previous.some(
+        (n) => n._id === notification._id
+      );
+
+      if (exists) {
+        return previous;
+      }
+
+      return [
+        notification,
+        ...previous,
+      ];
+
+    });
+
+  };
+
+  socket.on(
+    "notification",
+    onNotification
+  );
+
+  return () => {
+
+    socket.off(
+      "notification",
+      onNotification
+    );
+
+  };
+
+}, [walletAddress]);
+
+
 // FETCH NEW TOKENS
 useEffect(() => {
   fetchNewTokens();

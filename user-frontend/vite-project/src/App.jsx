@@ -16,6 +16,10 @@ import BestSolanaTradingBot from "./BestSolanaTradingBot";
 import FAQPage from "./FAQPage";
 import AutoTradeTelegramSignals from "./AutoTradeTelegramSignals";
 import TokenDiscoveryPage from "./TokenDiscoveryPage";
+import {
+  connectSocket,
+  disconnectSocket,
+} from "./services/socket";
 
 function AppContent({
   theme,
@@ -109,10 +113,20 @@ export default function App() {
     localStorage.setItem("autoswap_theme", theme);
 
     if (connected && publicKey) {
-      setWalletAddress(publicKey.toString());
-    } else {
-      setWalletAddress("");
-    }
+
+  const wallet = publicKey.toString();
+
+  setWalletAddress(wallet);
+
+  connectSocket(wallet);
+
+} else {
+
+  disconnectSocket();
+
+  setWalletAddress("");
+
+}
   }, [theme, connected, publicKey]);
   return (
     <Router>

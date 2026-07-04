@@ -7,6 +7,9 @@ import {
 import {
   analyzeChartEntry,
 } from "../services/chartEntryService.js";
+import {
+  notifyChartWatch,
+} from "../services/chartWatchNotificationService.js";
 
 const LOG = console;
 
@@ -96,9 +99,37 @@ async function processCycle() {
 
         if (result.changed) {
 
-          LOG.info(
-            `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
-          );
+  LOG.info(
+    `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
+  );
+
+  // ===================================================
+  // Dashboard Notification
+  // ===================================================
+
+  try {
+
+    await notifyChartWatch(
+      watch,
+      result
+    );
+
+  } catch (err) {
+
+    LOG.error(
+      `Failed to notify user for watch ${watch._id}:`,
+      err.message
+    );
+
+  }
+
+  // ===================================================
+  // NEXT STEPS
+  // ===================================================
+  // Telegram Notification
+  // Auto Trade Trigger
+
+}
 
           // ===================================================
           // NEXT STEP:
