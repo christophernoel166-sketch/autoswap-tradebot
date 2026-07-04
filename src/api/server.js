@@ -35,7 +35,7 @@ import { startHotNewPairsDiscovery } from "../jobs/discoverHotNewPairs.js";
 import { startBatchedDexscreenerDiscovery } from "../jobs/batchedDexscreenerDiscovery.js";
 import chartWatchRouter from "./routes/chartWatch.js";
 import { setIO } from "../services/socketService.js";
-
+import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
 
 
 export function createApiServer() {
