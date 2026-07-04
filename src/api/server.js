@@ -33,6 +33,11 @@ import trendingTokensRoute from "./routes/trendingTokens.js";
 import { startDiscoveredTokenRefresher } from "../jobs/refreshDiscoveredTokens.js";
 import { startHotNewPairsDiscovery } from "../jobs/discoverHotNewPairs.js";
 import { startBatchedDexscreenerDiscovery } from "../jobs/batchedDexscreenerDiscovery.js";
+import chartWatchRouter from "./routes/chartWatch.js";
+import { setIO } from "../services/socketService.js";
+import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
+
+
 export function createApiServer() {
   const app = express();
   const server = http.createServer(app);
@@ -86,11 +91,17 @@ app.use(express.json());
   // Socket.io
   // ============================
   const io = new IOServer(server, {
-    cors: {
-      origin: "*",
-      methods: ["GET", "POST"],
-    },
-  });
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+  },
+});
+
+// =====================================================
+// Register Socket.IO globally
+// =====================================================
+
+setIO(io);
 
   // Attach socket.io to requests
   app.use((req, _res, next) => {
@@ -150,12 +161,81 @@ app.use("/api/onchain-balance", onChainBalance);
   app.use("/api/wallet", walletHistory);
 app.use("/api/tokens", tokensRouter);
 app.use("/api/tokens", chartAnalysisRouter);
+app.use(
+  "/api/chart-watch",
+  chartWatchRouter
+);
   // ============================
   // Socket.io connection
   // ============================
-  io.on("connection", (socket) => {
-    console.log("🔌 socket connected:", socket.id);
+  // ============================
+// Socket.io connection
+// ============================
+
+io.on("connection", (socket) => {
+
+  console.log(
+    "🔌 Socket connected:",
+    socket.id
+  );
+
+  // =====================================
+  // User joins their private room
+  // =====================================
+
+  socket.on("join-wallet", (walletAddress) => {
+
+    if (
+      !walletAddress ||
+      typeof walletAddress !== "string"
+    ) {
+      return;
+    }
+
+    const room =
+      `wallet:${walletAddress}`;
+
+    socket.join(room);
+
+    console.log(
+      `✅ ${socket.id} joined ${room}`
+    );
+
   });
+
+  // =====================================
+  // Leave room
+  // =====================================
+
+  socket.on("leave-wallet", (walletAddress) => {
+
+    if (
+      !walletAddress ||
+      typeof walletAddress !== "string"
+    ) {
+      return;
+    }
+
+    socket.leave(
+      `wallet:${walletAddress}`
+    );
+
+  });
+
+  // =====================================
+  // Disconnect
+  // =====================================
+
+  socket.on("disconnect", () => {
+
+    console.log(
+      "❌ Socket disconnected:",
+      socket.id
+    );
+
+  });
+
+});
 
   // ============================
   // START SERVER
@@ -172,6 +252,7 @@ app.use("/api/tokens", chartAnalysisRouter);
 startDiscoveredTokenRefresher();
  startHotNewPairsDiscovery();
 startBatchedDexscreenerDiscovery();
+startChartWatchWorker();
     });
   }
 
