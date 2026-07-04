@@ -29,7 +29,7 @@ export function connectSocket(walletAddress) {
 
   const backend =
   import.meta.env.VITE_API_URL ||
-  "https://autoswap-tradebot-production-9c06.up.railway.app";
+  "https://autoswap-tradebot-production.up.railway.app";
 
   socket = io(backend, {
     transports: ["websocket"],
