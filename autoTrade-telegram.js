@@ -71,6 +71,9 @@ import {
 import {
   getWalletTokenBalance,
 } from "./src/services/walletBalance.js";
+import {
+  setTelegramBot,
+} from "./src/services/telegramBotService.js";
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1028,6 +1031,7 @@ mongoose
   .connect(MONGO_URI)
   .then(async () => {
     LOG.info("Connected to MongoDB");
+setTelegramBot(bot);
 
   await loadChannels();
 LOG.info("Initial channel list loaded");

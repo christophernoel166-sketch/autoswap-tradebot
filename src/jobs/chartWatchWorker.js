@@ -9,8 +9,8 @@ import {
 } from "../services/chartEntryService.js";
 
 import {
-  notifyChartWatch,
-} from "../services/chartWatchNotificationService.js";
+  dispatchChartNotification,
+} from "../services/chartNotificationDispatcher.js";
 
 const LOG = console;
 
@@ -119,19 +119,19 @@ async function processCycle() {
 
         try {
 
-          await notifyChartWatch(
-            watch,
-            result
-          );
+  await dispatchChartNotification({
+    watch,
+    result,
+  });
 
-        } catch (err) {
+} catch (err) {
 
-          LOG.error(
-            `❌ Failed to notify user for watch ${watch._id}:`,
-            err.message
-          );
+  LOG.error(
+    `❌ Failed to dispatch notifications for watch ${watch._id}:`,
+    err.message
+  );
 
-        }
+}
 
         // ================================================
         // FUTURE INTEGRATIONS
