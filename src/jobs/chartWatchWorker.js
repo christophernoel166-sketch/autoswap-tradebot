@@ -97,15 +97,15 @@ async function processCycle() {
             latestAnalysis
           );
 
-        if (result.changed) {
+       if (result.changed) {
 
   LOG.info(
     `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
   );
 
-  // ===================================================
+  // ============================================
   // Dashboard Notification
-  // ===================================================
+  // ============================================
 
   try {
 
@@ -115,6 +115,21 @@ async function processCycle() {
     );
 
   } catch (err) {
+
+    LOG.error(
+      `Failed to notify user for watch ${watch._id}:`,
+      err.message
+    );
+
+  }
+
+  // ============================================
+  // Future Integrations
+  // ============================================
+  // Telegram Notification
+  // Auto Trade Trigger
+
+}
 
     LOG.error(
       `Failed to notify user for watch ${watch._id}:`,
