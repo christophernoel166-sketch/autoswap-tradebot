@@ -36,7 +36,7 @@ import { startBatchedDexscreenerDiscovery } from "../jobs/batchedDexscreenerDisc
 import chartWatchRouter from "./routes/chartWatch.js";
 import { setIO } from "../services/socketService.js";
 import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
-
+import testTelegramQueueRoute from "../../routes/testTelegramQueue.js";
 
 export function createApiServer() {
   const app = express();
@@ -165,6 +165,11 @@ app.use(
   "/api/chart-watch",
   chartWatchRouter
 );
+app.use(
+  "/api/test",
+  testTelegramQueueRoute
+);
+
   // ============================
   // Socket.io connection
   // ============================
