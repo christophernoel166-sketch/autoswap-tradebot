@@ -1092,7 +1092,7 @@ setInterval(() => {
 
     LOG.info("Launching Telegram bot (wallet-mode)...");
 
-    bot.launch({
+bot.launch({
   allowedUpdates: [
     "message",
     "channel_post",
@@ -1101,19 +1101,36 @@ setInterval(() => {
 })
 .then(() => {
 
-  LOG.info("Telegram bot polling started");
+  LOG.info("✅ BOT.LAUNCH RESOLVED");
 
-  startTelegramQueueWorker(bot);
+  try {
+
+    LOG.info("Starting Telegram Queue Worker...");
+
+    startTelegramQueueWorker(bot);
+
+    LOG.info("✅ Queue Worker Started");
+
+  } catch (err) {
+
+    LOG.error(
+      err,
+      "Queue worker crashed"
+    );
+
+  }
 
 })
 .catch((err) => {
 
   LOG.error(
     err,
-    "Telegram bot launch failed"
+    "bot.launch failed"
   );
 
 });
+
+LOG.info("After bot.launch()");
 
     // ✅ START periodic refresh ONLY AFTER bot is running
     const CHANNEL_REFRESH_MS = parseInt(
