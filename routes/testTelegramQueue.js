@@ -1,5 +1,5 @@
 import express from "express";
-import { enqueueTelegramNotification } from "../services/telegramQueueService.js";
+import { enqueueTelegramNotification } from "../src/services/telegramQueueService.js";
 
 const router = express.Router();
 
