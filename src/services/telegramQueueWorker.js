@@ -1,5 +1,6 @@
-import { bot } from "../telegram/bot.js";
-import { dequeueTelegramNotification } from "./telegramQueueService.js";
+import {
+  dequeueTelegramNotification,
+} from "./telegramQueueService.js";
 
 const LOG = console;
 
@@ -11,7 +12,7 @@ let running = false;
 // PROCESS ONE QUEUE ITEM
 // =====================================================
 
-async function processQueue() {
+async function processQueue(bot) {
 
   const job =
     await dequeueTelegramNotification();
@@ -42,13 +43,8 @@ async function processQueue() {
       err.message
     );
 
-    // ============================================
-    // Requeue the message
-    // ============================================
-
-    // Uncomment later if desired:
-    //
-    // await enqueueTelegramNotification(job);
+    // Future:
+    // Retry / Dead-letter queue
 
   }
 
@@ -58,7 +54,15 @@ async function processQueue() {
 // START WORKER
 // =====================================================
 
-export function startTelegramQueueWorker() {
+export function startTelegramQueueWorker(
+  bot
+) {
+
+  if (!bot) {
+    throw new Error(
+      "Telegram bot instance is required."
+    );
+  }
 
   if (running) {
     return;
@@ -70,13 +74,13 @@ export function startTelegramQueueWorker() {
     "🚀 Telegram Queue Worker started."
   );
 
-  processQueue().catch(console.error);
+  processQueue(bot).catch(console.error);
 
   setInterval(async () => {
 
     try {
 
-      await processQueue();
+      await processQueue(bot);
 
     } catch (err) {
 

@@ -1103,7 +1103,7 @@ setInterval(() => {
 
   LOG.info("Telegram bot polling started");
 
-  startTelegramQueueWorker();
+  startTelegramQueueWorker(bot);
 
 })
 .catch((err) => {
