@@ -74,6 +74,10 @@ import {
 import {
   setTelegramBot,
 } from "./src/services/telegramBotService.js";
+import {
+  startTelegramQueueWorker,
+} from "./src/services/telegramQueueWorker.js";
+
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -1089,12 +1093,27 @@ setInterval(() => {
     LOG.info("Launching Telegram bot (wallet-mode)...");
 
     bot.launch({
-      allowedUpdates: ["message", "channel_post", "my_chat_member"],
-    }).catch((err) => {
-      LOG.error(err, "Telegram bot launch failed");
-    });
+  allowedUpdates: [
+    "message",
+    "channel_post",
+    "my_chat_member",
+  ],
+})
+.then(() => {
 
-    LOG.info("Telegram bot polling started");
+  LOG.info("Telegram bot polling started");
+
+  startTelegramQueueWorker();
+
+})
+.catch((err) => {
+
+  LOG.error(
+    err,
+    "Telegram bot launch failed"
+  );
+
+});
 
     // ✅ START periodic refresh ONLY AFTER bot is running
     const CHANNEL_REFRESH_MS = parseInt(

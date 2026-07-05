@@ -1,8 +1,8 @@
 import User from "../../models/User.js";
-import { getTelegramBot } from "./telegramBotService.js";
+import { enqueueTelegramNotification } from "./telegramQueueService.js";
 
 // =====================================================
-// SEND TELEGRAM CHART ALERT
+// SEND CHART WATCH TELEGRAM ALERT
 // =====================================================
 
 export async function notifyTelegramChartWatch(
@@ -10,24 +10,12 @@ export async function notifyTelegramChartWatch(
   result
 ) {
   try {
+
     // ============================================
     // Validate watch
     // ============================================
 
     if (!watch?.walletAddress) {
-      return;
-    }
-
-    // ============================================
-    // Telegram Bot
-    // ============================================
-
-    const bot = getTelegramBot();
-
-    if (!bot) {
-      console.warn(
-        "⚠️ Telegram Bot has not been initialized."
-      );
       return;
     }
 
@@ -61,25 +49,23 @@ export async function notifyTelegramChartWatch(
     );
 
     // ============================================
-    // Send message
+    // Queue Telegram notification
     // ============================================
 
-    await bot.telegram.sendMessage(
-      user.telegram.userId,
+    await enqueueTelegramNotification({
+      telegramUserId: user.telegram.userId,
       message,
-      {
-        parse_mode: "HTML",
-      }
-    );
+      parseMode: "HTML",
+    });
 
     console.log(
-      `📲 Chart alert sent to Telegram user ${user.telegram.userId}`
+      `📨 Telegram notification queued for ${user.telegram.userId}`
     );
 
   } catch (err) {
 
     console.error(
-      "❌ Telegram chart notification failed:",
+      "❌ Failed to queue Telegram notification:",
       err.message
     );
 
@@ -87,7 +73,7 @@ export async function notifyTelegramChartWatch(
 }
 
 // =====================================================
-// FORMAT TELEGRAM MESSAGE
+// BUILD TELEGRAM MESSAGE
 // =====================================================
 
 function buildTelegramMessage(
