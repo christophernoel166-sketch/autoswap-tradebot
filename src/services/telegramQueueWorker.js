@@ -1,93 +1,38 @@
-import {
-  dequeueTelegramNotification,
-} from "./telegramQueueService.js";
+export function startTelegramQueueWorker(bot) {
 
-const LOG = console;
-
-const POLL_INTERVAL_MS = 1000;
-
-let running = false;
-
-// =====================================================
-// PROCESS ONE QUEUE ITEM
-// =====================================================
-
-async function processQueue(bot) {
-
-  const job =
-    await dequeueTelegramNotification();
-
-  if (!job) {
-    return;
-  }
-
-  try {
-
-    await bot.telegram.sendMessage(
-      job.telegramUserId,
-      job.message,
-      {
-        parse_mode:
-          job.parseMode || "HTML",
-      }
-    );
-
-    LOG.info(
-      `📨 Telegram notification sent to ${job.telegramUserId}`
-    );
-
-  } catch (err) {
-
-    LOG.error(
-      "Telegram notification failed:",
-      err.message
-    );
-
-    // Future:
-    // Retry / Dead-letter queue
-
-  }
-
-}
-
-// =====================================================
-// START WORKER
-// =====================================================
-
-export function startTelegramQueueWorker(
-  bot
-) {
+  console.log("① startTelegramQueueWorker() entered");
 
   if (!bot) {
-    throw new Error(
-      "Telegram bot instance is required."
-    );
+    console.log("② bot is missing");
+    throw new Error("Telegram bot instance is required.");
   }
 
+  console.log("③ bot exists");
+
   if (running) {
+    console.log("④ worker already running");
     return;
   }
+
+  console.log("⑤ setting running=true");
 
   running = true;
 
-  LOG.info(
-    "🚀 Telegram Queue Worker started."
-  );
+  console.log("⑥ starting worker");
 
-  processQueue(bot).catch(console.error);
+  processQueue(bot).catch((err) => {
+    console.error("processQueue error:", err);
+  });
+
+  console.log("⑦ processQueue kicked off");
 
   setInterval(async () => {
-
     try {
-
       await processQueue(bot);
-
     } catch (err) {
-
-      LOG.error(err);
-
+      console.error(err);
     }
-
   }, POLL_INTERVAL_MS);
 
+  console.log("⑧ worker initialized");
 }
