@@ -1090,47 +1090,40 @@ setInterval(() => {
       );
     }, EXPIRY_POLL_MS);
 
-    LOG.info("Launching Telegram bot (wallet-mode)...");
+LOG.info("Launching Telegram bot (wallet-mode)...");
 
-bot.launch({
-  allowedUpdates: [
-    "message",
-    "channel_post",
-    "my_chat_member",
-  ],
-})
-.then(() => {
+try {
+
+  LOG.info("Deleting Telegram webhook...");
+
+  await bot.telegram.deleteWebhook({
+    drop_pending_updates: false,
+  });
+
+  LOG.info("✅ Webhook deleted");
+
+  await bot.launch({
+    allowedUpdates: [
+      "message",
+      "channel_post",
+      "my_chat_member",
+    ],
+  });
 
   LOG.info("✅ BOT.LAUNCH RESOLVED");
 
-  try {
+  startTelegramQueueWorker(bot);
 
-    LOG.info("Starting Telegram Queue Worker...");
+  LOG.info("✅ Telegram Queue Worker started");
 
-    startTelegramQueueWorker(bot);
-
-    LOG.info("✅ Queue Worker Started");
-
-  } catch (err) {
-
-    LOG.error(
-      err,
-      "Queue worker crashed"
-    );
-
-  }
-
-})
-.catch((err) => {
+} catch (err) {
 
   LOG.error(
     err,
-    "bot.launch failed"
+    "Telegram startup failed"
   );
 
-});
-
-LOG.info("After bot.launch()");
+}
 
     // ✅ START periodic refresh ONLY AFTER bot is running
     const CHANNEL_REFRESH_MS = parseInt(
