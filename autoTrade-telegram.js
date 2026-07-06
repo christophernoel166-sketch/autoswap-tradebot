@@ -1045,6 +1045,7 @@ registerSellExecutor(executeQueuedSell);
 
 startBuyWorker();
 startSellWorker();
+startTelegramQueueWorker();
 await restoreOpenPositions();
 
 setInterval(() => {
