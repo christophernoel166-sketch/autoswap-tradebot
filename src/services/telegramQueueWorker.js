@@ -1,38 +1,93 @@
-export function startTelegramQueueWorker(bot) {
+import {
+  dequeueTelegramNotification,
+} from "./telegramQueueService.js";
 
-  console.log("① startTelegramQueueWorker() entered");
+const LOG = console;
 
-  if (!bot) {
-    console.log("② bot is missing");
-    throw new Error("Telegram bot instance is required.");
-  }
+const POLL_INTERVAL_MS = 1000;
 
-  console.log("③ bot exists");
+let running = false;
 
-  if (running) {
-    console.log("④ worker already running");
+// =====================================================
+// PROCESS ONE QUEUE ITEM
+// =====================================================
+
+async function processQueue(bot) {
+
+  const job =
+    await dequeueTelegramNotification();
+
+  if (!job) {
     return;
   }
 
-  console.log("⑤ setting running=true");
+  try {
+
+    await bot.telegram.sendMessage(
+      job.telegramUserId,
+      job.message,
+      {
+        parse_mode:
+          job.parseMode || "HTML",
+      }
+    );
+
+    LOG.info(
+      `📨 Telegram notification sent to ${job.telegramUserId}`
+    );
+
+  } catch (err) {
+
+    LOG.error(
+      "Telegram notification failed:",
+      err.message
+    );
+
+    // Future:
+    // Retry / Dead-letter queue
+
+  }
+
+}
+
+// =====================================================
+// START WORKER
+// =====================================================
+
+export function startTelegramQueueWorker(
+  bot
+) {
+
+  if (!bot) {
+    throw new Error(
+      "Telegram bot instance is required."
+    );
+  }
+
+  if (running) {
+    return;
+  }
 
   running = true;
 
-  console.log("⑥ starting worker");
+  LOG.info(
+    "🚀 Telegram Queue Worker started."
+  );
 
-  processQueue(bot).catch((err) => {
-    console.error("processQueue error:", err);
-  });
-
-  console.log("⑦ processQueue kicked off");
+  processQueue(bot).catch(console.error);
 
   setInterval(async () => {
+
     try {
+
       await processQueue(bot);
+
     } catch (err) {
-      console.error(err);
+
+      LOG.error(err);
+
     }
+
   }, POLL_INTERVAL_MS);
 
-  console.log("⑧ worker initialized");
 }
