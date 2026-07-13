@@ -77,6 +77,11 @@ import {
 import {
   startTelegramQueueWorker,
 } from "./src/services/telegramQueueWorker.js";
+import {
+    processAIEntryPipeline,
+} from "../ai/pipelines/processAIEntryPipeline.js";
+import { runAIReviewManager } from "../ai/core/AIReviewManager.js";
+import { processAIExitPipeline } from "../ai/pipelines/processAIExitPipeline.js";
 
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
@@ -1040,7 +1045,7 @@ setTelegramBot(bot);
   await loadChannels();
 LOG.info("Initial channel list loaded");
 
-registerBuyExecutor(executeUserTrade);
+registerBuyExecutor(executeTradePlan);
 registerSellExecutor(executeQueuedSell);
 
 startBuyWorker();
@@ -1900,136 +1905,341 @@ const trailingShouldBeActive =
 // ===================================================
 
 if (!trailingShouldBeActive) {
-  const currentStopLoss =
-    info.dynamicStopLoss ?? profile.stopLossPercent;
 
-  if (change <= -currentStopLoss) {
-    LOG.info(
-      {
-        walletAddress,
-        mint,
-        change,
-        currentStopLoss,
-      },
-      "🛑 Stop-loss hit (queued sell)"
-    );
+    const currentStopLoss =
+        info.dynamicStopLoss ??
+        profile.stopLossPercent;
 
-    const locked =
-      await acquireSellLock(walletAddress, mint);
+    if (change <= -currentStopLoss) {
 
-    if (!locked) {
-      LOG.info(
-        { walletAddress, mint },
-        "⏭️ Sell skipped — duplicate sell lock"
-      );
-      return;
+        LOG.info(
+            {
+                walletAddress,
+                mint,
+                change,
+                currentStopLoss,
+            },
+            "🛑 Stop-loss hit (AI review)"
+        );
+
+        const exitRequest = buildExitTradeRequest({
+
+            walletAddress,
+
+            wallet: info.wallet,
+
+            user: info.user,
+
+            mint,
+
+            price,
+
+            entryPrice: entry,
+
+            highestPrice: walletHigh,
+
+            solAmount: info.solAmount,
+
+            buyTxid: info.buyTxid,
+
+            sourceChannel: info.sourceChannel,
+
+            slippageBps: info.slippageBps,
+
+            profile,
+
+            state,
+
+            info,
+
+            reason: "stop_loss",
+
+            percent: 100,
+
+            event: {
+
+                type: "STOP_LOSS",
+
+                triggerPrice: price,
+
+                changePercent: change,
+
+            },
+
+        });
+
+        await processExitDecision(exitRequest);
+
+        return;
+
     }
 
-    await enqueueSellJob({
-      walletAddress,
-      mint,
-      reason: "stop_loss",
-      percent: 100,
-      createdAt: Date.now(),
-    });
-
-    return;
-  }
 }
 
 /**
  * ===================================================
- * 🎯 TP1 — PARTIAL SELL
+ * 🎯 TP1 — AI REVIEW
  * ===================================================
  */
 if (info.tpStage < 1 && change >= profile.tp1Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP1 reached (queued sell)");
 
-  const locked = await acquireSellLock(walletAddress, mint);
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP1 reached (AI review)"
+  );
 
-  if (!locked) {
-    LOG.info(
-      { walletAddress, mint },
-      "⏭️ Sell skipped — duplicate sell lock"
-    );
-    return;
-  }
+  const exitRequest = buildExitTradeRequest({
 
-  await enqueueSellJob({
     walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
     mint,
+
+    price,
+
+    entryPrice: entry,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
     reason: "tp1",
+
     percent: profile.tp1SellPercent,
-    createdAt: Date.now(),
+
+    event: {
+
+      type: "TP1_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp1Percent,
+
+    },
+
   });
 
-  info.dynamicStopLoss = 0; // break-even
-  info.tpStage = 1;
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved TP1 execution
+  // ==========================================
+
+  if (
+    result?.success &&
+    (
+      result.action === "PARTIAL_EXIT" ||
+      result.action === "SCALE_OUT"
+    )
+  ) {
+
+    info.dynamicStopLoss = 0; // Move stop to break-even
+
+    info.tpStage = 1;
+
+  }
 
   return;
+
 }
 
 /**
  * ===================================================
- * 🎯 TP2 — PARTIAL SELL
+ * 🎯 TP2 — AI REVIEW
  * ===================================================
  */
 if (info.tpStage < 2 && change >= profile.tp2Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP2 reached (queued sell)");
 
-  const locked = await acquireSellLock(walletAddress, mint);
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP2 reached (AI review)"
+  );
 
-  if (!locked) {
-    LOG.info(
-      { walletAddress, mint },
-      "⏭️ Sell skipped — duplicate sell lock"
-    );
-    return;
-  }
+  const exitRequest = buildExitTradeRequest({
 
-  await enqueueSellJob({
     walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
     mint,
+
+    price,
+
+    entryPrice: entry,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
     reason: "tp2",
+
     percent: profile.tp2SellPercent,
-    createdAt: Date.now(),
+
+    event: {
+
+      type: "TP2_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp2Percent,
+
+    },
+
   });
 
-  info.dynamicStopLoss = profile.tp1Percent; // lock profit
-  info.tpStage = 2;
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved TP2 execution
+  // ==========================================
+
+  if (
+    result?.success &&
+    (
+      result.action === "PARTIAL_EXIT" ||
+      result.action === "SCALE_OUT"
+    )
+  ) {
+
+    // Lock TP1 profit
+    info.dynamicStopLoss = profile.tp1Percent;
+
+    info.tpStage = 2;
+
+  }
 
   return;
+
 }
 
 /**
  * ===================================================
- * 🎯 TP3 — SELL ALL
+ * 🎯 TP3 — AI REVIEW
  * ===================================================
  */
 if (info.tpStage < 3 && change >= profile.tp3Percent) {
-  LOG.info({ walletAddress, mint, change }, "🎯 TP3 reached (queued sell)");
 
-  const locked = await acquireSellLock(walletAddress, mint);
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP3 reached (AI review)"
+  );
 
-  if (!locked) {
-    LOG.info(
-      { walletAddress, mint },
-      "⏭️ Sell skipped — duplicate sell lock"
-    );
-    return;
-  }
+  const exitRequest = buildExitTradeRequest({
 
-  await enqueueSellJob({
     walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
     mint,
+
+    price,
+
+    entryPrice: entry,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
     reason: "tp3",
+
     percent: 100,
-    createdAt: Date.now(),
+
+    event: {
+
+      type: "TP3_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp3Percent,
+
+    },
+
   });
 
-  info.tpStage = 3;
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved full exit
+  // ==========================================
+
+  if (
+    result?.success &&
+    result.action === "FULL_EXIT"
+  ) {
+
+    info.tpStage = 3;
+
+  }
 
   return;
+
 }
 
 // ===================================================
@@ -2088,10 +2298,11 @@ if (Date.now() - info._lastTrailLogAt > 15_000) {
 }
 
 // ===================================================
-// 📉 TRAILING STOP
+// 📉 TRAILING STOP — AI REVIEW
 // ===================================================
 
 if (trailingShouldBeActive) {
+
   const dropFromPeakPct =
     ((walletHigh - price) / walletHigh) * 100;
 
@@ -2099,6 +2310,7 @@ if (trailingShouldBeActive) {
     walletHigh * (1 - trailingDistancePct / 100);
 
   if (dropFromPeakPct >= trailingDistancePct) {
+
     LOG.info(
       {
         walletAddress,
@@ -2110,53 +2322,614 @@ if (trailingShouldBeActive) {
         dropFromPeakPct,
         trailingExitPrice,
       },
-      "📉 Trailing stop hit (queued sell)"
+      "📉 Trailing stop hit (AI review)"
     );
 
-    const locked =
-      await acquireSellLock(walletAddress, mint);
+    const exitRequest = buildExitTradeRequest({
 
-    if (!locked) {
-      LOG.info(
-        { walletAddress, mint },
-        "⏭️ Sell skipped — duplicate sell lock"
-      );
-      return;
-    }
-
-    await enqueueSellJob({
       walletAddress,
+
+      wallet: info.wallet,
+
+      user: info.user,
+
       mint,
+
+      price,
+
+      entryPrice: entry,
+
+      highestPrice: walletHigh,
+
+      solAmount: info.solAmount,
+
+      buyTxid: info.buyTxid,
+
+      sourceChannel: info.sourceChannel,
+
+      slippageBps: info.slippageBps,
+
+      profile,
+
+      state,
+
+      info,
+
       reason: "trailing",
+
       percent: 100,
-      createdAt: Date.now(),
+
+      event: {
+
+        type: "TRAILING_STOP",
+
+        triggerPrice: price,
+
+        trailingDistancePct,
+
+        trailingExitPrice,
+
+        dropFromPeakPct,
+
+      },
+
     });
 
+    const result =
+      await processExitDecision(
+        exitRequest
+      );
+
+    // ==========================================
+    // AI approved trailing exit
+    // ==========================================
+
+    if (
+      result?.success &&
+      result.action === "FULL_EXIT"
+    ) {
+
+      LOG.info(
+        {
+          walletAddress,
+          mint,
+        },
+        "📉 AI approved trailing exit."
+      );
+
+    }
+
     return;
+
   }
+
 }
+
 } // ✅ THIS closes monitorUser
 
+// ===================================================
+// BUILD EXIT TRADE REQUEST
+// ===================================================
+
+function buildExitTradeRequest({
+
+    walletAddress,
+
+    wallet,
+
+    user,
+
+    mint,
+
+    price,
+
+    entryPrice,
+
+    highestPrice,
+
+    solAmount,
+
+    buyTxid,
+
+    sourceChannel,
+
+    slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
+    reason,
+
+    percent = 100,
+
+    event,
+
+}) {
+
+    return {
+
+        // ==========================================
+        // Identity
+        // ==========================================
+
+        requestId:
+
+            `${walletAddress}:${mint}:${Date.now()}`,
+
+        action:
+
+            "REVIEW_EXIT",
+
+        walletAddress,
+
+        wallet,
+
+        user,
+
+        mint,
+
+        // ==========================================
+        // Position
+        // ==========================================
+
+        entryPrice,
+
+        currentPrice:
+
+            price,
+
+        highestPrice,
+
+        solAmount,
+
+        buyTxid,
+
+        sourceChannel,
+
+        slippageBps,
+
+        // ==========================================
+        // Exit Request
+        // ==========================================
+
+        percent,
+
+        reason,
+
+        event,
+
+        // ==========================================
+        // Market Snapshot
+        // ==========================================
+
+        profile,
+
+        state,
+
+        info,
+
+        // ==========================================
+        // Metadata
+        // ==========================================
+
+        metadata: {
+
+            source:
+
+                "POSITION_MONITOR",
+
+            monitoredAt:
+
+                new Date(),
+
+        },
+
+    };
+
+}
+
+
+// ===================================================
+// AI EXIT DECISION PROCESSOR
+// ===================================================
+
+async function processExitDecision({
+
+    context,
+
+    event,
+
+}) {
+
+    if (!context) {
+
+        throw new Error(
+            "Exit decision context is required."
+        );
+
+    }
+
+    if (!event) {
+
+        throw new Error(
+            "Exit review event is required."
+        );
+
+    }
+try {
+    // ==========================================
+    // Queue AI Review
+    // ==========================================
+
+    runAIReviewManager(
+        context,
+        event
+    );
+
+    // ==========================================
+    // AI Review Not Required
+    // ==========================================
+
+    if (
+
+        !context.pendingReview?.reviewRequired
+
+    ) {
+
+        LOG.info(
+            {
+                walletAddress:
+                    context.walletAddress,
+
+                mint:
+                    context.mint,
+
+                event:
+                    event.type,
+
+            },
+            "🧠 AI review skipped."
+        );
+
+        return {
+
+            success: true,
+
+            action: "CONTINUE",
+
+            executionState: "SKIPPED",
+
+            reason: "Review not required.",
+
+        };
+
+    }
+
+    // ==========================================
+    // Run Exit Pipeline
+    // ==========================================
+
+    const pipelineResult =
+
+        await processAIExitPipeline(
+            context
+        );
+
+    if (
+
+        !pipelineResult?.approved
+
+    ) {
+
+        LOG.info(
+            {
+                walletAddress:
+                    context.walletAddress,
+
+                mint:
+                    context.mint,
+
+            },
+            "🧠 Exit pipeline rejected execution."
+        );
+
+        return {
+
+            success: true,
+
+            action: "CONTINUE",
+
+            executionState: "SKIPPED",
+
+            reason: "Exit pipeline rejected.",
+
+        };
+
+    }
+
+    // ==========================================
+    // Execute Approved Trade Plan
+    // ==========================================
+
+   const executionResult = await executeTradePlan(
+    pipelineResult
+);
+
+LOG.info(
+    {
+        walletAddress: context.walletAddress,
+        mint: context.mint,
+        action: executionResult?.action,
+        executionState: executionResult?.executionState,
+    },
+    "🧠 Exit execution completed."
+);
+
+return executionResult;
+
+} catch (err) {
+
+    LOG.error(
+        {
+            err,
+            walletAddress: context.walletAddress,
+            mint: context.mint,
+            event: event?.type,
+        },
+        "❌ AI Exit Decision failed."
+    );
+
+    return {
+
+        success: false,
+
+        action: "CONTINUE",
+
+        executionState: "FAILED",
+
+        reason: err.message,
+
+    };
+
+}
+
+}
+
+// ===================================================
+// 🚀 TRADE EXECUTION GATEWAY
+// ===================================================
+
+async function executeTradePlan(plan) {
+
+  if (!plan) {
+    throw new Error("Execution plan is required.");
+  }
+
+  const {
+
+    action,
+    user,
+    walletAddress,
+    wallet,
+    mint,
+    sourceChannel,
+    percent,
+    reason,
+    slippageBps,
+
+  } = plan;
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      action,
+      percent,
+      reason,
+    },
+    "🚀 Executing AI trade plan"
+  );
+
+  switch (action) {
+
+    // ==========================================
+    // BUY
+    // ==========================================
+
+   case "BUY": {
+
+    // ==========================================
+    // AI Entry Pipeline
+    // ==========================================
+
+    const approvedPlan = await processAIEntryPipeline(plan);
+
+    if (!approvedPlan) {
+
+        LOG.info(
+            {
+                requestId: plan.requestId,
+                walletAddress,
+                mint,
+            },
+            "🧠 AI rejected BUY request."
+        );
+
+        return {
+
+            success: false,
+
+            action: "HOLD",
+
+            executionState: "REJECTED",
+
+            reason: "AI rejected entry.",
+
+        };
+
+    }
+
+    LOG.info(
+        {
+            requestId: approvedPlan.requestId,
+            walletAddress,
+            mint,
+            action: approvedPlan.action,
+        },
+        "🧠 AI approved BUY request."
+    );
+
+    return executeUserTrade(
+        approvedPlan.user,
+        approvedPlan.mint,
+        approvedPlan.sourceChannel
+    );
+
+}
+
+    // ==========================================
+    // SCALE OUT
+    // ==========================================
+
+    case "SCALE_OUT":
+
+    // ==========================================
+    // PARTIAL EXIT
+    // ==========================================
+
+    case "PARTIAL_EXIT":
+
+    // ==========================================
+    // FULL EXIT
+    // ==========================================
+
+    case "FULL_EXIT": {
+
+      return executeQueuedSell({
+
+        action,
+
+        walletAddress,
+
+        wallet,
+
+        mint,
+
+        percent,
+
+        reason,
+
+        slippageBps,
+
+        user,
+
+      });
+
+    }
+
+    // ==========================================
+    // HOLD POSITION
+    // ==========================================
+
+    case "CONTINUE":
+
+    case "HOLD": {
+
+      LOG.info(
+        {
+          walletAddress,
+          mint,
+        },
+        "AI decided to continue holding position."
+      );
+
+      return {
+
+        success: true,
+
+        action,
+
+        executionState: "SKIPPED",
+
+        reason: "AI decided to continue holding.",
+
+      };
+
+    }
+
+    // ==========================================
+    // UNKNOWN ACTION
+    // ==========================================
+
+    default: {
+
+      throw new Error(
+
+        `Unsupported execution action: ${action}`
+
+      );
+
+    }
+
+  }
+
+}
+
+
 // EXECUTE QUEUE SELL
-async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, user }) {
+async function executeQueuedSell({ action, walletAddress, wallet, mint, reason, percent = 100,  slippageBps, user }) {
   const state = monitored.get(mint);
   const info = state?.users?.get(walletAddress);
 
-  if (!state || !info) {
-    LOG.warn({ walletAddress, mint, reason }, "⏭️ Queued sell skipped — position not found in monitor state");
+   // ==========================================
+  // Execution Context
+  // ==========================================
+
+const isFullExit =
+    action === "FULL_EXIT" ||
+    percent === 100;
+
+const isPartialExit =
+    action === "PARTIAL_EXIT";
+
+const isScaleOut =
+    action === "SCALE_OUT";
+
+  
+
+ if (!state || !info) {
+    LOG.warn(
+      { walletAddress, mint, reason },
+      "⏭️ Queued sell skipped — position not found in monitor state"
+    );
     return;
-  }
+}
+
+const executionWallet =
+
+    wallet ||
+
+    info.wallet;
 
   const price = state.lastPrice || info.entryPrice || 0;
 
-  const {
+const {
     profile,
     buyTxid,
     solAmount,
     entryPrice: storedEntryPrice,
     sourceChannel,
-    slippageBps,
-  } = info;
+    slippageBps: storedSlippageBps,
+} = info;
+
+const effectiveSlippageBps =
+
+    slippageBps ??
+
+    storedSlippageBps;
 
   const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
   if (!entry) {
@@ -2170,7 +2943,7 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
     let sellTxid = null;
 
     try {
-      if (percent === 100) {
+      if (isFullExit) {
         const allowed = await tryMarkPositionClosing(walletAddress, mint);
         if (!allowed) {
           LOG.warn(
@@ -2181,15 +2954,15 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
         }
       }
 
-      const wallet = info.wallet;
+     
 
-      if (!wallet) {
+      if (!executionWallet) {
         LOG.error(
           { walletAddress, mint },
           "❌ Missing wallet in monitor state"
         );
 
-        if (percent === 100) {
+        if (isFullExit) {
           await redis.hset(positionKey(walletAddress, mint), "status", "open");
         }
 
@@ -2197,27 +2970,60 @@ async function executeQueuedSell({ walletAddress, mint, reason, percent = 100, u
       }
 
       LOG.info(
-        {
-          wallet: wallet.publicKey.toBase58(),
-          mint,
-          percent,
-          reason,
-        },
-        "🔐 Using user wallet for queued SELL"
-      );
+  {
+    wallet: executionWallet.publicKey.toBase58(),
+    mint,
+    percent,
+    reason,
+  },
+  "🔐 Using user wallet for queued SELL"
+);
 
       const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
 
-      LOG.info(
-        { traceId, walletAddress, mint, reason, percent },
-        "🧪 QUEUED SELL TRACE START"
-      );
+     LOG.info(
+  {
+    traceId,
+    action,
+    walletAddress,
+    mint,
+    reason,
+    percent,
+    isFullExit,
+    isPartialExit,
+    isScaleOut,
+  },
+  "🧪 AI EXECUTION PLAN RECEIVED"
+);
 
-      if (percent === 100) {
-        sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
-      } else {
-        sellRes = await safeSellPartial(wallet, mint, percent, slippageBps, 4, traceId);
-      }
+      if (isFullExit) {
+
+    sellRes = await safeSellAll(
+        executionWallet,
+        mint,
+        effectiveSlippageBps,
+        4,
+        traceId
+    );
+
+} else if (isPartialExit || isScaleOut) {
+
+    sellRes = await safeSellPartial(
+        executionWallet,
+        mint,
+        percent,
+        effectiveSlippageBps,
+        4,
+        traceId
+    );
+
+} else {
+
+    throw new Error(
+        `Unsupported sell action: ${action}`
+    );
+
+}
 
       
 
@@ -2242,21 +3048,21 @@ LOG.info(
   "🧪 QUEUED SELL TX DEBUG"
 );
 
-      await chargeSellFee(wallet, sellTxid, mint, reason);
+      await chargeSellFee(executionWallet, sellTxid, mint, reason);
     } catch (err) {
       LOG.error(
         { err, walletAddress, mint, reason },
         "❌ Queued sell execution failed"
       );
 
-      if (percent === 100) {
+      if (isFullExit) {
         await redis.hset(positionKey(walletAddress, mint), "status", "open");
       }
 
       return;
     }
 
-        if (percent === 100) {
+        if (isFullExit) {
       const key = positionKey(walletAddress, mint);
 
       await redis.hset(key, "status", "closed");
@@ -2267,6 +3073,7 @@ LOG.info(
       } catch {}
 
       await saveTradeToBackend({
+          action,
         walletAddress,
         mint,
         solAmount,
@@ -2321,7 +3128,7 @@ await createNotification({
   message:
     soldTokens !== "0"
       ? `Sold ${soldTokens} tokens for ${solReceived} SOL`
-      : percent === 100
+      : isFullExit
       ? "Position sold successfully"
       : `Successfully sold ${percent}% of position`,
 });

@@ -9,10 +9,10 @@ let activeBuys = 0;
  * Inject the actual trade executor from your main bot file
  * so this worker stays reusable.
  */
-let executeUserTradeHandler = null;
+let executeTradeHandler = null;
 
 export function registerBuyExecutor(fn) {
-  executeUserTradeHandler = fn;
+  executeTradeHandler = fn;
 }
 
 function sleep(ms) {
@@ -34,12 +34,58 @@ async function processOneBuyJob(job) {
       return;
     }
 
-    if (typeof executeUserTradeHandler !== "function") {
-      console.warn("⚠️ Buy executor not registered");
-      return;
-    }
+    if (typeof executeTradeHandler !== "function") {
+    console.warn("⚠️ Trade executor not registered");
+    return;
+}
 
-    await executeUserTradeHandler(user, mint, channelId);
+const tradeRequest = {
+requestId: `${walletAddress}:${mint}:${Date.now()}`,
+    action: "BUY",
+
+    user,
+
+    walletAddress: user.walletAddress,
+
+    wallet: null,
+
+    mint,
+
+    sourceChannel: channelId,
+
+    percent: 100,
+
+    reason: "SIGNAL_APPROVED",
+
+    slippageBps: null,
+
+  metadata: {
+
+    source: "BUY_WORKER",
+
+    worker: "BUY_WORKER",
+
+    queue: "BUY_QUEUE",
+
+    receivedAt: new Date(),
+
+    signalSource: channelId,
+
+    aiReviewed: false,
+
+}
+
+};
+
+console.info("🧠 Submitting trade request", {
+  requestId: tradeRequest.requestId,
+  walletAddress,
+  mint,
+  sourceChannel: channelId,
+  source: "BUY_WORKER",
+});
+
+await executeTradeHandler(tradeRequest);
 
   } catch (err) {
     console.error("❌ Buy job execution failed:", err?.message || err);
