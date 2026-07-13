@@ -29,13 +29,25 @@
 import { addDebug } from "../core/AIContextUtils.js";
 import { createPipelineContext } from "../core/createPipelineContext.js";
 
-import { buildInvestmentThesis } from "../engines/InvestmentThesisBuilder.js";
-import { runRecommendationEngine } from "../engines/RecommendationEngine.js";
-import { runEntryValidationEngine } from "../engines/EntryValidationEngine.js";
+import {
+    buildInvestmentThesis,
+} from "../services/InvestmentThesisBuilder.js";
 
-import { generateTradeDecision } from "../managers/TradeDecisionCoordinator.js";
+import {
+    runRecommendationEngine,
+} from "../services/RecommendationEngine.js";
 
-import { buildTradeManagementPlan } from "../planners/TradeManagementPlanner.js";
+import {
+    runEntryValidationEngine,
+} from "../services/EntryValidationEngine.js";
+
+import {
+    generateTradeDecision,
+} from "../orchestration/TradeDecisionCoordinator.js";
+
+import {
+    buildTradeManagementPlan,
+} from "../orchestration/TradeManagementPlanner.js";
 
 /**
  * ==========================================================

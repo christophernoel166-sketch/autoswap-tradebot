@@ -34,7 +34,7 @@ import {
 
     addDebug,
 
-} from "./AIContextUtils.js";
+} from "../core/AIContextUtils.js";
 
 // ==========================================================
 // Constants
@@ -641,7 +641,7 @@ function buildPositionIntelligence(
 // Generate Position Intelligence
 // ==========================================================
 
-export function generatePositionIntelligence(
+export function evaluatePositionHealth(
     context
 ) {
 
@@ -709,6 +709,6 @@ export function generatePositionIntelligence(
 
 export default {
 
-    generatePositionIntelligence,
+    evaluatePositionHealth,
 
 };

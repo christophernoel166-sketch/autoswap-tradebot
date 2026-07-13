@@ -79,9 +79,15 @@ import {
 } from "./src/services/telegramQueueWorker.js";
 import {
     processAIEntryPipeline,
-} from "../ai/pipelines/processAIEntryPipeline.js";
-import { runAIReviewManager } from "../ai/core/AIReviewManager.js";
-import { processAIExitPipeline } from "../ai/pipelines/processAIExitPipeline.js";
+} from "./src/ai/pipelines/processAIEntryPipeline.js";
+
+import {
+    runAIReviewManager,
+} from "./src/ai/orchestration/AIReviewManager.js";
+
+import {
+    processAIExitPipeline,
+} from "./src/ai/pipelines/processAIExitPipeline.js";
 
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);

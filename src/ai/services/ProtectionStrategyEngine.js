@@ -35,7 +35,7 @@ import {
 
     addDebug,
 
-} from "./AIContextUtils.js";
+} from "../core/AIContextUtils.js";
 
 // ==========================================================
 // Protection Levels
@@ -1096,7 +1096,7 @@ function buildProtectionReport(
 // Generate Protection Strategy
 // ==========================================================
 
-export function generateProtectionStrategy(
+export function runProtectionStrategyEngine(
     context
 ) {
 
@@ -1170,6 +1170,6 @@ export function generateProtectionStrategy(
 
 export default {
 
-    generateProtectionStrategy,
+    runProtectionStrategyEngine,
 
 };

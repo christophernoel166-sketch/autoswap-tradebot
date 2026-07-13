@@ -32,7 +32,7 @@ import {
 
     addDebug,
 
-} from "./AIContextUtils.js";
+} from "../core/AIContextUtils.js";
 
 // ==========================================================
 // Constants
