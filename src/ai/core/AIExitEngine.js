@@ -937,7 +937,7 @@ const decision =
 // Generate Exit Decision
 // ==========================================================
 
-export function generateExitDecision(
+export function runAIExitEngine(
     context
 ) {
 
@@ -1011,6 +1011,6 @@ export function generateExitDecision(
 
 export default {
 
-    generateExitDecision,
+    runAIExitEngine,
 
 };

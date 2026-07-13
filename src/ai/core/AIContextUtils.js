@@ -496,6 +496,74 @@ export function setRecommendation(
 
 }
 
+export function setEntryValidation(
+    context,
+    validation
+) {
+
+    context.entryValidation = validation;
+
+    addTimelineEvent(
+        context,
+        "ENTRY_VALIDATION_UPDATED"
+    );
+
+    return context;
+
+}
+
+export function setProtectionStrategy(
+    context,
+    strategy
+) {
+
+    context.protectionStrategy = strategy;
+
+    addTimelineEvent(
+        context,
+        "PROTECTION_STRATEGY_UPDATED"
+    );
+
+    return context;
+
+}
+
+// ==========================================================
+// Exit Decision
+// ==========================================================
+
+export function setExitDecision(
+    context,
+    exitDecision
+) {
+
+    context.exitDecision = exitDecision;
+
+    addTimelineEvent(
+        context,
+        "EXIT_DECISION_CREATED"
+    );
+
+    return context;
+
+}
+
+export function setExitDecision(
+    context,
+    exitDecision
+) {
+
+    context.exitDecision = exitDecision;
+
+    addTimelineEvent(
+        context,
+        "EXIT_DECISION_CREATED"
+    );
+
+    return context;
+
+}
+
 export function setPositionHealth(
     context,
     health
