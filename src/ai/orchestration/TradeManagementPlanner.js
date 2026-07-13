@@ -557,7 +557,11 @@ return {
 
     approved:
 
-        decision.approved ?? false,
+    context.execution?.approved ??
+
+    decision.approved ??
+
+    false,
 
     plannerConfidence:
 

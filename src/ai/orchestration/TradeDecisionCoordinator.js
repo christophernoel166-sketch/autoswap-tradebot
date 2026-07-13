@@ -735,9 +735,12 @@ export function generateTradeDecision(
             context
         );
 
-    context.tradeDecision =
+   context.tradeDecision = report;
 
-        report;
+// Make the decision available to the planner.
+context.execution = context.execution || {};
+
+context.execution.tradeDecision = report;
 
     addDebug(
 

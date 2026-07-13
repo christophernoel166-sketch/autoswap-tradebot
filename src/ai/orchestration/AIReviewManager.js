@@ -30,7 +30,7 @@ import {
 
     addDebug,
 
-} from "./AIContextUtils.js";
+} from "../core/AIContextUtils.js";
 
 // ==========================================================
 // Event Priorities
