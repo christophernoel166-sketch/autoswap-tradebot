@@ -6,7 +6,7 @@ from "@solana/spl-token";
 import { redis }
 from "../utils/redis.js";
 
-const LOG = console;
+
 
 import {
   positionKey,
@@ -25,7 +25,31 @@ import {
   getConnection,
 } from "../utils/solanaConnection.js";
 
+const LOG = console;
+
+let rebuildInProgress = false;
+
+const REBUILD_BATCH_SIZE = 5;
+const REBUILD_BATCH_DELAY_MS = 2000;
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export async function rebuildPositionsFromBlockchain() {
+
+  if (rebuildInProgress) {
+
+    LOG.info(
+      "⏭️ Blockchain rebuild already in progress. Skipping duplicate request."
+    );
+
+    return false;
+
+  }
+
+  rebuildInProgress = true;
+
   try {
     const connection =
       getConnection();
@@ -43,13 +67,36 @@ export async function rebuildPositionsFromBlockchain() {
       "⚠️ Redis positions empty — rebuilding from blockchain"
     );
 
-    const users = await User.find({
-      tradingEnabled: true,
-    });
+    const users = await User.find(
+    { tradingEnabled: true },
+    {
+        walletAddress: 1,
+        tradingWalletPublicKey: 1,
+        tradingWalletEncryptedSecret: 1,
+    }
+).lean();
 
     let rebuilt = 0;
 
-    for (const user of users) {
+    for (
+
+  let i = 0;
+
+  i < users.length;
+
+  i += REBUILD_BATCH_SIZE
+
+) {
+
+  const batch = users.slice(
+
+    i,
+
+    i + REBUILD_BATCH_SIZE
+
+  );
+
+  for (const user of batch) {
       try {
         const wallet =
           restoreTradingWallet(user);
@@ -194,32 +241,115 @@ export async function rebuildPositionsFromBlockchain() {
             "✅ Position rebuilt from blockchain"
           );
         }
-      } catch (err) {
-        LOG.error(
-          {
-            err,
-            wallet:
-              user.walletAddress,
-          },
-          "❌ Blockchain restore failed"
-        );
+           } catch (err) {
+
+        if (
+
+          err?.message ===
+
+          "User trading wallet not initialized"
+
+        ) {
+
+          LOG.info(
+
+            {
+
+              wallet:
+
+                user.walletAddress,
+
+            },
+
+            "⏭️ Skipping user without trading wallet"
+
+          );
+
+        } else {
+
+          LOG.error(
+
+            {
+
+              err,
+
+              wallet:
+
+                user.walletAddress,
+
+            },
+
+            "❌ Blockchain restore failed"
+
+          );
+
+        }
+
       }
-    }
+
+  }
+
+  if (
+
+    i + REBUILD_BATCH_SIZE < users.length
+
+  ) {
 
     LOG.info(
+
+      {
+
+        completed:
+
+          Math.min(
+
+            i + REBUILD_BATCH_SIZE,
+
+            users.length
+
+          ),
+
+        total:
+
+          users.length,
+
+      },
+
+      "⏳ Waiting before next blockchain rebuild batch"
+
+    );
+
+    await sleep(
+
+      REBUILD_BATCH_DELAY_MS
+
+    );
+
+  }
+
+}
+
+LOG.info(
       { rebuilt },
       "✅ Blockchain rebuild completed"
     );
 
     return true;
   } catch (err) {
+
     LOG.error(
       err,
       "❌ rebuildPositionsFromBlockchain failed"
     );
 
     return false;
+
+  } finally {
+
+    rebuildInProgress = false;
+
   }
+
 }
 
 export default
