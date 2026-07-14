@@ -548,21 +548,7 @@ export function setExitDecision(
 
 }
 
-export function setExitDecision(
-    context,
-    exitDecision
-) {
 
-    context.exitDecision = exitDecision;
-
-    addTimelineEvent(
-        context,
-        "EXIT_DECISION_CREATED"
-    );
-
-    return context;
-
-}
 
 export function setPositionHealth(
     context,
