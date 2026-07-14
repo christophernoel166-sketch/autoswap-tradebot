@@ -32,10 +32,22 @@ export async function enqueueTelegramNotification({
 // POP TELEGRAM JOB
 // =====================================================
 
+const telegramQueueRedis = redis.duplicate();
+
 export async function dequeueTelegramNotification() {
 
-  const payload =
-    await redis.lpop(QUEUE_NAME);
+  const res = await telegramQueueRedis.brpop(
+    QUEUE_NAME,
+    0
+  );
+
+  if (!res) {
+    return null;
+  }
+
+  const payload = Array.isArray(res)
+    ? res[1]
+    : res;
 
   if (!payload) {
     return null;
