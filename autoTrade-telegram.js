@@ -89,6 +89,8 @@ import {
     processAIExitPipeline,
 } from "./src/ai/pipelines/processAIExitPipeline.js";
 
+let recoverySchedulerStarted = false;
+
 redis.ping().then((res) => {
   console.log("🧠 BOT Redis ping:", res);
 });
@@ -3788,22 +3790,34 @@ export async function restoreOpenPositions() {
 await scanWalletForMissingPositions();
 await rebuildPositionsFromBlockchain();
 
-LOG.info(
-  "♻️ Starting 15-minute recovery scheduler"
-);
-setInterval(
-  async () => {
-    try {
-      await scanWalletForMissingPositions();
-    } catch (err) {
-      LOG.error(
-        err,
-        "❌ Periodic missing-position scan failed"
-      );
-    }
-  },
-  15 * 60 * 1000
-);
+if (!recoverySchedulerStarted) {
+
+    recoverySchedulerStarted = true;
+
+    LOG.info(
+        "♻️ Starting 15-minute recovery scheduler"
+    );
+
+    setInterval(async () => {
+
+        try {
+
+            await scanWalletForMissingPositions();
+
+            await rebuildPositionsFromBlockchain();
+
+        } catch (err) {
+
+            LOG.error(
+                err,
+                "❌ Periodic recovery failed"
+            );
+
+        }
+
+    }, 15 * 60 * 1000);
+
+}
 
 
 
