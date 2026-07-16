@@ -13,6 +13,61 @@ function calculateGrowth(current, previous) {
   );
 }
 
+// =========================================================
+// AI Volume Intelligence Helpers
+// =========================================================
+
+function getVolumeStrength(score) {
+
+  if (score >= 90) return "VERY_STRONG";
+
+  if (score >= 75) return "STRONG";
+
+  if (score >= 60) return "MODERATE";
+
+  if (score >= 40) return "WEAK";
+
+  return "VERY_WEAK";
+
+}
+
+function getVolumeTrend(acceleration) {
+
+  if (acceleration >= 100) return "EXPLODING";
+
+  if (acceleration >= 50) return "ACCELERATING";
+
+  if (acceleration >= 10) return "GROWING";
+
+  if (acceleration >= -10) return "STABLE";
+
+  if (acceleration >= -30) return "DECLINING";
+
+  return "COLLAPSING";
+
+}
+
+function getBuyPressureLevel(ratio) {
+
+  if (ratio >= 3) return "EXTREME";
+
+  if (ratio >= 2) return "HIGH";
+
+  if (ratio >= 1.5) return "MODERATE";
+
+  if (ratio >= 1) return "BALANCED";
+
+  return "LOW";
+
+}
+
+function getOrganicVolume(ratioScore, accelerationScore) {
+
+  return ratioScore >= 70 &&
+         accelerationScore >= 70;
+
+}
+
 export async function fetchVolumeAnalysisData({
   volume5mUsd,
   buys5m,
@@ -20,6 +75,7 @@ export async function fetchVolumeAnalysisData({
   previousVolume5mUsd = 0,
   previousBuys5m = 0,
   previousSells5m = 0,
+  context = {},
 }) {
   const volume = Number(volume5mUsd || 0);
   const buys = Number(buys5m || 0);
@@ -131,40 +187,300 @@ export async function fetchVolumeAnalysisData({
     volumeVerdict = "Neutral";
   }
 
-  return {
-    volumeUsd: volume,
+// =========================================================
+// AI Volume Intelligence
+// =========================================================
 
-    previousVolumeUsd:
-      previousVolume,
+const volumeStrength =
+  getVolumeStrength(volumeScore);
 
-    buys5m: buys,
-    sells5m: sells,
+const volumeTrend =
+  getVolumeTrend(volumeAcceleration);
 
-    previousBuys5m:
-      previousBuys,
+const buyPressureLevel =
+  getBuyPressureLevel(buySellRatio);
 
-    previousSells5m:
-      previousSells,
+const organicVolume =
+  getOrganicVolume(
+    ratioScore,
+    accelerationScore
+  );
 
-    buySellRatio: Number(
+// =========================================================
+// AI Evidence
+// =========================================================
+
+const evidence = {
+
+  confidenceContribution:
+
+    volumeScore,
+
+  confidenceWeight:
+
+    4,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  risks: [],
+
+  assumptions: [],
+
+  convictionDrivers: [],
+
+  monitoringPriorities: [],
+
+};
+
+// ---------------------------------------------------------
+// Strengths
+// ---------------------------------------------------------
+
+if (
+  volumeStrength === "VERY_STRONG" ||
+  volumeStrength === "STRONG"
+) {
+
+  evidence.strengths.push(
+    "Trading volume is strong"
+  );
+
+}
+
+if (organicVolume) {
+
+  evidence.strengths.push(
+    "Volume appears organic"
+  );
+
+}
+
+if (
+  buyPressureLevel === "HIGH" ||
+  buyPressureLevel === "EXTREME"
+) {
+
+  evidence.strengths.push(
+    "Buying activity dominates selling"
+  );
+
+}
+
+if (
+  volumeTrend === "ACCELERATING" ||
+  volumeTrend === "EXPLODING"
+) {
+
+  evidence.strengths.push(
+    "Volume is accelerating"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Weaknesses
+// ---------------------------------------------------------
+
+if (
+  volumeStrength === "WEAK" ||
+  volumeStrength === "VERY_WEAK"
+) {
+
+  evidence.weaknesses.push(
+    "Trading volume is weak"
+  );
+
+}
+
+if (
+  buyPressureLevel === "LOW"
+) {
+
+  evidence.weaknesses.push(
+    "Selling pressure is elevated"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Risks
+// ---------------------------------------------------------
+
+if (
+  volumeTrend === "DECLINING"
+) {
+
+  evidence.risks.push(
+    "Volume is declining"
+  );
+
+}
+
+if (
+  volumeTrend === "COLLAPSING"
+) {
+
+  evidence.risks.push(
+    "Rapid volume decline may signal fading interest"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------
+
+evidence.assumptions.push(
+  "Current trading activity continues"
+);
+
+// ---------------------------------------------------------
+// Conviction Drivers
+// ---------------------------------------------------------
+
+if (organicVolume) {
+
+  evidence.convictionDrivers.push(
+    "Organic participation"
+  );
+
+}
+
+if (
+  volumeTrend === "EXPLODING"
+) {
+
+  evidence.convictionDrivers.push(
+    "Explosive volume growth"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Monitoring Priorities
+// ---------------------------------------------------------
+
+evidence.monitoringPriorities.push(
+  "Monitor volume acceleration"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor buy/sell ratio"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor volume trend"
+);
+
+// =========================================================
+// Attach Evidence To AI Context
+// =========================================================
+
+if (
+  context &&
+  typeof context === "object"
+) {
+
+  context.evidence ??= {};
+
+  context.evidence.volume =
+    evidence;
+
+}
+
+return {
+
+  // =======================================================
+  // Existing Outputs (Backward Compatible)
+  // =======================================================
+
+  volumeUsd: volume,
+
+  previousVolumeUsd:
+    previousVolume,
+
+  buys5m: buys,
+
+  sells5m: sells,
+
+  previousBuys5m:
+    previousBuys,
+
+  previousSells5m:
+    previousSells,
+
+  buySellRatio:
+    Number(
       buySellRatio.toFixed(2)
     ),
 
-    volumeAcceleration:
-      Number(
-        volumeAcceleration.toFixed(2)
-      ),
+  volumeAcceleration:
+    Number(
+      volumeAcceleration.toFixed(2)
+    ),
 
-    buyGrowth:
-      Number(
-        buyGrowth.toFixed(2)
-      ),
+  buyGrowth:
+    Number(
+      buyGrowth.toFixed(2)
+    ),
 
-    ratioScore,
-    accelerationScore,
-    buyGrowthScore,
+  ratioScore,
 
-    volumeScore,
-    volumeVerdict,
-  };
+  accelerationScore,
+
+  buyGrowthScore,
+
+  volumeScore,
+
+  volumeVerdict,
+
+  // =======================================================
+  // AI Intelligence
+  // =======================================================
+
+ volumeStrength,
+
+volumeTrend,
+
+volumeTrendConfidence:
+
+  volumeStrength === "VERY_STRONG"
+    ? "HIGH"
+
+    : volumeStrength === "STRONG"
+      ? "MEDIUM"
+
+      : "LOW",
+
+  buyPressure: {
+
+    ratio: Number(
+      buySellRatio.toFixed(3)
+    ),
+
+    level: buyPressureLevel,
+
+  },
+
+ organicVolume: {
+
+  detected: organicVolume,
+
+  confidence:
+
+    organicVolume
+      ? "HIGH"
+      : "LOW",
+
+},
+
+  // =======================================================
+  // AI Evidence
+  // =======================================================
+
+  evidence,
+
+};
 }

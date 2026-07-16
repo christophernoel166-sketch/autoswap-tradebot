@@ -13,10 +13,62 @@ function calculateGrowth(current, previous) {
   );
 }
 
+// =========================================================
+// AI Liquidity Intelligence Helpers
+// =========================================================
+
+function getLiquidityStrength(score) {
+
+  if (score >= 90) return "VERY_STRONG";
+
+  if (score >= 75) return "STRONG";
+
+  if (score >= 60) return "HEALTHY";
+
+  if (score >= 40) return "WEAK";
+
+  return "VERY_WEAK";
+
+}
+
+function getLiquidityTrend(growth) {
+
+  if (growth >= 100) return "EXPANDING";
+
+  if (growth >= 30) return "GROWING";
+
+  if (growth >= 0) return "STABLE";
+
+  if (growth >= -20) return "DECLINING";
+
+  return "DRAINING";
+
+}
+
+function getLiquidityRisk(liquidityUsd) {
+
+  if (liquidityUsd >= 100000) return "LOW";
+
+  if (liquidityUsd >= 50000) return "MODERATE";
+
+  if (liquidityUsd >= 20000) return "HIGH";
+
+  return "EXTREME";
+
+}
+
+function hasHealthyLiquidity(score) {
+
+  return score >= 60;
+
+}
+
 export async function fetchLiquidityAnalysisData({
   liquidityUsd,
   previousLiquidityUsd = 0,
+  context = {},
 }) {
+
   const liquidity =
     Number(liquidityUsd || 0);
 
@@ -100,21 +152,238 @@ export async function fetchLiquidityAnalysisData({
       "Neutral";
   }
 
-  return {
-    liquidityUsd: liquidity,
+// =========================================================
+// AI Liquidity Intelligence
+// =========================================================
 
-    previousLiquidityUsd:
-      previousLiquidity,
+const liquidityStrength =
+  getLiquidityStrength(
+    liquidityScore
+  );
 
-    liquidityGrowth:
-      Number(
-        liquidityGrowth.toFixed(2)
-      ),
+const liquidityTrend =
+  getLiquidityTrend(
+    liquidityGrowth
+  );
 
-    liquiditySizeScore,
-    growthScore,
+const liquidityRisk =
+  getLiquidityRisk(
+    liquidity
+  );
 
+const healthyLiquidity =
+  hasHealthyLiquidity(
+    liquidityScore
+  );
+
+// =========================================================
+// AI Evidence
+// =========================================================
+
+const evidence = {
+
+  confidenceContribution:
     liquidityScore,
-    liquidityVerdict,
-  };
+
+  confidenceWeight:
+    5,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  risks: [],
+
+  assumptions: [],
+
+  convictionDrivers: [],
+
+  monitoringPriorities: [],
+
+};
+
+// ---------------------------------------------------------
+// Strengths
+// ---------------------------------------------------------
+
+if (
+  liquidityStrength === "VERY_STRONG" ||
+  liquidityStrength === "STRONG"
+) {
+
+  evidence.strengths.push(
+    "Liquidity is strong"
+  );
+
+}
+
+if (healthyLiquidity) {
+
+  evidence.strengths.push(
+    "Healthy liquidity supports larger trades"
+  );
+
+}
+
+if (
+  liquidityTrend === "EXPANDING" ||
+  liquidityTrend === "GROWING"
+) {
+
+  evidence.strengths.push(
+    "Liquidity is increasing"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Weaknesses
+// ---------------------------------------------------------
+
+if (
+  liquidityStrength === "WEAK" ||
+  liquidityStrength === "VERY_WEAK"
+) {
+
+  evidence.weaknesses.push(
+    "Liquidity is weak"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Risks
+// ---------------------------------------------------------
+
+if (
+  liquidityRisk === "HIGH"
+) {
+
+  evidence.risks.push(
+    "Limited liquidity may increase slippage"
+  );
+
+}
+
+if (
+  liquidityRisk === "EXTREME"
+) {
+
+  evidence.risks.push(
+    "Very low liquidity increases rug risk"
+  );
+
+}
+
+if (
+  liquidityTrend === "DRAINING"
+) {
+
+  evidence.risks.push(
+    "Liquidity is leaving the pool"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------
+
+evidence.assumptions.push(
+  "Liquidity remains available"
+);
+
+// ---------------------------------------------------------
+// Conviction Drivers
+// ---------------------------------------------------------
+
+if (healthyLiquidity) {
+
+  evidence.convictionDrivers.push(
+    "Strong liquidity foundation"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Monitoring Priorities
+// ---------------------------------------------------------
+
+evidence.monitoringPriorities.push(
+  "Monitor liquidity growth"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor liquidity withdrawals"
+);
+
+// =========================================================
+// Attach Evidence
+// =========================================================
+
+if (
+  context &&
+  typeof context === "object"
+) {
+
+  context.evidence ??= {};
+
+  context.evidence.liquidity =
+    evidence;
+
+}
+
+ return {
+
+  // =======================================================
+  // Existing Outputs (Backward Compatible)
+  // =======================================================
+
+  liquidityUsd: liquidity,
+
+  previousLiquidityUsd:
+    previousLiquidity,
+
+  liquidityGrowth:
+    Number(
+      liquidityGrowth.toFixed(2)
+    ),
+
+  liquiditySizeScore,
+
+  growthScore,
+
+  liquidityScore,
+
+  liquidityVerdict,
+
+  // =======================================================
+  // AI Intelligence
+  // =======================================================
+
+  liquidityStrength,
+
+  liquidityTrend,
+
+  liquidityTrendConfidence:
+
+    liquidityStrength === "VERY_STRONG"
+      ? "HIGH"
+
+      : liquidityStrength === "STRONG"
+        ? "MEDIUM"
+
+        : "LOW",
+
+  liquidityRisk,
+
+  healthyLiquidity,
+
+  // =======================================================
+  // AI Evidence
+  // =======================================================
+
+  evidence,
+
+};
 }

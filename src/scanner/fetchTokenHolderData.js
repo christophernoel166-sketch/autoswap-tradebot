@@ -48,6 +48,91 @@ function isProgramOwner(owner) {
   return !!addr && KNOWN_PROGRAM_OWNERS.has(addr);
 }
 
+// =========================================================
+// AI Holder Intelligence Helpers
+// =========================================================
+
+function getHolderStrength(score) {
+
+  if (score >= 90) return "VERY_STRONG";
+
+  if (score >= 75) return "STRONG";
+
+  if (score >= 60) return "HEALTHY";
+
+  if (score >= 40) return "WEAK";
+
+  return "VERY_WEAK";
+
+}
+
+function getWhaleRisk(largestHolderPercent) {
+
+  if (largestHolderPercent >= 40)
+    return "EXTREME";
+
+  if (largestHolderPercent >= 25)
+    return "HIGH";
+
+  if (largestHolderPercent >= 15)
+    return "MODERATE";
+
+  return "LOW";
+
+}
+
+function getDistributionQuality(top10HoldingPercent) {
+
+  if (top10HoldingPercent <= 35)
+    return "EXCELLENT";
+
+  if (top10HoldingPercent <= 50)
+    return "GOOD";
+
+  if (top10HoldingPercent <= 70)
+    return "MODERATE";
+
+  return "POOR";
+
+}
+
+function calculateDecentralizationScore(
+  largestHolderPercent,
+  top10HoldingPercent
+) {
+
+  let score = 100;
+
+  score -= largestHolderPercent * 1.2;
+
+  score -=
+    Math.max(
+      top10HoldingPercent - 30,
+      0
+    ) * 0.6;
+
+  return Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(score)
+    )
+  );
+
+}
+
+function hasHealthyDistribution(
+  largestHolderPercent,
+  top10HoldingPercent
+) {
+
+  return (
+    largestHolderPercent <= 20 &&
+    top10HoldingPercent <= 60
+  );
+
+}
+
 function detectSmartLpSignals({
   owner,
   tokenAccountAddress,
@@ -169,7 +254,12 @@ async function getParsedAccountOwner(connection, tokenAccountAddress) {
   }
 }
 
-export async function fetchTokenHolderData(tokenMint, options = {}) {
+export async function fetchTokenHolderData(
+  tokenMint,
+  options = {},
+  context = {}
+) {
+
   const rpcUrl = process.env.QUICKNODE_RPC_URL || process.env.RPC_URL;
 
   if (!rpcUrl) {
@@ -348,6 +438,214 @@ export async function fetchTokenHolderData(tokenMint, options = {}) {
       .reduce((sum, h) => sum + safeNumber(h.percent, 0), 0)
   );
 
+// =========================================================
+// AI Holder Intelligence
+// =========================================================
+
+const holderStrength =
+  getHolderStrength(
+    100 - largestHolderPercent
+  );
+
+const whaleRisk =
+  getWhaleRisk(
+    largestHolderPercent
+  );
+
+const distributionQuality =
+  getDistributionQuality(
+    top10HoldingPercent
+  );
+
+const decentralizationScore =
+  calculateDecentralizationScore(
+    largestHolderPercent,
+    top10HoldingPercent
+  );
+
+const healthyDistribution =
+  hasHealthyDistribution(
+    largestHolderPercent,
+    top10HoldingPercent
+  );
+
+// =========================================================
+// AI Evidence
+// =========================================================
+
+const evidence = {
+
+  confidenceContribution:
+    decentralizationScore,
+
+  confidenceWeight:
+    5,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  risks: [],
+
+  assumptions: [],
+
+  convictionDrivers: [],
+
+  monitoringPriorities: [],
+
+};
+
+// ---------------------------------------------------------
+// Strengths
+// ---------------------------------------------------------
+
+if (
+  holderStrength === "VERY_STRONG" ||
+  holderStrength === "STRONG"
+) {
+
+  evidence.strengths.push(
+    "Holder concentration is low"
+  );
+
+}
+
+if (healthyDistribution) {
+
+  evidence.strengths.push(
+    "Token ownership is well distributed"
+  );
+
+}
+
+if (
+  whaleRisk === "LOW"
+) {
+
+  evidence.strengths.push(
+    "No dominant whale detected"
+  );
+
+}
+
+if (
+  distributionQuality === "EXCELLENT" ||
+  distributionQuality === "GOOD"
+) {
+
+  evidence.strengths.push(
+    "Healthy holder distribution"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Weaknesses
+// ---------------------------------------------------------
+
+if (
+  holderStrength === "WEAK" ||
+  holderStrength === "VERY_WEAK"
+) {
+
+  evidence.weaknesses.push(
+    "Ownership is concentrated"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Risks
+// ---------------------------------------------------------
+
+if (
+  whaleRisk === "HIGH"
+) {
+
+  evidence.risks.push(
+    "Large whale may impact price"
+  );
+
+}
+
+if (
+  whaleRisk === "EXTREME"
+) {
+
+  evidence.risks.push(
+    "Extreme whale concentration increases rug risk"
+  );
+
+}
+
+if (
+  distributionQuality === "POOR"
+) {
+
+  evidence.risks.push(
+    "Poor holder distribution"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------
+
+evidence.assumptions.push(
+  "Large holders do not sell aggressively"
+);
+
+// ---------------------------------------------------------
+// Conviction Drivers
+// ---------------------------------------------------------
+
+if (healthyDistribution) {
+
+  evidence.convictionDrivers.push(
+    "Decentralized ownership"
+  );
+
+}
+
+if (
+  decentralizationScore >= 80
+) {
+
+  evidence.convictionDrivers.push(
+    "Excellent decentralization"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Monitoring Priorities
+// ---------------------------------------------------------
+
+evidence.monitoringPriorities.push(
+  "Monitor whale wallets"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor holder concentration"
+);
+
+// =========================================================
+// Attach Evidence
+// =========================================================
+
+if (
+  context &&
+  typeof context === "object"
+) {
+
+  context.evidence ??= {};
+
+  context.evidence.holders =
+    evidence;
+
+}
+
   let holderWarning = null;
 
   if (!includedHolders.length) {
@@ -358,11 +656,50 @@ export async function fetchTokenHolderData(tokenMint, options = {}) {
   }
 
   return {
-    holderCount: includedHolders.length,
-    largestHolderPercent,
-    top10HoldingPercent,
-    topHolders: includedHolders.slice(0, 10),
-    excludedAccounts,
-    holderWarning,
-  };
+
+  // =======================================================
+  // Existing Outputs (Backward Compatible)
+  // =======================================================
+
+  holderCount:
+    includedHolders.length,
+
+  largestHolderPercent,
+
+  top10HoldingPercent,
+
+  topHolders:
+    includedHolders.slice(0, 10),
+
+  excludedAccounts,
+
+  holderWarning,
+
+  // =======================================================
+  // AI Intelligence
+  // =======================================================
+
+  holderStrength,
+
+  whaleRisk,
+
+  distributionQuality,
+
+  decentralizationScore,
+
+  healthyDistribution,
+
+  holderHealth:
+
+    healthyDistribution
+      ? "HEALTHY"
+      : "UNHEALTHY",
+
+  // =======================================================
+  // AI Evidence
+  // =======================================================
+
+  evidence,
+
+};
 }

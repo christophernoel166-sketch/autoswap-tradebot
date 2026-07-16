@@ -451,12 +451,45 @@ if (type === "surge-watch") {
   }
 });
 
+
+
+
 // =====================================================
 // SCAN ROUTE
 // =====================================================
 router.post("/scan", async (req, res) => {
   try {
     const { tokenMint, walletAddress } = req.body || {};
+
+// ======================================================
+// Shared AI Context
+// ======================================================
+
+const aiContext = {
+
+    // All engine outputs
+    analyses: {},
+
+    // Evidence collected from every engine
+    evidence: {},
+
+    // AI reasoning (filled later)
+    reasoning: {},
+
+    // Investment thesis (filled later)
+    investmentThesis: {},
+
+    // Final recommendation (filled later)
+    recommendation: null,
+
+    // Overall confidence
+    confidence: 0,
+
+    // Debug information
+    debug: [],
+
+};
+
 
     if (!tokenMint || typeof tokenMint !== "string") {
       return res.status(400).json({
@@ -473,6 +506,9 @@ const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
     // ================= MARKET FETCH =================
     try {
       market = await fetchTokenMarketData(tokenMint);
+aiContext.analyses.market =
+  market;
+
     } catch (err) {
       if ((err?.message || "").includes("No market pairs found")) {
         const response = formatScanResponse({
@@ -671,6 +707,8 @@ console.log(
     }
 
     enrichedSocialData = await checkSocialStatus(enrichedSocialData);
+aiContext.analyses.social =
+  enrichedSocialData;
 
     // ================= TELEGRAM =================
     const telegramAlpha = await fetchTelegramAlphaPosts({
@@ -708,6 +746,8 @@ console.log(
 
     activityData.xReplyCount = xPumpReplyData.xReplyCount;
     activityData.xPumpReplyScore = xPumpReplyData.xPumpReplyScore;
+aiContext.analyses.activity =
+  activityData;
 
     // ================= HOLDERS =================
 let holderData = {
@@ -723,48 +763,74 @@ console.log(
   "🔍 HOLDER SCAN REQUEST",
   tokenMint
 );
-  holderData = await fetchTokenHolderData(tokenMint, {
-    excludeAddresses: getExcludedHolderAddressesForMint(tokenMint),
-    marketContext: {
-      dexId: market?.token?.dexId || market?.rawPair?.dexId || "",
-      labels: market?.rawPair?.labels || [],
-    },
-  });
+  holderData = await fetchTokenHolderData({
+  tokenMint: tokenMint.trim(),
+
+  excludeAddresses:
+    getExcludedHolderAddressesForMint(tokenMint),
+
+  marketContext: {
+    dexId:
+      market?.token?.dexId ||
+      market?.rawPair?.dexId ||
+      "",
+
+    labels:
+      market?.rawPair?.labels || [],
+  },
+
+  market,
+
+  context: aiContext,
+});
+
+aiContext.analyses.holders =
+  holderData;
 } catch (err) {
   console.warn("Holder scan failed:", err?.message);
   holderData.holderWarning = "Holder scan temporarily unavailable";
 }
 
     // ================= INTEGRITY =================
-    const integrityData = await fetchMarketIntegrityData({
-      tokenMint: tokenMint.trim(),
-      market,
-      context: {
-        recentTrades: [],
-      },
-    });
+    const integrityData =
+await fetchMarketIntegrityData({
+  tokenMint: tokenMint.trim(),
+  market,
+  context: {
+    ...aiContext,
+    recentTrades: [],
+  },
+});
 
+aiContext.analyses.integrity =
+  integrityData;
 // ================= WALLET INTELLIGENCE =================
 const walletIntel = await fetchWalletIntelligenceData({
   tokenMint: tokenMint.trim(),
   holderData,
   market,
+  context: aiContext,
 });
+aiContext.analyses.wallets =
+  walletIntel;
 
     // ================= RUG RISK =================
     const rugRiskData = await fetchRugRiskData({
-      tokenMint: tokenMint.trim(),
-      market,
-      holderData,
-      context: {},
-    });
-
+  tokenMint: tokenMint.trim(),
+  market,
+  holderData,
+  context: aiContext,
+});
+aiContext.analyses.rugRisk =
+  rugRiskData;
 
 const momentumData = await fetchMomentumData({
   tokenMint: tokenMint.trim(),
   market,
-  context: {},
+  context: aiContext,
 });
+aiContext.analyses.momentum =
+  momentumData;
 
 // VOLUME ANALYSIS
 const discoveredToken =
@@ -794,7 +860,11 @@ await fetchVolumeAnalysisData({
   previousSells5m:
     discoveredToken
       ?.previousSells5m || 0,
+ context: aiContext
 });
+
+aiContext.analyses.volume =
+    volumeAnalysis;
 
 const liquidityAnalysis =
 await fetchLiquidityAnalysisData({
@@ -804,24 +874,33 @@ await fetchLiquidityAnalysisData({
   previousLiquidityUsd:
     discoveredToken
       ?.previousLiquidityUsd || 0,
+ context: aiContext
 });
+// Store full analysis
+aiContext.analyses.liquidity =
+  liquidityAnalysis;
 
 const riskStructureData = await fetchRiskStructureData({
   tokenMint: tokenMint.trim(),
   market,
   holderData,
-  context: {},
+  context: aiContext,
 });
+aiContext.analyses.riskStructure =
+  riskStructureData;
 
 
-
-const profitWalletData = await fetchProfitWalletData({
+const profitWalletData =
+await fetchProfitWalletData({
   tokenMint: tokenMint.trim(),
   holderData,
   walletIntel,
   market,
-  context: {},
+  context: aiContext,
 });
+
+aiContext.analyses.profitWallets =
+  profitWalletData;
     // ================= METRICS =================
 const rawMetrics = {
   ageMinutes: market.metrics.ageMinutes,
@@ -914,6 +993,8 @@ try {
 } catch (err) {
   console.warn("Chart analysis failed:", err?.message);
 }
+aiContext.analyses.chart =
+  chartEntry;
 
 let forecast = null;
 
@@ -1072,6 +1153,89 @@ if (chartEntry?.ok) {
   };
 }
 
+// Store forecast for AI reasoning
+aiContext.analyses.forecast =
+  forecast;
+
+// =====================================================
+// Forecast AI Evidence
+// =====================================================
+
+if (forecast) {
+
+  aiContext.evidence.forecast = {
+
+    confidenceContribution:
+      forecast.confidence,
+
+    confidenceWeight: 8,
+
+    strengths: [],
+
+    weaknesses: [],
+
+    risks: [],
+
+    assumptions: [],
+
+    convictionDrivers: [],
+
+    monitoringPriorities: [],
+
+  };
+
+  if (
+    forecast.shortTerm.score >= 80
+  ) {
+
+    aiContext.evidence.forecast
+      .strengths.push(
+        "Strong short-term momentum"
+      );
+
+  }
+
+  if (
+    forecast.midTerm.score >= 75
+  ) {
+
+    aiContext.evidence.forecast
+      .convictionDrivers.push(
+        "Healthy mid-term trend"
+      );
+
+  }
+
+  if (
+    forecast.longTerm.score >= 70
+  ) {
+
+    aiContext.evidence.forecast
+      .convictionDrivers.push(
+        "Long-term structure remains healthy"
+      );
+
+  }
+
+  if (
+    forecast.longTerm.score < 40
+  ) {
+
+    aiContext.evidence.forecast
+      .risks.push(
+        "Long-term trend is weakening"
+      );
+
+  }
+
+  aiContext.evidence.forecast
+    .monitoringPriorities.push(
+      "Monitor trend continuation"
+    );
+
+}
+
+
 console.log(
   "🚀 FORECAST RESPONSE START"
 );
@@ -1104,18 +1268,35 @@ const signalScore = await scoreSignal({
 
   forecastScore:
     forecast?.forecastScore,
+
+  context: aiContext,
 });
 
+// Store signal scoring
+aiContext.analyses.signalScore =
+  signalScore;
+
+// Build AI recommendation
 const aiRecommendation =
   buildAIRecommendation({
+
+    context: aiContext,
+
     forecast,
+
     signalScore,
-    momentumData,
-    profitWalletData,
-    rugRiskData,
-    volumeAnalysis,
-    liquidityAnalysis,
+
   });
+
+// Store recommendation
+aiContext.analyses.aiRecommendation =
+  aiRecommendation;
+
+aiContext.recommendation =
+  aiRecommendation;
+
+aiContext.confidence =
+  aiRecommendation?.confidence ?? 0;
 
 console.log(
   "🧠 SIGNAL SCORE",
@@ -1232,6 +1413,16 @@ try {
     forecastVerdict:
       forecast?.verdict ?? null,
 
+signalScore:
+    signalScore?.signalScore ?? null,
+
+recommendation:
+  aiRecommendation?.action ?? null,
+
+recommendationConfidence:
+  aiRecommendation?.confidence ?? null,
+
+
     // Initial state
     label: "PENDING",
   });
@@ -1267,14 +1458,31 @@ return res.status(200).json({
   volumeAnalysis,
   liquidityAnalysis,
 
-  ai: {
+ ai: {
+
     version: "v2",
+
     generatedAt: scanTimestamp,
 
     forecast,
+
     signalScore,
+
     recommendation: aiRecommendation,
-  },
+
+    confidence:
+      aiContext.confidence,
+
+    evidence:
+      aiContext.evidence,
+
+    reasoning:
+      aiContext.reasoning,
+
+    investmentThesis:
+      aiContext.investmentThesis,
+
+},
 
   ...response,
 
@@ -1320,6 +1528,19 @@ router.post("/scan-custom-mode", async (req, res) => {
 
     const cleanWalletAddress = walletAddress.trim();
     const cleanTokenMint = tokenMint.trim();
+// ======================================================
+// Shared AI Context
+// ======================================================
+
+const aiContext = {
+  analyses: {},
+  evidence: {},
+  reasoning: {},
+  investmentThesis: {},
+  recommendation: null,
+  confidence: 0,
+  debug: [],
+};
 
 
 const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
@@ -1358,6 +1579,10 @@ if (!hasConditions) {
   } catch (err) {
     console.warn("Chart analysis failed:", err?.message);
   }
+// Store chart analysis
+aiContext.analyses.chart =
+  chartEntry;
+let forecast = null;
 
   return res.status(200).json({
     ok: true,
@@ -1467,6 +1692,8 @@ expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
     // Only fetch data needed for condition matching
     // ===================================================
     const market = await fetchTokenMarketData(cleanTokenMint);
+aiContext.analyses.market =
+    market;
 
     const socialData = fetchTokenSocialData(market.rawPair);
     let enrichedSocialData = { ...socialData };
@@ -1485,6 +1712,8 @@ expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
     }
 
     enrichedSocialData = await checkSocialStatus(enrichedSocialData);
+aiContext.analyses.social =
+    enrichedSocialData;
 
     let holderData = {
       largestHolderPercent: null,
@@ -1495,45 +1724,80 @@ expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
     };
 
     try {
-      holderData = await fetchTokenHolderData(cleanTokenMint, {
-        excludeAddresses: getExcludedHolderAddressesForMint(cleanTokenMint),
-        marketContext: {
-          dexId: market?.token?.dexId || market?.rawPair?.dexId || "",
-          labels: market?.rawPair?.labels || [],
-        },
-      });
+      holderData = await fetchTokenHolderData({
+  tokenMint: cleanTokenMint,
+
+  excludeAddresses:
+    getExcludedHolderAddressesForMint(cleanTokenMint),
+
+  marketContext: {
+    dexId:
+      market?.token?.dexId ||
+      market?.rawPair?.dexId ||
+      "",
+
+    labels:
+      market?.rawPair?.labels || [],
+  },
+
+  market,
+
+  context: aiContext,
+});
+aiContext.analyses.holders =
+  holderData;
+     
     } catch (err) {
       console.warn("Custom mode holder scan failed:", err?.message);
       holderData.holderWarning = "Holder scan temporarily unavailable";
     }
 
-    const integrityData = await fetchMarketIntegrityData({
-      tokenMint: cleanTokenMint,
-      market,
-      context: {
-        recentTrades: [],
-      },
-    });
+    const integrityData =
+await fetchMarketIntegrityData({
+    tokenMint: cleanTokenMint,
+    market,
 
-    const walletIntel = await fetchWalletIntelligenceData({
-      tokenMint: cleanTokenMint,
-      holderData,
-      market,
-    });
+    context:{
+        ...aiContext,
+        recentTrades:[]
+    }
+});
 
-    const rugRiskData = await fetchRugRiskData({
-      tokenMint: cleanTokenMint,
-      market,
-      holderData,
-      context: {},
-    });
+aiContext.analyses.integrity =
+    integrityData;
 
-    const riskStructureData = await fetchRiskStructureData({
-      tokenMint: cleanTokenMint,
-      market,
-      holderData,
-      context: {},
-    });
+    const walletIntel =
+await fetchWalletIntelligenceData({
+    tokenMint: cleanTokenMint,
+    holderData,
+    market,
+    context: aiContext,
+});
+
+aiContext.analyses.wallets =
+    walletIntel;
+
+    const rugRiskData =
+await fetchRugRiskData({
+    tokenMint: cleanTokenMint,
+    market,
+    holderData,
+    context: aiContext,
+});
+
+aiContext.analyses.rugRisk =
+    rugRiskData;
+
+    const riskStructureData =
+await fetchRiskStructureData({
+    tokenMint: cleanTokenMint,
+    market,
+    holderData,
+    context: aiContext,
+});
+
+aiContext.analyses.riskStructure =
+    riskStructureData;
 
     const conditionCheck = matchTokenConditions({
       market,
@@ -1556,7 +1820,508 @@ try {
   console.warn("Chart analysis failed:", err?.message);
 }
 
-    return res.status(200).json({
+aiContext.analyses.chart =
+  chartEntry;
+
+// =====================================================
+// VOLUME ANALYSIS
+// =====================================================
+
+const discoveredToken =
+  await DiscoveredToken.findOne({
+    mintAddress: cleanTokenMint,
+  }).lean();
+
+const volumeAnalysis =
+  await fetchVolumeAnalysisData({
+    volume5mUsd:
+      market.metrics.volume5mUsd,
+
+    buys5m:
+      market.metrics.buys5m,
+
+    sells5m:
+      market.metrics.sells5m,
+
+    previousVolume5mUsd:
+      discoveredToken?.previousVolume5mUsd || 0,
+
+    previousBuys5m:
+      discoveredToken?.previousBuys5m || 0,
+
+    previousSells5m:
+      discoveredToken?.previousSells5m || 0,
+
+    context: aiContext,
+  });
+
+aiContext.analyses.volume =
+  volumeAnalysis;
+
+// =====================================================
+// LIQUIDITY ANALYSIS
+// =====================================================
+
+const liquidityAnalysis =
+  await fetchLiquidityAnalysisData({
+    liquidityUsd:
+      market.metrics.liquidityUsd,
+
+    previousLiquidityUsd:
+      discoveredToken?.previousLiquidityUsd || 0,
+
+    context: aiContext,
+  });
+
+aiContext.analyses.liquidity =
+  liquidityAnalysis;
+
+// =====================================================
+// MOMENTUM
+// =====================================================
+
+const momentumData =
+  await fetchMomentumData({
+    tokenMint: cleanTokenMint,
+    market,
+    context: aiContext,
+  });
+
+aiContext.analyses.momentum =
+  momentumData;
+
+// =====================================================
+// PROFIT WALLETS
+// =====================================================
+
+const profitWalletData =
+  await fetchProfitWalletData({
+    tokenMint: cleanTokenMint,
+    holderData,
+    walletIntel,
+    market,
+    context: aiContext,
+  });
+
+aiContext.analyses.profitWallets =
+  profitWalletData;
+
+// =====================================================
+// FORECAST
+// =====================================================
+
+function getForecastVerdict(score) {
+
+  if (score >= 90)
+    return "VERY_STRONG_BULLISH";
+
+  if (score >= 75)
+    return "STRONG_BULLISH";
+
+  if (score >= 60)
+    return "BULLISH";
+
+  if (score >= 40)
+    return "NEUTRAL";
+
+  if (score >= 25)
+    return "BEARISH";
+
+  return "STRONG_BEARISH";
+
+}
+
+let forecast = null;
+
+if (chartEntry?.ok) {
+
+  const trendScore =
+    Number(chartEntry.metrics?.trendStrength || 0);
+
+  const volumeScore =
+    Number(volumeAnalysis?.volumeScore || 0);
+
+  const liquidityScore =
+    Number(liquidityAnalysis?.liquidityScore || 0);
+
+  const momentumScore =
+    Number(momentumData?.momentumScore || 0);
+
+  const walletQualityScore =
+    Number(profitWalletData?.walletQualityScore || 0);
+
+  const fundingClusterScore =
+    Number(riskStructureData?.fundingClusterScore || 0);
+
+  const priceChange24h =
+    Number(market.metrics?.priceChange24h || 0);
+
+  const momentum24h =
+    Math.min(
+      100,
+      Math.abs(priceChange24h) / 20
+    );
+
+  const shortTermScore =
+    Math.round(
+      trendScore * 0.40 +
+      volumeScore * 0.35 +
+      liquidityScore * 0.25
+    );
+
+  const midTermScore =
+    Math.round(
+      trendScore * 0.25 +
+      volumeScore * 0.30 +
+      liquidityScore * 0.25 +
+      momentum24h * 0.20
+    );
+
+  const longTermScore =
+    Math.round(
+      liquidityScore * 0.30 +
+      walletQualityScore * 0.25 +
+      (100 - fundingClusterScore) * 0.20 +
+      momentumScore * 0.25
+    );
+
+  forecast = {
+
+    trendScore,
+
+    volumeScore,
+
+    liquidityScore,
+
+    forecastScore:
+      shortTermScore,
+
+    verdict:
+      getForecastVerdict(shortTermScore),
+
+    shortTerm: {
+
+      score:
+        shortTermScore,
+
+      verdict:
+        getForecastVerdict(shortTermScore),
+
+    },
+
+    midTerm: {
+
+      score:
+        midTermScore,
+
+      verdict:
+        getForecastVerdict(midTermScore),
+
+    },
+
+    longTerm: {
+
+      score:
+        longTermScore,
+
+      verdict:
+        getForecastVerdict(longTermScore),
+
+    },
+
+    confidence:
+      Math.round(
+        (
+          shortTermScore +
+          midTermScore +
+          longTermScore
+        ) / 3
+      ),
+
+  };
+
+}
+
+aiContext.analyses.forecast =
+  forecast;
+
+// =====================================================
+// FORECAST EVIDENCE
+// =====================================================
+
+if (forecast) {
+
+  aiContext.evidence.forecast = {
+
+    confidenceContribution:
+      forecast.confidence,
+
+    confidenceWeight: 8,
+
+    strengths: [],
+
+    weaknesses: [],
+
+    risks: [],
+
+    assumptions: [],
+
+    convictionDrivers: [],
+
+    monitoringPriorities: [],
+
+  };
+
+  if (forecast.shortTerm.score >= 80) {
+
+    aiContext.evidence.forecast.strengths.push(
+      "Strong short-term momentum"
+    );
+
+  }
+
+  if (forecast.midTerm.score >= 75) {
+
+    aiContext.evidence.forecast.convictionDrivers.push(
+      "Healthy mid-term trend"
+    );
+
+  }
+
+  if (forecast.longTerm.score >= 70) {
+
+    aiContext.evidence.forecast.convictionDrivers.push(
+      "Long-term structure remains healthy"
+    );
+
+  }
+
+  if (forecast.longTerm.score < 40) {
+
+    aiContext.evidence.forecast.risks.push(
+      "Long-term trend is weakening"
+    );
+
+  }
+
+  aiContext.evidence.forecast.monitoringPriorities.push(
+    "Monitor trend continuation"
+  );
+
+}
+
+// =====================================================
+// SIGNAL SCORE
+// =====================================================
+
+const signalScore =
+  await scoreSignal({
+
+    momentumScore:
+      momentumData?.momentumScore,
+
+    walletQualityScore:
+      profitWalletData?.walletQualityScore,
+
+    rugRiskScore:
+      rugRiskData?.rugRiskScore,
+
+    forecastScore:
+      forecast?.forecastScore,
+
+    context: aiContext,
+
+  });
+
+aiContext.analyses.signalScore =
+  signalScore;
+
+// =====================================================
+// AI RECOMMENDATION
+// =====================================================
+
+const aiRecommendation =
+  buildAIRecommendation({
+
+    context:
+      aiContext,
+
+    forecast,
+
+    signalScore,
+
+  });
+
+aiContext.analyses.aiRecommendation =
+  aiRecommendation;
+
+aiContext.recommendation =
+  aiRecommendation;
+
+aiContext.confidence =
+  aiRecommendation?.confidence ?? 0;
+
+// =====================================================
+// SAVE HISTORICAL OUTCOME
+// =====================================================
+
+try {
+
+  await TokenOutcome.create({
+
+    // Identification
+    mintAddress: cleanTokenMint,
+    pairAddress: market.token?.pairAddress || null,
+    symbol: market.token?.symbol || null,
+    name: market.token?.name || null,
+
+    // Source
+    source: "custom_scan",
+    walletAddress: cleanWalletAddress,
+
+    // Timing
+    scannedAt: new Date(),
+
+    // Entry Price
+    entryPriceUsd:
+      market.metrics?.priceUsd ?? null,
+
+    // Market
+    ageMinutes:
+      market.metrics?.ageMinutes,
+
+    liquidityUsd:
+      market.metrics?.liquidityUsd,
+
+    marketCapUsd:
+      market.metrics?.marketCapUsd,
+
+    volume5mUsd:
+      market.metrics?.volume5mUsd,
+
+    buys5m:
+      market.metrics?.buys5m,
+
+    sells5m:
+      market.metrics?.sells5m,
+
+    // Holder Metrics
+    largestHolderPercent:
+      holderData?.largestHolderPercent,
+
+    top10HoldingPercent:
+      holderData?.top10HoldingPercent,
+
+    // Wallet Intelligence
+    smartDegenCount:
+      walletIntel?.smartDegenCount,
+
+    botDegenCount:
+      walletIntel?.botDegenCount,
+
+    ratTraderCount:
+      walletIntel?.ratTraderCount,
+
+    alphaCallerCount:
+      walletIntel?.alphaCallerCount,
+
+    sniperWalletCount:
+      walletIntel?.sniperWalletCount,
+
+    // Profit Wallets
+    profitableWalletCount:
+      profitWalletData?.profitableWalletCount,
+
+    walletQualityScore:
+      profitWalletData?.walletQualityScore,
+
+    profitWalletConfidence:
+      profitWalletData?.profitWalletConfidence,
+
+    // Momentum
+    momentumScore:
+      momentumData?.momentumScore,
+
+    velocityBreakoutScore:
+      momentumData?.velocityBreakoutScore,
+
+    // Integrity
+    walletParticipationScore:
+      integrityData?.walletParticipationScore,
+
+    velocitySanityScore:
+      integrityData?.velocitySanityScore,
+
+    washTradingRiskScore:
+      integrityData?.washTradingRiskScore,
+
+    bundleSuspicionScore:
+      integrityData?.bundleSuspicionScore,
+
+    artificialVolumeFlag:
+      integrityData?.artificialVolumeFlag,
+
+    fakeMomentumFlag:
+      integrityData?.fakeMomentumFlag,
+
+    // Risk Structure
+    bundleScore:
+      riskStructureData?.bundleScore,
+
+    bundledWalletCount:
+      riskStructureData?.bundledWalletCount,
+
+    fundingClusterScore:
+      riskStructureData?.fundingClusterScore,
+
+    largestFundingCluster:
+      riskStructureData?.largestFundingCluster,
+
+    // Rug Risk
+    devDumpRiskScore:
+      rugRiskData?.devDumpRiskScore,
+
+    liquidityPullRiskScore:
+      rugRiskData?.liquidityPullRiskScore,
+
+    insiderRiskScore:
+      rugRiskData?.insiderRiskScore,
+
+    rugRiskScore:
+      rugRiskData?.rugRiskScore,
+
+    // Forecast
+    forecastScore:
+      forecast?.forecastScore ?? null,
+
+    forecastVerdict:
+      forecast?.verdict ?? null,
+
+    // AI
+    signalScore:
+      signalScore?.signalScore ?? null,
+
+    recommendation:
+      aiRecommendation?.action ?? null,
+
+    recommendationConfidence:
+      aiRecommendation?.confidence ?? null,
+
+    // Initial State
+    label: "PENDING",
+
+  });
+
+} catch (err) {
+
+  console.error(
+    "Failed to save TokenOutcome:",
+    err
+  );
+
+}
+
+return res.status(200).json({
       ok: true,
       mode: "custom",
       walletAddress: cleanWalletAddress,
@@ -1619,13 +2384,43 @@ liquidityLockReason: liquidityLock.liquidityLockReason,
       },
       scannedAt: new Date(),
 expiresAt: new Date(Date.now() + SCAN_EXPIRY_MS).toISOString(),
-      customMode: {
-        enabled: true,
-        hasConditions: true,
-        bypassedDefaultScanner: true,
-      },
-    
-    });
+     customMode: {
+  enabled: true,
+  hasConditions: true,
+  bypassedDefaultScanner: true,
+},
+
+volumeAnalysis,
+
+liquidityAnalysis,
+
+momentum: momentumData,
+
+profitWallets: profitWalletData,
+
+ai: {
+  version: "v2",
+
+  generatedAt: new Date().toISOString(),
+
+  forecast,
+
+  signalScore,
+
+  recommendation: aiRecommendation,
+
+  confidence: aiContext.confidence,
+
+  evidence: aiContext.evidence,
+
+  reasoning: aiContext.reasoning,
+
+  investmentThesis: aiContext.investmentThesis,
+},
+
+});
+
+
   } catch (error) {
     console.error("POST /api/tokens/scan-custom-mode error:", error);
 

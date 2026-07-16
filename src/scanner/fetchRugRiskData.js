@@ -9,6 +9,50 @@ function clamp(v, min, max) {
   return Math.min(Math.max(v, min), max);
 }
 
+// =========================================================
+// AI Rug Risk Helpers
+// =========================================================
+
+function getRiskLevel(score) {
+
+  if (score >= 85) return "EXTREME";
+
+  if (score >= 70) return "HIGH";
+
+  if (score >= 50) return "MODERATE";
+
+  if (score >= 30) return "LOW";
+
+  return "VERY_LOW";
+
+}
+
+function getEntrySafety(score) {
+
+  if (score <= 20) return "SAFE";
+
+  if (score <= 40) return "CAUTION";
+
+  if (score <= 60) return "HIGH_RISK";
+
+  return "DO_NOT_ENTER";
+
+}
+
+function getRugProbability(score) {
+
+  if (score >= 80) return "VERY_HIGH";
+
+  if (score >= 60) return "HIGH";
+
+  if (score >= 40) return "MODERATE";
+
+  if (score >= 20) return "LOW";
+
+  return "VERY_LOW";
+
+}
+
 /**
  * Rug risk detection (first version)
  *
@@ -122,16 +166,247 @@ export async function fetchRugRiskData({
       ? "MODERATE"
       : "LOW";
 
-  return {
-    tokenMint,
+// =========================================================
+// AI Rug Intelligence
+// =========================================================
 
-    devDumpRiskScore,
-    liquidityPullRiskScore,
-    insiderRiskScore,
+const overallRiskLevel =
+  getRiskLevel(rugRiskScore);
 
-    rugRiskScore,
-    rugRiskLevel,
+const rugProbability =
+  getRugProbability(rugRiskScore);
 
-    rugWarning: warnings.length ? warnings.join(" | ") : null,
-  };
+const entrySafety =
+  getEntrySafety(rugRiskScore);
+
+// =========================================================
+// AI Evidence
+// =========================================================
+
+const evidence = {
+
+  confidenceContribution:
+    100 - rugRiskScore,
+
+  confidenceWeight:
+    6,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  risks: [],
+
+  assumptions: [],
+
+  convictionDrivers: [],
+
+  monitoringPriorities: [],
+
+};
+
+// ---------------------------------------------------------
+// Strengths
+// ---------------------------------------------------------
+
+if (
+  rugRiskScore <= 25
+) {
+
+  evidence.strengths.push(
+    "Low rug risk detected"
+  );
+
+}
+
+if (
+  liquidityPullRiskScore <= 20
+) {
+
+  evidence.strengths.push(
+    "Liquidity appears stable"
+  );
+
+}
+
+if (
+  insiderRiskScore <= 20
+) {
+
+  evidence.strengths.push(
+    "Holder concentration is acceptable"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Weaknesses
+// ---------------------------------------------------------
+
+if (
+  rugRiskScore >= 50
+) {
+
+  evidence.weaknesses.push(
+    "Elevated rug risk"
+  );
+
+}
+
+if (
+  devDumpRiskScore >= 40
+) {
+
+  evidence.weaknesses.push(
+    "Developer dump risk is elevated"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Risks
+// ---------------------------------------------------------
+
+if (
+  liquidityPullRiskScore >= 40
+) {
+
+  evidence.risks.push(
+    "Liquidity removal risk"
+  );
+
+}
+
+if (
+  insiderRiskScore >= 40
+) {
+
+  evidence.risks.push(
+    "Insider concentration risk"
+  );
+
+}
+
+if (
+  devDumpRiskScore >= 40
+) {
+
+  evidence.risks.push(
+    "Developer-controlled supply"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------
+
+evidence.assumptions.push(
+  "Liquidity remains available"
+);
+
+// ---------------------------------------------------------
+// Conviction Drivers
+// ---------------------------------------------------------
+
+if (
+  rugRiskScore <= 20
+) {
+
+  evidence.convictionDrivers.push(
+    "Very low structural rug risk"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Monitoring Priorities
+// ---------------------------------------------------------
+
+evidence.monitoringPriorities.push(
+  "Monitor liquidity"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor whale wallets"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor holder concentration"
+);
+
+// =========================================================
+// Attach Evidence
+// =========================================================
+
+if (
+  context &&
+  typeof context === "object"
+) {
+
+  context.evidence ??= {};
+
+  context.evidence.risk =
+    evidence;
+
+}
+
+
+return {
+
+  // =======================================================
+  // Existing Outputs (Backward Compatible)
+  // =======================================================
+
+  tokenMint,
+
+  devDumpRiskScore,
+
+  liquidityPullRiskScore,
+
+  insiderRiskScore,
+
+  rugRiskScore,
+
+  rugRiskLevel,
+
+  rugWarning:
+
+    warnings.length
+      ? warnings.join(" | ")
+      : null,
+
+  // =======================================================
+  // AI Intelligence
+  // =======================================================
+
+  overallRiskLevel,
+
+  rugProbability,
+
+  entrySafety,
+
+  safeToEnter:
+    rugRiskScore <= 40,
+
+  riskBreakdown: {
+
+    developer:
+      devDumpRiskScore,
+
+    liquidity:
+      liquidityPullRiskScore,
+
+    insider:
+      insiderRiskScore,
+
+  },
+
+  // =======================================================
+  // AI Evidence
+  // =======================================================
+
+  evidence,
+
+};
 }

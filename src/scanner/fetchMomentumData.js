@@ -9,6 +9,86 @@ function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
 }
 
+// =========================================================
+// AI Intelligence Helpers
+// =========================================================
+
+function getMomentumStage(ageMinutes, momentumScore) {
+
+  if (momentumScore < 30) return "FADING";
+
+  if (ageMinutes <= 10) return "EARLY";
+
+  if (ageMinutes <= 30) return "BUILDING";
+
+  if (ageMinutes <= 120) return "ACCELERATING";
+
+  if (ageMinutes <= 360) return "PEAK";
+
+  return "EXHAUSTING";
+
+}
+
+function getMomentumStrength(score) {
+
+  if (score >= 90) return "VERY_STRONG";
+
+  if (score >= 75) return "STRONG";
+
+  if (score >= 55) return "MODERATE";
+
+  if (score >= 35) return "WEAK";
+
+  return "VERY_WEAK";
+
+}
+
+function getBuyPressureLevel(ratio) {
+
+  if (ratio >= 0.75) return "VERY_HIGH";
+
+  if (ratio >= 0.65) return "HIGH";
+
+  if (ratio >= 0.55) return "MODERATE";
+
+  if (ratio >= 0.50) return "BALANCED";
+
+  return "LOW";
+
+}
+
+function getBreakoutStrength(score) {
+
+  if (score >= 85) return "STRONG";
+
+  if (score >= 65) return "MODERATE";
+
+  if (score >= 45) return "WEAK";
+
+  return "NONE";
+
+}
+
+function getContinuationProbability(
+  momentumScore,
+  velocityBreakoutScore
+) {
+
+  return clamp(
+
+    Math.round(
+      momentumScore * 0.45 +
+      velocityBreakoutScore * 0.55
+    ),
+
+    0,
+
+    100
+
+  );
+
+}
+
 export async function fetchMomentumData({
   tokenMint,
   market = {},
@@ -102,11 +182,234 @@ export async function fetchMomentumData({
   }
 
   velocityBreakoutScore = clamp(Math.round(velocityBreakoutScore), 0, 100);
+// =========================================================
+// AI Momentum Intelligence
+// =========================================================
+
+const momentumStage = getMomentumStage(
+  ageMinutes,
+  momentumScore
+);
+
+const momentumStrength = getMomentumStrength(
+  momentumScore
+);
+
+const buyPressureLevel = getBuyPressureLevel(
+  buyPressure
+);
+
+const breakoutDetected =
+  velocityBreakoutScore >= 65;
+
+const breakoutStrength = getBreakoutStrength(
+  velocityBreakoutScore
+);
+
+const continuationProbability =
+  getContinuationProbability(
+    momentumScore,
+    velocityBreakoutScore
+  );
+
+// =========================================================
+// AI Evidence
+// =========================================================
+
+const evidence = {
+
+  confidenceContribution: momentumScore,
+
+  confidenceWeight: 3,
+
+  strengths: [],
+
+  weaknesses: [],
+
+  risks: [],
+
+  assumptions: [],
+
+  convictionDrivers: [],
+
+  monitoringPriorities: [],
+
+};
+
+// ---------------------------------------------------------
+// Strengths
+// ---------------------------------------------------------
+
+if (momentumStrength === "VERY_STRONG" || momentumStrength === "STRONG") {
+
+  evidence.strengths.push(
+    "Momentum is accelerating"
+  );
+
+}
+
+if (buyPressureLevel === "VERY_HIGH" || buyPressureLevel === "HIGH") {
+
+  evidence.strengths.push(
+    "Strong buy pressure"
+  );
+
+}
+
+if (breakoutDetected) {
+
+  evidence.strengths.push(
+    "Velocity breakout detected"
+  );
+
+}
+
+if (continuationProbability >= 75) {
+
+  evidence.strengths.push(
+    "High probability of trend continuation"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Weaknesses
+// ---------------------------------------------------------
+
+if (momentumStrength === "WEAK" || momentumStrength === "VERY_WEAK") {
+
+  evidence.weaknesses.push(
+    "Momentum is weak"
+  );
+
+}
+
+if (buyPressureLevel === "LOW") {
+
+  evidence.weaknesses.push(
+    "Buying pressure is limited"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Risks
+// ---------------------------------------------------------
+
+if (momentumStage === "PEAK") {
+
+  evidence.risks.push(
+    "Momentum may be approaching exhaustion"
+  );
+
+}
+
+if (momentumStage === "EXHAUSTING") {
+
+  evidence.risks.push(
+    "Late-stage momentum increases reversal risk"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Assumptions
+// ---------------------------------------------------------
+
+evidence.assumptions.push(
+  "Buy pressure remains above selling pressure"
+);
+
+// ---------------------------------------------------------
+// Conviction Drivers
+// ---------------------------------------------------------
+
+if (breakoutDetected) {
+
+  evidence.convictionDrivers.push(
+    "Breakout confirmation"
+  );
+
+}
+
+if (momentumStrength === "VERY_STRONG") {
+
+  evidence.convictionDrivers.push(
+    "Exceptional momentum strength"
+  );
+
+}
+
+// ---------------------------------------------------------
+// Monitoring Priorities
+// ---------------------------------------------------------
+
+evidence.monitoringPriorities.push(
+  "Monitor buy/sell pressure"
+);
+
+evidence.monitoringPriorities.push(
+  "Monitor transaction velocity"
+);
+// =========================================================
+// Attach Evidence To AI Context (if provided)
+// =========================================================
+
+if (context && typeof context === "object") {
+
+  context.evidence ??= {};
+
+  context.evidence.momentum = evidence;
+
+}
 
   return {
-    tokenMint: tokenMint || null,
-    momentumScore,
-    velocityBreakoutScore,
-    momentumWarning: warnings.length ? warnings.join(" | ") : null,
-  };
+
+  tokenMint: tokenMint || null,
+
+  // =======================================================
+  // Existing Outputs (Backward Compatible)
+  // =======================================================
+
+  momentumScore,
+
+  velocityBreakoutScore,
+
+  momentumWarning:
+
+    warnings.length
+      ? warnings.join(" | ")
+      : null,
+
+  // =======================================================
+  // AI Intelligence
+  // =======================================================
+
+  momentumStage,
+
+  momentumStrength,
+
+  buyPressure: {
+
+    ratio: Number(
+      buyPressure.toFixed(3)
+    ),
+
+    level: buyPressureLevel,
+
+  },
+
+  breakoutDetected,
+
+  breakoutStrength,
+
+  continuationProbability,
+
+  // =======================================================
+  // AI Evidence
+  // =======================================================
+
+  evidence,
+
+};
 }
