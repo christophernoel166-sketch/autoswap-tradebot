@@ -4,6 +4,9 @@ import { HelmetProvider } from "react-helmet-async";
 import App from "./App";
 import "./index.css";
 
+// AI Context
+import { AIProvider } from "./context/ai/AIContext";
+
 // Core Solana adapters
 import {
     ConnectionProvider,
@@ -14,7 +17,7 @@ import {
 import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import "@solana/wallet-adapter-react-ui/styles.css";
 
-// Wallet Adapters (only the ones your version supports)
+// Wallet Adapters
 import {
     PhantomWalletAdapter,
     SolflareWalletAdapter,
@@ -37,8 +40,10 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             <WalletProvider wallets={wallets} autoConnect={true}>
                 <WalletModalProvider>
                     <HelmetProvider>
-  <App />
-</HelmetProvider>
+                        <AIProvider>
+                            <App />
+                        </AIProvider>
+                    </HelmetProvider>
                 </WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>

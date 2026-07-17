@@ -1,3 +1,5 @@
+
+
 export default function AIIntelligencePanel({ ai }) {
   if (!ai) return null;
 

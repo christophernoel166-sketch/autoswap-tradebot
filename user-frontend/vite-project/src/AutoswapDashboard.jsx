@@ -23,7 +23,7 @@ import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
 import AIIntelligencePanel from "./components/AIIntelligencePanel";
 import { getSocket } from "./services/socket";
-
+import { AICommandCenter } from "./components/ai";
 
 
 const API_BASE = (import.meta.env?.VITE_API_BASE || "http://localhost:4000").replace(/\/$/, "");
@@ -1546,7 +1546,10 @@ console.log(
     mobileTab === "dashboard" ? "block" : "hidden"
   } lg:block`}
 >
-  <div className="space-y-6">
+ <div className="space-y-6">
+
+    <AICommandCenter />
+
     <PerformanceSummary
       totalPnl={totalPnl}
       metrics={metrics}
