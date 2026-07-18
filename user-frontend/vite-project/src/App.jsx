@@ -20,6 +20,7 @@ import {
   connectSocket,
   disconnectSocket,
 } from "./services/socket";
+import { AIBootstrap } from "./components/ai";
 
 function AppContent({
   theme,
@@ -67,7 +68,9 @@ const isDashboard = location.pathname === "/dashboard";
         </div>
       </div>
 
-      <Routes>
+      <AIBootstrap />
+
+<Routes>
   <Route path="/" element={<LandingPage />} />
 <Route path="/discover" element={<TokenDiscoveryPage />} />
 
@@ -110,24 +113,27 @@ export default function App() {
       root.classList.remove("dark");
     }
 
-    localStorage.setItem("autoswap_theme", theme);
+ localStorage.setItem("autoswap_theme", theme);
 
+}, [theme]);
+
+useEffect(() => {
     if (connected && publicKey) {
 
-  const wallet = publicKey.toString();
+        const wallet = publicKey.toString();
 
-  setWalletAddress(wallet);
+        setWalletAddress(wallet);
 
-  connectSocket(wallet);
+        connectSocket(wallet);
 
-} else {
+    } else {
 
-  disconnectSocket();
+        disconnectSocket();
 
-  setWalletAddress("");
+        setWalletAddress("");
 
-}
-  }, [theme, connected, publicKey]);
+    }
+}, [connected, publicKey]);
   return (
     <Router>
       <AppContent
