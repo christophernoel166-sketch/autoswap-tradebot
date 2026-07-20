@@ -34,6 +34,12 @@ from "../../scanner/fetchLiquidityAnalysisData.js";
 import TokenOutcome from "../../../models/TokenOutcome.js";
 import { scoreSignal } from "../../services/signalScoringService.js";
 import { buildAIRecommendation } from "../../services/aiRecommendationService.js";
+import {
+    scanStarted,
+    scanStage,
+    scanCompleted,
+    scanFailed,
+} from "../../services/aiWorkflowService.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -461,36 +467,7 @@ router.post("/scan", async (req, res) => {
   try {
     const { tokenMint, walletAddress } = req.body || {};
 
-// ======================================================
-// Shared AI Context
-// ======================================================
-
-const aiContext = {
-
-    // All engine outputs
-    analyses: {},
-
-    // Evidence collected from every engine
-    evidence: {},
-
-    // AI reasoning (filled later)
-    reasoning: {},
-
-    // Investment thesis (filled later)
-    investmentThesis: {},
-
-    // Final recommendation (filled later)
-    recommendation: null,
-
-    // Overall confidence
-    confidence: 0,
-
-    // Debug information
-    debug: [],
-
-};
-
-
+    // Validate request first
     if (!tokenMint || typeof tokenMint !== "string") {
       return res.status(400).json({
         ok: false,
@@ -498,22 +475,63 @@ const aiContext = {
       });
     }
 
+    // Normalize inputs
+    const cleanTokenMint = tokenMint.trim();
+    const cleanWalletAddress = walletAddress?.trim();
+
+    // Notify AI workflow that a scan has started
+    scanStarted(
+      cleanWalletAddress,
+      cleanTokenMint
+    );
+
+    // ======================================================
+    // Shared AI Context
+    // ======================================================
+
+    const aiContext = {
+      // All engine outputs
+      analyses: {},
+
+      // Evidence collected from every engine
+      evidence: {},
+
+      // AI reasoning (filled later)
+      reasoning: {},
+
+      // Investment thesis (filled later)
+      investmentThesis: {},
+
+      // Final recommendation (filled later)
+      recommendation: null,
+
+      // Overall confidence
+      confidence: 0,
+
+      // Debug information
+      debug: [],
+    };
+
     let market;
 
-const cleanTokenMint = tokenMint.trim();
-const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
+    const liquidityLock = await fetchLiquidityLockStatus(cleanTokenMint);
 
     // ================= MARKET FETCH =================
     try {
-      market = await fetchTokenMarketData(tokenMint);
+      market = await fetchTokenMarketData(cleanTokenMint);
 aiContext.analyses.market =
   market;
+scanStage(
+    cleanWalletAddress,
+    "MARKET_ANALYSIS",
+    10
+);
 
     } catch (err) {
       if ((err?.message || "").includes("No market pairs found")) {
         const response = formatScanResponse({
           token: {
-            mintAddress: tokenMint.trim(),
+            mintAddress: cleanTokenMint,
             symbol: "UNKNOWN",
             name: "Unknown Token",
             boosted: false,
@@ -560,7 +578,7 @@ aiContext.analyses.market =
         return res.status(200).json({
           ok: true,
           walletAddress: walletAddress || null,
-          tokenMint: tokenMint.trim(),
+          tokenMint: cleanTokenMint,
           pairAddress: null,
           dexId: null,
           chainId: "solana",
@@ -786,6 +804,13 @@ console.log(
 
 aiContext.analyses.holders =
   holderData;
+
+scanStage(
+    cleanWalletAddress,
+    "HOLDER_ANALYSIS",
+    20
+);
+
 } catch (err) {
   console.warn("Holder scan failed:", err?.message);
   holderData.holderWarning = "Holder scan temporarily unavailable";
@@ -804,6 +829,13 @@ await fetchMarketIntegrityData({
 
 aiContext.analyses.integrity =
   integrityData;
+
+scanStage(
+    cleanWalletAddress,
+    "MARKET_INTEGRITY",
+    35
+);
+
 // ================= WALLET INTELLIGENCE =================
 const walletIntel = await fetchWalletIntelligenceData({
   tokenMint: tokenMint.trim(),
@@ -813,6 +845,12 @@ const walletIntel = await fetchWalletIntelligenceData({
 });
 aiContext.analyses.wallets =
   walletIntel;
+
+scanStage(
+    cleanWalletAddress,
+    "WALLET_INTELLIGENCE",
+    45
+);
 
     // ================= RUG RISK =================
     const rugRiskData = await fetchRugRiskData({
@@ -824,6 +862,12 @@ aiContext.analyses.wallets =
 aiContext.analyses.rugRisk =
   rugRiskData;
 
+scanStage(
+    cleanWalletAddress,
+    "RUG_RISK",
+    55
+);
+
 const momentumData = await fetchMomentumData({
   tokenMint: tokenMint.trim(),
   market,
@@ -831,6 +875,12 @@ const momentumData = await fetchMomentumData({
 });
 aiContext.analyses.momentum =
   momentumData;
+
+scanStage(
+    cleanWalletAddress,
+    "MOMENTUM",
+    65
+);
 
 // VOLUME ANALYSIS
 const discoveredToken =
@@ -996,6 +1046,12 @@ try {
 aiContext.analyses.chart =
   chartEntry;
 
+scanStage(
+    cleanWalletAddress,
+    "CHART_ANALYSIS",
+    75
+);
+
 let forecast = null;
 
 function getForecastVerdict(score) {
@@ -1157,6 +1213,12 @@ if (chartEntry?.ok) {
 aiContext.analyses.forecast =
   forecast;
 
+scanStage(
+    cleanWalletAddress,
+    "FORECAST",
+    85
+);
+
 // =====================================================
 // Forecast AI Evidence
 // =====================================================
@@ -1298,6 +1360,12 @@ aiContext.recommendation =
 aiContext.confidence =
   aiRecommendation?.confidence ?? 0;
 
+scanStage(
+    cleanWalletAddress,
+    "AI_REASONING",
+    95
+);
+
 console.log(
   "🧠 SIGNAL SCORE",
   JSON.stringify(
@@ -1435,10 +1503,24 @@ recommendationConfidence:
 
 const scanTimestamp = new Date().toISOString();
 
+scanCompleted(
+    cleanWalletAddress,
+    {
+        recommendation: aiRecommendation,
+        confidence: aiContext.confidence,
+        forecast,
+        signalScore,
+        evidence: aiContext.evidence,
+        reasoning: aiContext.reasoning,
+        investmentThesis:
+            aiContext.investmentThesis,
+    }
+);
+
 return res.status(200).json({
   ok: true,
   walletAddress: walletAddress || null,
-  tokenMint: tokenMint.trim(),
+  tokenMint: cleanTokenMint,
   pairAddress: market.token.pairAddress,
   dexId: market.token.dexId,
   chainId: market.token.chainId,
@@ -1495,6 +1577,11 @@ return res.status(200).json({
 
   } catch (error) {
     console.error("POST /api/tokens/scan error:", error);
+
+scanFailed(
+    walletAddress?.trim(),
+    error
+);
 
     return res.status(500).json({
       ok: false,

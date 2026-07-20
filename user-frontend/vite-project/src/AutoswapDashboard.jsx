@@ -1419,7 +1419,7 @@ console.log(
     <div className="p-4 lg:px-4 lg:py-6 max-w-8xl mx-auto space-y-6
                 bg-gray-50 dark:bg-gray-900 rounded-xl">
 
-
+       
 
 {/* MOBILE HEADER */}
 <MobileHeader connected={connected} walletAddress={walletAddress} />

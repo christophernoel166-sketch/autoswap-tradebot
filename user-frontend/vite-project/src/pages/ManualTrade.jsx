@@ -566,7 +566,7 @@ setTimeout(() => {
             CONF
           </span>{" "}
           <span className="font-semibold text-white">
-            {forecast.confidence}%
+            {scanResult?.ai?.confidence ?? forecast.confidence ?? 0}%
           </span>
         </div>
 

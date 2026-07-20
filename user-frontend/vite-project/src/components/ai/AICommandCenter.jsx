@@ -17,7 +17,7 @@ export default function AICommandCenter() {
         },
         {
             title: "Confidence",
-            value: `${aiState.portfolio.confidence}%`,
+            value: `${aiState.analysis.confidence ?? 0}%`,
             icon: "📈",
             color: "cyan",
         },

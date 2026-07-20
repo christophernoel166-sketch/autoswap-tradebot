@@ -99,13 +99,8 @@ const recommendationColor =
             Confidence:
           </span>{" "}
           <span className="text-cyan-300">
-            {`${
-              ai.recommendation?.confidence ??
-              ai.signalScore
-                ?.confidenceScore ??
-              0
-            }%`}
-          </span>
+  {`${ai.confidence ?? ai.signalScore?.confidenceScore ?? 0}%`}
+</span>
         </div>
 
         {/* Adjusted Score */}

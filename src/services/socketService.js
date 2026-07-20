@@ -39,3 +39,17 @@ export function emit(event, payload) {
 
   return true;
 }
+
+// =====================================================
+// SAFE ROOM EMIT
+// =====================================================
+
+export function emitToRoom(room, event, payload) {
+  if (!io) {
+    return false;
+  }
+
+  io.to(room).emit(event, payload);
+
+  return true;
+}
