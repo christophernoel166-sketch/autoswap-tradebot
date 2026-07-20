@@ -7,16 +7,13 @@ let activeHandlers = [];
 
 /**
  * Attach AI-related socket listeners to the existing Socket.IO connection.
- * This function does NOT create a socket. It reuses the singleton socket
- * created by socket.js.
+ * This function reuses the singleton socket created by socket.js.
  */
 export function attachAIListeners(ai) {
     const socket = getSocket();
 
     if (!socket) {
-        console.warn(
-            "[AI Socket] Socket has not been initialized."
-        );
+        console.warn("[AI Socket] Socket has not been initialized.");
         return false;
     }
 
@@ -32,59 +29,69 @@ export function attachAIListeners(ai) {
         updateMarket,
         updatePipeline,
         updatePositionMetrics,
-        addActivity,
+        updateAnalysis,
         updateDiagnostics,
+        updateLearning,
+        updateAIState,
+        addActivity,
     } = ai;
 
-updateDiagnostics({
-    socketConnected: socket.connected,
-    reconnecting: false,
-    lastHeartbeat: socket.connected
-        ? Date.now()
-        : null,
-});
+    updateDiagnostics({
+        socketConnected: socket.connected,
+        reconnecting: false,
+        lastHeartbeat: socket.connected ? Date.now() : null,
+    });
 
     const handlers = [
         {
             event: "ai_system",
-            handler: (payload) => {
-                updateSystem(payload);
-            },
+            handler: updateSystem,
         },
 
         {
             event: "ai_portfolio",
-            handler: (payload) => {
-                updatePortfolio(payload);
-            },
+            handler: updatePortfolio,
         },
 
         {
             event: "ai_market",
-            handler: (payload) => {
-                updateMarket(payload);
-            },
+            handler: updateMarket,
         },
 
         {
             event: "ai_pipeline",
-            handler: (payload) => {
-                updatePipeline(payload);
-            },
+            handler: updatePipeline,
         },
 
         {
             event: "ai_positions",
-            handler: (payload) => {
-                updatePositionMetrics(payload);
-            },
+            handler: updatePositionMetrics,
+        },
+
+        {
+            event: "ai_analysis",
+            handler: updateAnalysis,
+        },
+
+        {
+            event: "ai_diagnostics",
+            handler: updateDiagnostics,
+        },
+
+        {
+            event: "ai_learning",
+            handler: updateLearning,
         },
 
         {
             event: "ai_activity",
-            handler: (payload) => {
-                addActivity(payload);
-            },
+            handler: addActivity,
+        },
+
+        // Full-state synchronization
+        {
+            event: "ai_state",
+            handler: updateAIState,
         },
 
         {
@@ -137,7 +144,7 @@ updateDiagnostics({
 
     console.log("[AI Socket] AI listeners attached.");
 
-return true;
+    return true;
 }
 
 /**
@@ -147,22 +154,19 @@ export function detachAIListeners() {
     const socket = getSocket();
 
     if (!socket) {
-    listenersAttached = false;
-    activeHandlers = [];
-    return false;
-}
+        listenersAttached = false;
+        activeHandlers = [];
+        return false;
+    }
 
-    activeHandlers.forEach(
-        ({ event, handler }) => {
-            socket.off(event, handler);
-        }
-    );
+    activeHandlers.forEach(({ event, handler }) => {
+        socket.off(event, handler);
+    });
 
     activeHandlers = [];
     listenersAttached = false;
 
-    console.log(
-        "[AI Socket] AI listeners detached."
-    );
-return true;
+    console.log("[AI Socket] AI listeners detached.");
+
+    return true;
 }

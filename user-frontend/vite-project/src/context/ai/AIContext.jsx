@@ -71,6 +71,39 @@ export function AIProvider({ children }) {
   }, []);
 
   /* ===============================
+     ANALYSIS
+  =============================== */
+
+  const updateAnalysis = useCallback((payload) => {
+    dispatch({
+      type: AI_ACTIONS.UPDATE_ANALYSIS,
+      payload,
+    });
+  }, []);
+
+  /* ===============================
+     LEARNING
+  =============================== */
+
+  const updateLearning = useCallback((payload) => {
+    dispatch({
+      type: AI_ACTIONS.UPDATE_LEARNING,
+      payload,
+    });
+  }, []);
+
+  /* ===============================
+     FULL AI STATE
+  =============================== */
+
+  const updateAIState = useCallback((payload) => {
+    dispatch({
+      type: AI_ACTIONS.UPDATE_AI_STATE,
+      payload,
+    });
+  }, []);
+
+  /* ===============================
      ACTIVITY
   =============================== */
 
@@ -118,6 +151,10 @@ export function AIProvider({ children }) {
       updatePipeline,
       updatePositionMetrics,
 
+      updateAnalysis,
+      updateLearning,
+      updateAIState,
+
       addActivity,
       clearActivity,
 
@@ -133,6 +170,10 @@ export function AIProvider({ children }) {
       updateMarket,
       updatePipeline,
       updatePositionMetrics,
+
+      updateAnalysis,
+      updateLearning,
+      updateAIState,
 
       addActivity,
       clearActivity,

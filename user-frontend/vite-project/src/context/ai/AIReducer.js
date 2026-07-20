@@ -51,6 +51,33 @@ export function aiReducer(state, action) {
                 },
             };
 
+        case AI_ACTIONS.UPDATE_ANALYSIS:
+            return {
+                ...state,
+                analysis: {
+                    ...state.analysis,
+                    ...action.payload,
+                },
+            };
+
+        case AI_ACTIONS.UPDATE_DIAGNOSTICS:
+            return {
+                ...state,
+                diagnostics: {
+                    ...state.diagnostics,
+                    ...action.payload,
+                },
+            };
+
+        case AI_ACTIONS.UPDATE_LEARNING:
+            return {
+                ...state,
+                learning: {
+                    ...state.learning,
+                    ...action.payload,
+                },
+            };
+
         case AI_ACTIONS.ADD_ACTIVITY:
             return {
                 ...state,
@@ -66,17 +93,17 @@ export function aiReducer(state, action) {
                 activity: [],
             };
 
-        case AI_ACTIONS.UPDATE_DIAGNOSTICS:
+        // Full AI state synchronization from backend
+        case AI_ACTIONS.UPDATE_AI_STATE:
             return {
                 ...state,
-                diagnostics: {
-                    ...state.diagnostics,
-                    ...action.payload,
-                },
+                ...action.payload,
             };
 
         case AI_ACTIONS.RESET_AI:
-            return initialAIState;
+            return {
+                ...initialAIState,
+            };
 
         default:
             return state;
