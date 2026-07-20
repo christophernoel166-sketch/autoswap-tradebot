@@ -781,26 +781,26 @@ console.log(
   "🔍 HOLDER SCAN REQUEST",
   tokenMint
 );
-  holderData = await fetchTokenHolderData({
-  tokenMint: tokenMint.trim(),
+ holderData = await fetchTokenHolderData(
+  tokenMint.trim(),
+  {
+    excludeAddresses:
+      getExcludedHolderAddressesForMint(tokenMint),
 
-  excludeAddresses:
-    getExcludedHolderAddressesForMint(tokenMint),
+    marketContext: {
+      dexId:
+        market?.token?.dexId ||
+        market?.rawPair?.dexId ||
+        "",
 
-  marketContext: {
-    dexId:
-      market?.token?.dexId ||
-      market?.rawPair?.dexId ||
-      "",
+      labels:
+        market?.rawPair?.labels || [],
+    },
 
-    labels:
-      market?.rawPair?.labels || [],
+    market,
   },
-
-  market,
-
-  context: aiContext,
-});
+  aiContext
+);
 
 aiContext.analyses.holders =
   holderData;
@@ -1811,26 +1811,26 @@ aiContext.analyses.social =
     };
 
     try {
-      holderData = await fetchTokenHolderData({
-  tokenMint: cleanTokenMint,
+  holderData = await fetchTokenHolderData(
+  cleanTokenMint,
+  {
+    excludeAddresses:
+      getExcludedHolderAddressesForMint(cleanTokenMint),
 
-  excludeAddresses:
-    getExcludedHolderAddressesForMint(cleanTokenMint),
+    marketContext: {
+      dexId:
+        market?.token?.dexId ||
+        market?.rawPair?.dexId ||
+        "",
 
-  marketContext: {
-    dexId:
-      market?.token?.dexId ||
-      market?.rawPair?.dexId ||
-      "",
+      labels:
+        market?.rawPair?.labels || [],
+    },
 
-    labels:
-      market?.rawPair?.labels || [],
+    market,
   },
-
-  market,
-
-  context: aiContext,
-});
+  aiContext
+);
 aiContext.analyses.holders =
   holderData;
      
