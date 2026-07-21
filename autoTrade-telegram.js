@@ -3306,7 +3306,13 @@ async function safeSellAll(
 
 
 async function executeUserTrade(user, mint, sourceChannel) {
-  if (!user) return;
+    if (!user) {
+        LOG.error(
+            { mint, sourceChannel },
+            "❌ executeUserTrade called without user"
+        );
+        return;
+    }
 
   try {
     // ===================================================
