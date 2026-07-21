@@ -2755,7 +2755,7 @@ async function executeTradePlan(plan) {
 
     const approvedPlan = await processAIEntryPipeline(plan);
 
-    if (!approvedPlan) {
+    if (!approvedPlan?.approved) {
 
         LOG.info(
             {
@@ -2790,11 +2790,11 @@ async function executeTradePlan(plan) {
         "🧠 AI approved BUY request."
     );
 
-    return executeUserTrade(
-        approvedPlan.user,
-        approvedPlan.mint,
-        approvedPlan.sourceChannel
-    );
+   return executeUserTrade(
+    user,
+    mint,
+    sourceChannel
+);
 
 }
 
