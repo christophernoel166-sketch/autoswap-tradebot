@@ -186,18 +186,15 @@ export async function processAIEntryPipeline(tradeRequest) {
 
         context.execution.approved = false;
 
-        context.errors.push({
+        context.diagnostics.errors.push({
 
-            message:
-                error.message,
+    message: error.message,
 
-            stack:
-                error.stack,
+    stack: error.stack,
 
-            timestamp:
-                new Date(),
+    timestamp: new Date(),
 
-        });
+});
 
         addDebug(
             context,

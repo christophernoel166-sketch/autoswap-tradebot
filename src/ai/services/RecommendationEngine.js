@@ -110,7 +110,7 @@ function getConfidence(context) {
 
         context?.investmentThesis?.confidence ??
 
-        context?.confidence ??
+        context?.confidence?.overall
 
         0
 
@@ -250,7 +250,7 @@ function buildAIModel(context) {
 
                 reasoning.confidence ??
 
-                context?.confidence ??
+                context?.confidence?.overall
 
                 0
 

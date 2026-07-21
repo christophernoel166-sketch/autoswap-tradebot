@@ -36,102 +36,185 @@ export function createPipelineContext(tradeRequest = {}) {
 
     }
 
-    const now = new Date();
+  const now = new Date();
 
-    return {
+const requestId =
+    tradeRequest.requestId ??
+    crypto.randomUUID();
 
-        // ==================================================
-        // Incoming Request
-        // ==================================================
+const action =
+    tradeRequest.action ?? "BUY";
+
+const walletAddress =
+    tradeRequest.walletAddress ??
+    tradeRequest.user?.walletAddress ??
+    null;
+
+const mint =
+    tradeRequest.mint ??
+    tradeRequest.token?.mint ??
+    null;
+
+return {
+
+    // ==================================================
+    // Context Metadata
+    // ==================================================
+
+    contextVersion: "2.0.0",
+
+    requestId,
+
+    createdAt: now,
+
+    // ==================================================
+    // Original Request
+    // ==================================================
+
+    request: {
 
         ...tradeRequest,
 
-        requestId:
+    },
 
-            tradeRequest.requestId ??
 
-            crypto.randomUUID(),
+// ==================================================
+// Normalized Objects
+// ==================================================
 
-        createdAt:
+user:
 
-            now,
+    tradeRequest.user ?? null,
 
-        contextVersion:
+token: {
 
-            "1.0.0",
+    mint,
 
-        // ==================================================
-        // Pipeline State
-        // ==================================================
+},
 
-        pipeline: {
+trade: {
 
-            name:
+    action,
 
-                tradeRequest.action === "BUY"
-                    ? "ENTRY_PIPELINE"
-                    : "EXIT_PIPELINE",
+    amount:
 
-            stage:
+        tradeRequest.amount ?? null,
 
-                "INITIALIZED",
+    source:
 
-            status:
+        tradeRequest.source ?? "UNKNOWN",
 
-                "RUNNING",
+},
 
-            startedAt:
+    // ==================================================
+    // Backward Compatibility
+    // ==================================================
 
-                now,
+    ...tradeRequest,
 
-            completedAt:
+    walletAddress,
 
-                null,
+    mint,
 
-        },
- 
+    action,
+
+       // ==================================================
+// Pipeline State
+// ==================================================
+
+pipeline: {
+
+    name:
+        action === "SELL"
+            ? "EXIT_PIPELINE"
+            : "ENTRY_PIPELINE",
+
+    version: "2.0.0",
+
+    stage: "INITIALIZED",
+
+    status: "RUNNING",
+
+    currentEngine: null,
+
+    progress: 0,
+
+    startedAt: now,
+
+    completedAt: null,
+
+},
+
 pipelineHistory: [],
-        // ==================================================
-        // Execution State
-        // ==================================================
 
-        execution: {
+// ==================================================
+// Lifecycle
+// ==================================================
 
-            approved:
+lifecycle: {
 
-                false,
+    state: "INITIALIZED",
 
-            executed:
+    currentPhase: "STARTUP",
 
-                false,
+    stages: [],
 
-            skipped:
+    lastUpdated: now,
 
-                false,
+},
 
-            executionState:
+// ==================================================
+// Timeline
+// ==================================================
 
-                "PENDING",
+timeline: [],
 
-        },
+// ==================================================
+// Runtime
+// ==================================================
 
+runtime: {
+
+    startedAt: now,
+
+    updatedAt: now,
+
+    completedAt: null,
+
+    durationMs: null,
+
+},
+
+// ==================================================
+// Runtime Flags
+// ==================================================
+
+flags: {
+
+    completed: false,
+
+    frozen: false,
+
+    aiReviewed: false,
+
+    simulation: false,
+
+},
+
+     
         // ==================================================
         // Metadata
         // ==================================================
 
-        metadata: {
+       metadata: {
 
-            aiReviewed:
+    aiReviewed: false,
 
-                false,
+    pipelineVersion: "2.0.0",
 
-            pipelineVersion:
+    ...(tradeRequest.metadata || {}),
 
-                "1.0.0",
-
-            ...(tradeRequest.metadata || {}),
-
-        },
+},
 
         // ==================================================
         // AI Outputs
@@ -169,6 +252,30 @@ pipelineHistory: [],
 
             null,
 
+   // ==================================================
+        // Execution State
+        // ==================================================
+
+       execution: {
+
+    approved: false,
+
+    executed: false,
+
+    skipped: false,
+
+    executionState: "PENDING",
+
+    startedAt: null,
+
+    completedAt: null,
+
+    transactionSignature: null,
+
+    executionError: null,
+
+},
+
 // ==================================================
 // Decision Memory
 // ==================================================
@@ -189,29 +296,167 @@ decisionMemory: {
         // Review State
         // ==================================================
 
-        pendingReview:
+      review: {
 
-            null,
+    pending: false,
 
-        reviewEvents:
+    events: [],
 
-            [],
+},
 
         // ==================================================
-        // Diagnostics
-        // ==================================================
+// Diagnostics
+// ==================================================
 
-        warnings:
+diagnostics: {
+    warnings: [],
+    errors: [],
+    debug: [],
+},
 
-            [],
+// ==================================================
+// Engine Metrics
+// ==================================================
 
-        errors:
+engineMetrics: {
 
-            [],
+    total: 0,
 
-        debug:
+    completed: 0,
 
-            [],
+    failed: 0,
+
+    current: null,
+
+},
+
+// ==================================================
+// Engine Runtime
+// ==================================================
+
+engines: {
+
+    investmentThesis: {
+
+        status: "PENDING",
+
+        startedAt: null,
+
+        completedAt: null,
+
+        success: null,
+
+        output: null,
+
+    },
+
+    recommendation: {
+
+        status: "PENDING",
+
+        startedAt: null,
+
+        completedAt: null,
+
+        success: null,
+
+        output: null,
+
+    },
+
+    entryValidation: {
+
+        status: "PENDING",
+
+        startedAt: null,
+
+        completedAt: null,
+
+        success: null,
+
+        output: null,
+
+    },
+
+    tradeDecision: {
+
+        status: "PENDING",
+
+        startedAt: null,
+
+        completedAt: null,
+
+        success: null,
+
+        output: null,
+
+    },
+
+    tradePlanning: {
+
+        status: "PENDING",
+
+        startedAt: null,
+
+        completedAt: null,
+
+        success: null,
+
+        output: null,
+
+    },
+
+},
+
+// ==================================================
+// Confidence
+// ==================================================
+
+confidence: {
+
+    overall: null,
+
+    entry: null,
+
+    exit: null,
+
+    conviction: null,
+
+},
+
+confidenceGaps: {
+
+    degradedConfidence: false,
+
+    missingEngines: [],
+
+    unavailableData: [],
+
+},
+
+// ==================================================
+// AI Storage
+// ==================================================
+
+analyses: {},
+
+evidence: {},
+
+// ==================================================
+// Pipeline Result
+// ==================================================
+
+result: {
+
+    success: null,
+
+    verdict: null,
+
+    reason: null,
+
+    completedAt: null,
+
+},
 
         // ==================================================
         // Performance Metrics
@@ -219,19 +464,23 @@ decisionMemory: {
 
         metrics: {
 
-            pipelineDurationMs:
+    pipelineDurationMs: null,
 
-                null,
+    aiProcessingMs: null,
 
-            aiProcessingMs:
+    totalEngines: 0,
 
-                null,
+    completedEngines: 0,
 
-        },
+    failedEngines: 0,
+
+},
 
     };
 
 }
+
+
 
 export default {
 

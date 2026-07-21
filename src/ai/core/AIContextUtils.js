@@ -604,8 +604,20 @@ export function setConfidence(
     confidence
 ) {
 
-    context.confidence =
-        confidence;
+    // Backward-compatible support
+    if (
+        typeof context.confidence !== "object" ||
+        context.confidence === null
+    ) {
+        context.confidence = {
+            overall: null,
+            entry: null,
+            exit: null,
+            conviction: null,
+        };
+    }
+
+    context.confidence.overall = confidence;
 
     addTimelineEvent(
         context,
@@ -726,9 +738,7 @@ export async function runEngine(
 // Validation
 // ==========================================================
 
-export function validateContext(
-    context
-) {
+export function validateContext(context) {
 
     if (!context) {
 
@@ -738,27 +748,55 @@ export function validateContext(
 
     }
 
+    // --------------------------------------------------
+    // User
+    // --------------------------------------------------
+
     if (!context.user) {
 
-        throw new Error(
-            "AI Context missing user."
-        );
+        context.user = context.request?.user ?? null;
 
     }
+
+    // --------------------------------------------------
+    // Token
+    // --------------------------------------------------
 
     if (!context.token) {
 
-        throw new Error(
-            "AI Context missing token."
-        );
+        context.token = {
+
+            mint:
+                context.mint ??
+                context.request?.mint ??
+                null,
+
+        };
 
     }
 
+    // --------------------------------------------------
+    // Trade
+    // --------------------------------------------------
+
     if (!context.trade) {
 
-        throw new Error(
-            "AI Context missing trade."
-        );
+        context.trade = {
+
+            action:
+                context.action ??
+                context.request?.action ??
+                "BUY",
+
+            amount:
+                context.request?.amount ??
+                null,
+
+            source:
+                context.request?.source ??
+                "UNKNOWN",
+
+        };
 
     }
 

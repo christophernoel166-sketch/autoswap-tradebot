@@ -426,9 +426,10 @@ function evaluateForecast(
         context?.analyses?.forecast;
 
     const score =
-        clampScore(
-            analysis?.score
-        );
+    clampScore(
+        analysis?.forecastScore ??
+        analysis?.score
+    );
 
     return buildEvaluation({
 
@@ -470,9 +471,10 @@ function evaluateRisk(
         context?.analyses?.risk;
 
     const score =
-        clampScore(
-            analysis?.score
-        );
+    clampScore(
+        analysis?.riskScore ??
+        analysis?.score
+    );
 
     return buildEvaluation({
 
