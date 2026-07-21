@@ -110,7 +110,7 @@ function getConfidence(context) {
 
         context?.investmentThesis?.confidence ??
 
-        context?.confidence?.overall
+        context?.confidence?.overall ??
 
         0
 
@@ -250,7 +250,7 @@ function buildAIModel(context) {
 
                 reasoning.confidence ??
 
-                context?.confidence?.overall
+                context?.confidence?.overall ??
 
                 0
 
@@ -573,7 +573,7 @@ function buildExecutionHints(
     const confidence =
         toNumber(
             recommendation.confidence ??
-            context?.confidence
+            context?.confidence?.overall
         );
 
     const urgency =
@@ -733,7 +733,7 @@ function buildScorecard(
 
         confidence:
             score(
-                context?.confidence
+                context?.confidence?.overall
             ),
 
         liquidity:
@@ -766,17 +766,17 @@ function buildScorecard(
                 analyses.chart?.score
             ),
 
-        forecast:
-            score(
-                analyses.forecast?.score ??
-                analyses.forecast?.forecastScore
-            ),
+       forecast:
+    score(
+        analyses.forecast?.forecastScore ??
+        analyses.forecast?.score
+    ),
 
-        risk:
-            score(
-                analyses.risk?.score ??
-                analyses.risk?.riskScore
-            ),
+       risk:
+    score(
+        analyses.risk?.riskScore ??
+        analyses.risk?.score
+    ),
 
         historical:
             score(
