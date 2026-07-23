@@ -65,15 +65,18 @@ export async function processAIExitPipeline(tradeRequest) {
 
     }
 
-    // ======================================================
-    // Create Standardized Pipeline Context
-    // ======================================================
+   // ======================================================
+// Resolve Standardized Pipeline Context
+// ======================================================
 
-    const context = createPipelineContext(
-        tradeRequest
-    );
+const context =
+    tradeRequest?.diagnostics &&
+    tradeRequest?.timeline &&
+    tradeRequest?.runtime
+        ? tradeRequest
+        : createPipelineContext(tradeRequest);
 
-    context.metadata.aiReviewed = true;
+context.metadata.aiReviewed = true;
 
     // ======================================================
     // Pipeline Started

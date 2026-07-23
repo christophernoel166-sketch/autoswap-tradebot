@@ -88,6 +88,9 @@ import {
 import {
     processAIExitPipeline,
 } from "./src/ai/pipelines/processAIExitPipeline.js";
+import {
+    createPipelineContext,
+} from "./src/ai/core/createPipelineContext.js";
 
 let recoverySchedulerStarted = false;
 
@@ -2457,7 +2460,7 @@ function buildExitTradeRequest({
 
 }) {
 
-const context = {
+const tradeRequest = {
 
     // ==========================================
     // Identity
@@ -2511,6 +2514,10 @@ const context = {
     },
 
 };
+
+const context = createPipelineContext(
+    tradeRequest
+);
 
 return {
 
