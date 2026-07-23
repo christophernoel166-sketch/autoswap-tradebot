@@ -476,32 +476,52 @@ function calculateRecommendationTrend(
 // ==========================================================
 // Summary
 // ==========================================================
-
 function generateSummary({
-
     health,
-
     trend,
-
-    recommendation,
-
+    recommendation = {},
     confidenceTrend,
-
     riskTrend,
-
 }) {
+
+    const action = String(
+        recommendation?.action ?? "UNKNOWN"
+    );
+
+    const safeHealth = String(
+        health ?? "UNKNOWN"
+    );
+
+    const safeTrend = String(
+        trend ?? "UNKNOWN"
+    );
+
+    const safeConfidenceTrend = String(
+        confidenceTrend ?? "UNKNOWN"
+    );
+
+    const safeRiskTrend = String(
+        riskTrend ?? "UNKNOWN"
+    );
 
     return [
 
-        `Position health is ${health.toLowerCase()}.`,
+        `Position health is ${safeHealth
+            .toLowerCase()}.`,
 
-        `Overall trend is ${trend.toLowerCase().replaceAll("_", " ")}.`,
+        `Overall trend is ${safeTrend
+            .toLowerCase()
+            .replaceAll("_", " ")}.`,
 
-        `AI confidence is ${confidenceTrend.toLowerCase()}.`,
+        `AI confidence is ${safeConfidenceTrend
+            .toLowerCase()}.`,
 
-        `Risk is ${riskTrend.toLowerCase()}.`,
+        `Risk is ${safeRiskTrend
+            .toLowerCase()}.`,
 
-        `Current recommendation is ${recommendation.action.toLowerCase().replaceAll("_", " ")}.`,
+        `Current recommendation is ${action
+            .toLowerCase()
+            .replaceAll("_", " ")}.`,
 
     ].join(" ");
 
