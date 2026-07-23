@@ -229,7 +229,7 @@ export async function processAIExitPipeline(tradeRequest) {
 
         context.execution.approved = false;
 
-        context.errors.push({
+        context.diagnostics.errors.push({
 
             message: error.message,
 

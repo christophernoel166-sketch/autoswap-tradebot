@@ -175,7 +175,8 @@ function evaluateMarketHealth(
 
             clampScore(
 
-                analyses.forecast?.score
+                analyses.forecast?.forecastScore ??
+analyses.forecast?.score
 
             ),
 
@@ -199,7 +200,8 @@ function evaluateMarketHealth(
 
             clampScore(
 
-                analyses.risk?.score
+                analyses.risk?.riskScore ??
+analyses.risk?.score
 
             ),
 

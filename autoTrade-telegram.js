@@ -2457,89 +2457,69 @@ function buildExitTradeRequest({
 
 }) {
 
-    return {
+const context = {
 
-        // ==========================================
-        // Identity
-        // ==========================================
+    // ==========================================
+    // Identity
+    // ==========================================
 
-        requestId:
+    requestId:
+        `${walletAddress}:${mint}:${Date.now()}`,
 
-            `${walletAddress}:${mint}:${Date.now()}`,
+    action:
+        "REVIEW_EXIT",
 
-        action:
+    walletAddress,
+    wallet,
+    user,
+    mint,
 
-            "REVIEW_EXIT",
+    // ==========================================
+    // Position
+    // ==========================================
 
-        walletAddress,
+    entryPrice,
+    currentPrice: price,
+    highestPrice,
+    solAmount,
+    buyTxid,
+    sourceChannel,
+    slippageBps,
 
-        wallet,
+    // ==========================================
+    // Exit Request
+    // ==========================================
 
-        user,
+    percent,
+    reason,
 
-        mint,
+    // ==========================================
+    // Market Snapshot
+    // ==========================================
 
-        // ==========================================
-        // Position
-        // ==========================================
+    profile,
+    state,
+    info,
 
-        entryPrice,
+    // ==========================================
+    // Metadata
+    // ==========================================
 
-        currentPrice:
+    metadata: {
+        source: "POSITION_MONITOR",
+        monitoredAt: new Date(),
+    },
 
-            price,
+};
 
-        highestPrice,
+return {
 
-        solAmount,
+    context,
 
-        buyTxid,
+    event,
 
-        sourceChannel,
-
-        slippageBps,
-
-        // ==========================================
-        // Exit Request
-        // ==========================================
-
-        percent,
-
-        reason,
-
-        event,
-
-        // ==========================================
-        // Market Snapshot
-        // ==========================================
-
-        profile,
-
-        state,
-
-        info,
-
-        // ==========================================
-        // Metadata
-        // ==========================================
-
-        metadata: {
-
-            source:
-
-                "POSITION_MONITOR",
-
-            monitoredAt:
-
-                new Date(),
-
-        },
-
-    };
-
+};
 }
-
-
 // ===================================================
 // AI EXIT DECISION PROCESSOR
 // ===================================================
@@ -2662,8 +2642,8 @@ try {
     // Execute Approved Trade Plan
     // ==========================================
 
-   const executionResult = await executeTradePlan(
-    pipelineResult
+const executionResult = await executeTradePlan(
+    pipelineResult.tradePlan
 );
 
 LOG.info(
