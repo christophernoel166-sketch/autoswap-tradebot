@@ -26,9 +26,7 @@ export async function patternLearningService() {
             });
 
         console.log(
-
             `📚 ${outcomes.length} outcome(s) ready for learning.`
-
         );
 
         for (const outcome of outcomes) {
@@ -42,11 +40,8 @@ export async function patternLearningService() {
     } catch (error) {
 
         console.error(
-
             "❌ Pattern Learning Error:",
-
             error
-
         );
 
     }
@@ -73,30 +68,31 @@ async function learnOutcome(
         });
 
         if (!outcome.learning) {
-    outcome.learning = {};
-}
 
-outcome.learning.usedForTraining = true;
+            outcome.learning = {};
 
-outcome.learning.trainedAt =
-    new Date();
+        }
+
+        // Save the pattern this outcome belongs to
+        outcome.learning.patternId = key;
+
+        // Mark as trained
+        outcome.learning.usedForTraining = true;
+
+        outcome.learning.trainedAt =
+            new Date();
 
         await outcome.save();
 
         console.log(
-
             `🧠 Learned pattern ${key}`
-
         );
 
     } catch (error) {
 
         console.error(
-
             `❌ Failed learning ${outcome.symbol}`,
-
             error
-
         );
 
     }
