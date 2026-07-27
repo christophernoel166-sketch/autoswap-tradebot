@@ -1,4 +1,4 @@
-import { rebuildPatternStats } from "./patternLearningService.js";
+import { rebuildPatternStats } from "./rebuildPatternStats.js";
 
 let schedulerRunning = false;
 
