@@ -1454,29 +1454,27 @@ return res.status(200).json({
   volumeAnalysis,
   liquidityAnalysis,
 
- ai: {
+ai: {
 
     version: "v2",
 
     generatedAt: scanTimestamp,
 
-    forecast,
-
-    signalScore,
+    confidence: aiContext.confidence,
 
     recommendation: aiRecommendation,
 
-    confidence:
-      aiContext.confidence,
+    signalScore,
 
-    evidence:
-      aiContext.evidence,
+    forecast,
 
-    reasoning:
-      aiContext.reasoning,
+    analyses: aiContext.analyses,
 
-    investmentThesis:
-      aiContext.investmentThesis,
+    evidence: aiContext.evidence,
+
+    reasoning: aiContext.reasoning,
+
+    investmentThesis: aiContext.investmentThesis,
 
 },
 
