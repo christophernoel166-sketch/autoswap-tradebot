@@ -22,6 +22,12 @@ const PatternStatsSchema = new mongoose.Schema(
       min: 0,
     },
 
+trainedOutcomes: {
+  type: Number,
+  default: 0,
+  min: 0,
+},
+
     winners: {
       type: Number,
       default: 0,
@@ -59,25 +65,45 @@ const PatternStatsSchema = new mongoose.Schema(
       default: 0,
     },
 
-    averageReturn24h: {
-      type: Number,
-      default: 0,
-    },
+lossRate: {
+  type: Number,
+  default: 0,
+},
 
-    medianReturn24h: {
-      type: Number,
-      default: 0,
-    },
+averagePeakReturn: {
+  type: Number,
+  default: 0,
+},
 
-    bestReturn24h: {
-      type: Number,
-      default: 0,
-    },
+medianPeakReturn: {
+  type: Number,
+  default: 0,
+},
 
-    worstReturn24h: {
-      type: Number,
-      default: 0,
-    },
+bestPeakReturn: {
+  type: Number,
+  default: 0,
+},
+
+worstPeakReturn: {
+  type: Number,
+  default: 0,
+},
+
+averageMinutesToPeak: {
+  type: Number,
+  default: 0,
+},
+
+averageCollapseTime: {
+  type: Number,
+  default: 0,
+},
+
+averageCollapsePercent: {
+  type: Number,
+  default: 0,
+},
 
     // =====================================================
     // AI CONFIDENCE

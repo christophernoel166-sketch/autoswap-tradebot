@@ -1,242 +1,104 @@
 import TokenOutcome from "../../models/TokenOutcome.js";
-import PatternStats from "../../models/PatternStats.js";
+
 import {
-  scoreBucket,
-  rugRiskBucket,
-} from "../utils/patternBuckets.js";
+    buildPatternKey,
+} from "./buildPatternKey.js";
 
-// During development we keep this low so the AI
-// starts learning quickly.
-const MIN_PATTERN_SAMPLES = 5;
+import {
+    updatePatternStats,
+} from "./updatePatternStats.js";
 
-function pct(a, b) {
-  if (!b) return 0;
-  return Number(((a / b) * 100).toFixed(2));
-}
+export async function patternLearningService() {
 
-function avg(values) {
-  if (!values.length) return 0;
-
-  return (
-    values.reduce((sum, value) => sum + value, 0) /
-    values.length
-  );
-}
-
-function median(values) {
-  if (!values.length) return 0;
-
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-
-  if (sorted.length % 2 === 0) {
-    return (
-      (sorted[middle - 1] + sorted[middle]) / 2
+    console.log(
+        "🧠 Starting Pattern Learning..."
     );
-  }
 
-  return sorted[middle];
+    try {
+
+        const outcomes =
+            await TokenOutcome.find({
+
+                trackingComplete: true,
+
+                "learning.usedForTraining": false,
+
+            });
+
+        console.log(
+
+            `📚 ${outcomes.length} outcome(s) ready for learning.`
+
+        );
+
+        for (const outcome of outcomes) {
+
+            await learnOutcome(
+                outcome
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+
+            "❌ Pattern Learning Error:",
+
+            error
+
+        );
+
+    }
+
 }
 
-function buildConfidence({
-  winRate,
-  samples,
-  averagePeakReturn,
-}) {
-  const sampleWeight = Math.min(samples, 100) / 100;
-
-  const confidence =
-    winRate * 0.6 +
-    sampleWeight * 100 * 0.3 +
-    Math.min(
-      Math.max(averagePeakReturn, 0),
-      100
-    ) *
-      0.1;
-
-  return Number(confidence.toFixed(2));
-}
-
-async function updatePattern(
-  key,
-  docs,
-  metadata = {}
+async function learnOutcome(
+    outcome
 ) {
-  if (docs.length < MIN_PATTERN_SAMPLES) {
-    return;
-  }
 
-  const winners = docs.filter(
-    (d) =>
-      d.label === "WINNER" ||
-      d.label === "MOONSHOT"
-  );
+    try {
 
-  const moonshots = docs.filter(
-    (d) => d.label === "MOONSHOT"
-  );
+        const key =
+            buildPatternKey(
+                outcome
+            );
 
-  const losers = docs.filter(
-    (d) =>
-      d.label === "LOSER" ||
-      d.label === "RUG_OR_FAILURE"
-  );
+        await updatePatternStats({
 
-  const neutrals = docs.filter(
-    (d) => d.label === "NEUTRAL"
-  );
+            key,
 
-  // ==================================================
-  // LEARN FROM PEAK RETURN FIRST
-  // Fallback to return24h for legacy documents.
-  // ==================================================
+            outcome,
 
-  const peakReturns = docs
-    .map((d) =>
-      Number.isFinite(d.peakReturn)
-        ? Number(d.peakReturn)
-        : Number(d.return24h)
-    )
-    .filter(Number.isFinite);
+        });
 
-  const averagePeakReturn = Number(
-    avg(peakReturns).toFixed(2)
-  );
-
-  const medianPeakReturn = Number(
-    median(peakReturns).toFixed(2)
-  );
-
-  const bestPeakReturn = peakReturns.length
-    ? Math.max(...peakReturns)
-    : 0;
-
-  const worstPeakReturn = peakReturns.length
-    ? Math.min(...peakReturns)
-    : 0;
-
-  const winRate = pct(
-    winners.length,
-    docs.length
-  );
-
-  const moonshotRate = pct(
-    moonshots.length,
-    docs.length
-  );
-
-  const confidenceScore =
-    buildConfidence({
-      winRate,
-      samples: docs.length,
-      averagePeakReturn,
-    });
-
-  await PatternStats.findOneAndUpdate(
-    { key },
-    {
-      key,
-
-      samples: docs.length,
-
-      winners: winners.length,
-
-      moonshots: moonshots.length,
-
-      losers: losers.length,
-
-      neutrals: neutrals.length,
-
-      winRate,
-
-      moonshotRate,
-
-      // Stored using existing field names so the
-      // rest of the system remains compatible.
-      averageReturn24h: averagePeakReturn,
-      medianReturn24h: medianPeakReturn,
-      bestReturn24h: bestPeakReturn,
-      worstReturn24h: worstPeakReturn,
-
-      confidenceScore,
-
-      metadata: {
-        ...metadata,
-        learningMode: "peak_return",
-      },
-
-      lastComputedAt: new Date(),
-    },
-    {
-      upsert: true,
-      new: true,
-    }
-  );
+        if (!outcome.learning) {
+    outcome.learning = {};
 }
 
-export async function rebuildPatternStats() {
-  const completed =
-    await TokenOutcome.find({
-      trackingComplete: true,
-    }).lean();
+outcome.learning.usedForTraining = true;
 
-  // ----------------------------------
-  // GLOBAL
-  // ----------------------------------
+outcome.learning.trainedAt =
+    new Date();
 
-  await updatePattern(
-    "GLOBAL",
-    completed
-  );
+        await outcome.save();
 
-  // ----------------------------------
-  // AUTO-GENERATED BUCKET PATTERNS
-  // ----------------------------------
+        console.log(
 
-  const grouped = new Map();
+            `🧠 Learned pattern ${key}`
 
-  for (const doc of completed) {
-    const momentum =
-      scoreBucket(doc.momentumScore);
+        );
 
-    const wallet =
-      scoreBucket(doc.walletQualityScore);
+    } catch (error) {
 
-    const rug =
-      rugRiskBucket(doc.rugRiskScore);
+        console.error(
 
-    const key = [
-      momentum,
-      rug,
-      wallet,
-    ].join("__");
+            `❌ Failed learning ${outcome.symbol}`,
 
-    if (!grouped.has(key)) {
-      grouped.set(key, []);
+            error
+
+        );
+
     }
 
-    grouped.get(key).push(doc);
-  }
-
-  for (const [key, docs] of grouped) {
-    const parts = key.split("__");
-
-    await updatePattern(
-      key,
-      docs,
-      {
-        momentumBucket: parts[0],
-        rugRiskBucket: parts[1],
-        walletBucket: parts[2],
-      }
-    );
-  }
-
-  console.log(
-    `🧠 AI rebuilt ${
-      grouped.size + 1
-    } historical pattern groups from ${
-      completed.length
-    } completed outcomes`
-  );
 }

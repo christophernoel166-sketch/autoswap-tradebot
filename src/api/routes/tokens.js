@@ -40,6 +40,9 @@ import {
     scanCompleted,
     scanFailed,
 } from "../../services/aiWorkflowService.js";
+import {
+    saveTokenOutcome,
+} from "../../services/outcome/tokenOutcomeService.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -1383,117 +1386,28 @@ console.log(
 // =====================================================
 
 try {
-  await TokenOutcome.create({
-    // Identification
-    mintAddress: tokenMint.trim(),
-    pairAddress: market.token?.pairAddress || null,
-    symbol: market.token?.symbol || null,
-    name: market.token?.name || null,
+  await saveTokenOutcome({
 
-    // Source
-    source: "manual_scan",
-    walletAddress: walletAddress || null,
+    tokenMint,
+    walletAddress,
 
-    // Timing
-    scannedAt: new Date(),
+    market,
+    holderData,
+    walletIntel,
+    profitWalletData,
+    momentumData,
+    integrityData,
+    riskStructureData,
+    rugRiskData,
 
-    // Entry price
-    entryPriceUsd:
-  market.metrics?.priceUsd ?? null,
+    forecast,
+    signalScore,
 
-    // Market
-    ageMinutes: market.metrics?.ageMinutes,
-    liquidityUsd: market.metrics?.liquidityUsd,
-    marketCapUsd: market.metrics?.marketCapUsd,
-    volume5mUsd: market.metrics?.volume5mUsd,
-    buys5m: market.metrics?.buys5m,
-    sells5m: market.metrics?.sells5m,
+    aiRecommendation,
+    aiContext,
 
-    // Holder metrics
-    largestHolderPercent:
-      holderData?.largestHolderPercent,
-    top10HoldingPercent:
-      holderData?.top10HoldingPercent,
+});
 
-    // Wallet intelligence
-    smartDegenCount:
-      walletIntel?.smartDegenCount,
-    botDegenCount:
-      walletIntel?.botDegenCount,
-    ratTraderCount:
-      walletIntel?.ratTraderCount,
-    alphaCallerCount:
-      walletIntel?.alphaCallerCount,
-    sniperWalletCount:
-      walletIntel?.sniperWalletCount,
-
-    // Profit wallet metrics
-    profitableWalletCount:
-      profitWalletData?.profitableWalletCount,
-    walletQualityScore:
-      profitWalletData?.walletQualityScore,
-    profitWalletConfidence:
-      profitWalletData?.profitWalletConfidence,
-
-    // Momentum
-    momentumScore:
-      momentumData?.momentumScore,
-    velocityBreakoutScore:
-      momentumData?.velocityBreakoutScore,
-
-    // Market integrity
-    walletParticipationScore:
-      integrityData?.walletParticipationScore,
-    velocitySanityScore:
-      integrityData?.velocitySanityScore,
-    washTradingRiskScore:
-      integrityData?.washTradingRiskScore,
-    bundleSuspicionScore:
-      integrityData?.bundleSuspicionScore,
-    artificialVolumeFlag:
-      integrityData?.artificialVolumeFlag,
-    fakeMomentumFlag:
-      integrityData?.fakeMomentumFlag,
-
-    // Risk structure
-    bundleScore:
-      riskStructureData?.bundleScore,
-    bundledWalletCount:
-      riskStructureData?.bundledWalletCount,
-    fundingClusterScore:
-      riskStructureData?.fundingClusterScore,
-    largestFundingCluster:
-      riskStructureData?.largestFundingCluster,
-
-    // Rug risk
-    devDumpRiskScore:
-      rugRiskData?.devDumpRiskScore,
-    liquidityPullRiskScore:
-      rugRiskData?.liquidityPullRiskScore,
-    insiderRiskScore:
-      rugRiskData?.insiderRiskScore,
-    rugRiskScore:
-      rugRiskData?.rugRiskScore,
-
-    // Forecast
-    forecastScore:
-      forecast?.forecastScore ?? null,
-    forecastVerdict:
-      forecast?.verdict ?? null,
-
-signalScore:
-    signalScore?.signalScore ?? null,
-
-recommendation:
-  aiRecommendation?.action ?? null,
-
-recommendationConfidence:
-  aiRecommendation?.confidence ?? null,
-
-
-    // Initial state
-    label: "PENDING",
-  });
 } catch (err) {
   console.error(
     "Failed to save TokenOutcome:",

@@ -1,0 +1,72 @@
+export const AI_STAGE = {
+
+    INITIALIZED:
+        "INITIALIZED",
+
+    SCANNING:
+        "SCANNING",
+
+    TOKEN_DISCOVERY:
+        "TOKEN_DISCOVERY",
+
+    MARKET_ANALYSIS:
+        "MARKET_ANALYSIS",
+
+    FORECAST:
+        "FORECAST",
+
+    CHART:
+        "CHART",
+
+    MOMENTUM:
+        "MOMENTUM",
+
+    LIQUIDITY:
+        "LIQUIDITY",
+
+    VOLUME:
+        "VOLUME",
+
+    WALLET:
+        "WALLET",
+
+    HOLDER_ANALYSIS:
+        "HOLDER_ANALYSIS",
+
+    INTEGRITY:
+        "INTEGRITY",
+
+    RUG_RISK:
+        "RUG_RISK",
+
+    HISTORICAL_PATTERN:
+        "HISTORICAL_PATTERN",
+
+    EVIDENCE:
+        "BUILDING_EVIDENCE",
+
+    CONFIDENCE:
+        "CALCULATING_CONFIDENCE",
+
+    RECOMMENDATION:
+        "GENERATING_RECOMMENDATION",
+
+    DECISION:
+        "GENERATING_DECISION",
+
+    EXECUTION:
+        "EXECUTING_TRADE",
+
+    MONITORING:
+        "MONITORING_POSITION",
+
+    LEARNING:
+        "LEARNING_FROM_OUTCOME",
+
+    COMPLETED:
+        "COMPLETED",
+
+    FAILED:
+        "FAILED",
+
+};
