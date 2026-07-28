@@ -244,6 +244,68 @@ export async function fetchMarketIntegrityData({
     warnings.push("Momentum may be driven by artificial activity");
   }
 
+// ---------------------------------------------------
+// AI Market Integrity Verdict
+// ---------------------------------------------------
+
+let verdictTitle = "Mixed Signals";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 70;
+
+// Strong organic market
+if (
+  walletParticipationScore >= 80 &&
+  washTradingRiskScore <= 20 &&
+  bundleSuspicionScore <= 20 &&
+  velocitySanityScore >= 75 &&
+  !fakeMomentumFlag
+) {
+  verdictTitle = "Organic Market";
+  verdictLevel = "LOW";
+  verdictColor = "green";
+  verdictConfidence = 95;
+}
+
+// High manipulation risk
+else if (
+  fakeMomentumFlag ||
+  washTradingRiskScore >= 70 ||
+  bundleSuspicionScore >= 60
+) {
+  verdictTitle = "Manipulated Market";
+  verdictLevel = "HIGH";
+  verdictColor = "red";
+  verdictConfidence = 92;
+}
+
+// Moderate concern
+else if (
+  washTradingRiskScore >= 40 ||
+  walletParticipationScore < 45 ||
+  velocitySanityScore < 50
+) {
+  verdictTitle = "Suspicious Activity";
+  verdictLevel = "MEDIUM_HIGH";
+  verdictColor = "orange";
+  verdictConfidence = 82;
+}
+
+const verdict = {
+  title: verdictTitle,
+  level: verdictLevel,
+  color: verdictColor,
+  confidence: verdictConfidence,
+
+  summary:
+    warnings.length > 0
+      ? warnings
+      : [
+          "Trading activity appears healthy.",
+          "No significant integrity issues detected.",
+        ],
+};
+
   return {
     tokenMint: tokenMint || null,
 
@@ -268,5 +330,7 @@ export async function fetchMarketIntegrityData({
     fakeMomentumFlag,
 
     integrityWarning: warnings.length ? warnings.join(" | ") : null,
+
+verdict,
   };
 }

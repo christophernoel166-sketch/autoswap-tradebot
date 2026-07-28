@@ -110,6 +110,7 @@ setShowChartConfirm,
   const social = scanResult?.social || null;
 const activity = scanResult?.activity || null;
   const integrity = scanResult?.integrity || null;
+const integrityVerdict = integrity?.verdict || null;
   const rugRisk = scanResult?.rugRisk || null;
   const profitWallets = scanResult?.profitWallets || null;
 
@@ -979,6 +980,51 @@ setTimeout(() => {
     </div>
 
   </div>
+
+{integrityVerdict && (
+  <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+
+    <div className="flex items-center justify-between flex-wrap gap-2">
+
+      <span
+        className={`px-3 py-1 rounded-full text-xs font-semibold ${
+          integrityVerdict.color === "green"
+            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            : integrityVerdict.color === "red"
+            ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400"
+            : integrityVerdict.color === "orange"
+            ? "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+            : "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+        }`}
+      >
+        {integrityVerdict.title}
+      </span>
+
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        Risk: {integrityVerdict.level}
+      </span>
+
+      <span className="text-xs text-gray-500 dark:text-gray-400">
+        Confidence {integrityVerdict.confidence}%
+      </span>
+
+    </div>
+
+    <div className="mt-3 space-y-1">
+
+      {integrityVerdict.summary?.map((item, index) => (
+        <div
+          key={index}
+          className="text-sm text-gray-600 dark:text-gray-300"
+        >
+          • {item}
+        </div>
+      ))}
+
+    </div>
+
+  </div>
+)}
 
 </Section>
 
