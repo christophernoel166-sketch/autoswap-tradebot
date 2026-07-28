@@ -190,6 +190,19 @@ const getAnalysisSummary = (analysis) => {
 const aiIntegrityAnalysis =
   getAnalysisSummary(aiAnalyses.integrity);
 
+console.log("ai.analyses =", aiAnalyses);
+
+console.log(
+  "ai.analyses.integrity =",
+  aiAnalyses.integrity
+);
+
+console.log(
+  "aiIntegrityAnalysis =",
+  aiIntegrityAnalysis
+);
+
+
 const aiWalletAnalysis =
   getAnalysisSummary(aiAnalyses.wallets);
 
