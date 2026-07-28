@@ -153,6 +153,23 @@ const forecast =
   scanResult?.ai?.forecast ??
   scanResult?.forecast ??
   null;
+
+const ai = scanResult?.ai || null;
+
+const aiAnalyses = ai?.analyses || {};
+
+const aiEvidence = ai?.evidence || [];
+
+const aiReasoning = ai?.reasoning || [];
+
+const aiRecommendation = ai?.recommendation || null;
+
+const aiSignalScore = ai?.signalScore || null;
+
+const aiConfidence = ai?.confidence || 0;
+
+const aiInvestmentThesis = ai?.investmentThesis || "";
+
 const [showAnalysisSummary, setShowAnalysisSummary] =
   useState(false);
 
