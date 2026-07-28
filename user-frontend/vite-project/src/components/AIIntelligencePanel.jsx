@@ -1,12 +1,32 @@
+function SummaryCard({
+  title,
+  value,
+  valueClass = "text-white",
+}) {
+  return (
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
+      <div className="text-xs text-gray-400">
+        {title}
+      </div>
+
+      <div className={`mt-1 text-lg font-bold ${valueClass}`}>
+        {value}
+      </div>
+    </div>
+  );
+}
+
 export default function AIIntelligencePanel({ ai }) {
   if (!ai) return null;
 
   const recommendation =
     typeof ai.recommendation === "string"
       ? ai.recommendation
-      : ai.recommendation?.recommendation ?? "WATCH";
+      : ai.recommendation?.recommendation ??
+        "WATCH";
 
-  const recommendationLabel = recommendation.replaceAll("_", " ");
+  const recommendationLabel =
+    recommendation.replaceAll("_", " ");
 
   const recommendationColor =
     recommendation === "STRONG_BUY"
@@ -31,106 +51,153 @@ export default function AIIntelligencePanel({ ai }) {
     ? ai.recommendation.reasoning
     : [];
 
+  const confidence =
+    ai.confidence ??
+    ai.signalScore?.confidenceScore ??
+    0;
+
+  const forecastScore =
+    ai.forecast?.forecastScore ?? 0;
+
+  const adjustedScore =
+    ai.signalScore
+      ?.adjustedForecastScore ??
+    forecastScore;
+
+  const historicalWinRate =
+    ai.signalScore?.historicalWinRate ??
+    0;
+
+  const historicalSamples =
+    ai.signalScore
+      ?.historicalSamples ?? 0;
+
+  const patternKey =
+    ai.signalScore?.patternKey ??
+    "N/A";
+
+  const winRateColor =
+    historicalWinRate >= 80
+      ? "bg-green-500/20 text-green-300 border-green-500/30"
+      : historicalWinRate >= 60
+      ? "bg-blue-500/20 text-blue-300 border-blue-500/30"
+      : historicalWinRate >= 40
+      ? "bg-yellow-500/20 text-yellow-300 border-yellow-500/30"
+      : "bg-red-500/20 text-red-300 border-red-500/30";
+
+  let patternQuality = "Unknown";
+  let patternColor =
+    "bg-gray-700 text-gray-300 border-gray-600";
+
+  if (
+    historicalSamples >= 50 &&
+    historicalWinRate >= 75
+  ) {
+    patternQuality = "Excellent";
+    patternColor =
+      "bg-green-500/20 text-green-300 border-green-500/30";
+  } else if (
+    historicalSamples >= 25 &&
+    historicalWinRate >= 60
+  ) {
+    patternQuality = "Good";
+    patternColor =
+      "bg-blue-500/20 text-blue-300 border-blue-500/30";
+  } else if (
+    historicalSamples >= 10
+  ) {
+    patternQuality = "Average";
+    patternColor =
+      "bg-yellow-500/20 text-yellow-300 border-yellow-500/30";
+  } else if (
+    historicalSamples > 0
+  ) {
+    patternQuality = "Limited Data";
+    patternColor =
+      "bg-orange-500/20 text-orange-300 border-orange-500/30";
+  }
+
   return (
-    <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 transition-all duration-500 ease-in-out">
-      <h3 className="text-lg font-semibold text-cyan-300 mb-3">
+    <div className="bg-gray-800 rounded-xl border border-cyan-500/30 p-4 transition-all duration-500 ease-in-out">
+
+      <h3 className="mb-4 text-lg font-semibold text-cyan-300">
         🧠 AI Intelligence
       </h3>
 
-      <div className="space-y-4 text-sm">
+      <div className="space-y-5 text-sm">
 
-        {/* Summary Cards */}
+        {/* Summary */}
         <div className="grid grid-cols-2 gap-3">
 
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
-            <div className="text-xs text-gray-400">
-              Recommendation
+          <SummaryCard
+            title="Recommendation"
+            value={recommendationLabel}
+            valueClass={recommendationColor}
+          />
+
+          <SummaryCard
+            title="Confidence"
+            value={`${confidence}%`}
+            valueClass="text-cyan-300"
+          />
+
+          <SummaryCard
+            title="Forecast Score"
+            value={`${forecastScore} / 100`}
+          />
+
+          <SummaryCard
+            title="Adjusted Score"
+            value={`${adjustedScore} / 100`}
+            valueClass="text-yellow-300"
+          />
+
+        </div>
+
+        {/* Pattern Intelligence */}
+        <div className="space-y-3">
+
+          <div>
+
+            <div className="mb-1 text-xs text-gray-400">
+              Pattern
             </div>
 
-            <div
-              className={`mt-1 text-lg font-bold ${recommendationColor}`}
+            <div className="break-all font-mono text-xs text-purple-300">
+              {patternKey}
+            </div>
+
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${winRateColor}`}
             >
-              {recommendationLabel}
-            </div>
+              Win Rate {historicalWinRate}%
+            </span>
+
+            <span
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${patternColor}`}
+            >
+              {patternQuality}
+            </span>
+
+            <span className="rounded-full border border-gray-600 px-3 py-1 text-xs text-gray-300">
+              {historicalSamples} Samples
+            </span>
+
           </div>
 
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
-            <div className="text-xs text-gray-400">
-              Confidence
-            </div>
-
-            <div className="mt-1 text-lg font-bold text-cyan-300">
-              {ai.confidence ??
-                ai.signalScore?.confidenceScore ??
-                0}
-              %
-            </div>
-          </div>
-
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
-            <div className="text-xs text-gray-400">
-              Forecast Score
-            </div>
-
-            <div className="mt-1 text-lg font-bold text-white">
-              {ai.forecast?.forecastScore ?? "--"} / 100
-            </div>
-          </div>
-
-          <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
-            <div className="text-xs text-gray-400">
-              Adjusted Score
-            </div>
-
-            <div className="mt-1 text-lg font-bold text-yellow-300">
-              {ai.signalScore?.adjustedForecastScore ??
-                ai.forecast?.forecastScore ??
-                "--"}{" "}
-              / 100
-            </div>
-          </div>
-
-        </div>
-
-        {/* Pattern */}
-        <div>
-          <span className="text-gray-400">
-            Pattern:
-          </span>{" "}
-          <span className="text-purple-300 break-all">
-            {ai.signalScore?.patternKey ?? "N/A"}
-          </span>
-        </div>
-
-        {/* Historical Win Rate */}
-        <div>
-          <span className="text-gray-400">
-            Historical Win Rate:
-          </span>{" "}
-          <span className="text-green-400">
-            {ai.signalScore?.historicalWinRate ??
-              0}
-            %
-          </span>
-        </div>
-
-        {/* Samples */}
-        <div>
-          <span className="text-gray-400">
-            Samples:
-          </span>{" "}
-          <span className="text-white">
-            {ai.signalScore?.historicalSamples ??
-              0}
-          </span>
         </div>
 
         {/* AI Reasoning */}
         {reasoning.length > 0 && (
-          <div className="pt-3 border-t border-gray-700">
-            <div className="text-gray-300 font-semibold mb-2">
+          <div className="border-t border-gray-700 pt-4">
+
+            <h4 className="mb-2 font-semibold text-gray-300">
               AI Reasoning
-            </div>
+            </h4>
 
             <ul className="list-disc list-inside space-y-1 text-gray-400">
               {reasoning.map((item, index) => (
@@ -139,15 +206,17 @@ export default function AIIntelligencePanel({ ai }) {
                 </li>
               ))}
             </ul>
+
           </div>
         )}
 
         {/* AI Explanation */}
         {explanation.length > 0 && (
-          <div className="pt-3 border-t border-gray-700">
-            <div className="text-gray-300 font-semibold mb-2">
+          <div className="border-t border-gray-700 pt-4">
+
+            <h4 className="mb-2 font-semibold text-gray-300">
               Why?
-            </div>
+            </h4>
 
             <ul className="list-disc list-inside space-y-1 text-gray-400">
               {explanation.map((item, index) => (
@@ -156,15 +225,16 @@ export default function AIIntelligencePanel({ ai }) {
                 </li>
               ))}
             </ul>
+
           </div>
         )}
 
-        {/* Footer */}
-        <div className="pt-2 text-xs text-gray-500">
+        <div className="border-t border-gray-700 pt-3 text-xs text-gray-500">
           This panel will disappear automatically after 40 seconds.
         </div>
 
       </div>
+
     </div>
   );
 }
