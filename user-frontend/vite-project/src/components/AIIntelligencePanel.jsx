@@ -43,89 +43,137 @@ const reasoning =
         🧠 AI Intelligence
       </h3>
 
-      <div className="space-y-2 text-sm">
-        {/* Recommendation */}
-        <div>
-          <span className="text-gray-400">
-            Recommendation:
-          </span>{" "}
-          <span
-            className={`font-bold ${recommendationColor}`}
-          >
-            {recommendationLabel}
-          </span>
-        </div>
+      <div className="space-y-3 text-sm">
 
-        {/* Forecast Score */}
-        <div>
-          <span className="text-gray-400">
-            Forecast Score:
-          </span>{" "}
-          <span className="text-white">
-            {`${ai.forecast?.forecastScore ?? "--"} / 100`}
-          </span>
-        </div>
+  {/* Summary Cards */}
+  <div className="grid grid-cols-2 gap-3">
 
-        {/* Pattern */}
-        <div>
-          <span className="text-gray-400">
-            Pattern:
-          </span>{" "}
-          <span className="text-purple-300 break-all">
-            {ai.signalScore?.patternKey ??
-              "N/A"}
-          </span>
-        </div>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
+      <div className="text-xs text-gray-400">
+        Recommendation
+      </div>
 
-        {/* Historical Win Rate */}
-        <div>
-          <span className="text-gray-400">
-            Historical Win Rate:
-          </span>{" "}
-          <span className="text-green-400">
-            {ai.signalScore?.historicalWinRate ??
-              0}
-            %
-          </span>
-        </div>
+      <div
+        className={`mt-1 text-lg font-bold ${recommendationColor}`}
+      >
+        {recommendationLabel}
+      </div>
+    </div>
 
-        {/* Samples */}
-        <div>
-          <span className="text-gray-400">
-            Samples:
-          </span>{" "}
-          <span className="text-white">
-            {ai.signalScore?.historicalSamples ??
-              0}
-          </span>
-        </div>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
+      <div className="text-xs text-gray-400">
+        Confidence
+      </div>
 
-        {/* Confidence */}
-        <div>
-          <span className="text-gray-400">
-            Confidence:
-          </span>{" "}
-          <span className="text-cyan-300">
-  {`${ai.confidence ?? ai.signalScore?.confidenceScore ?? 0}%`}
-</span>
-        </div>
+      <div className="mt-1 text-lg font-bold text-cyan-300">
+        {ai.confidence ??
+          ai.signalScore?.confidenceScore ??
+          0}
+        %
+      </div>
+    </div>
 
-        {/* Adjusted Score */}
-        <div>
-          <span className="text-gray-400">
-            Adjusted Score:
-          </span>{" "}
-          <span className="text-yellow-300">
-            {`${
-              ai.signalScore
-                ?.adjustedForecastScore ??
-              ai.forecast
-                ?.forecastScore ??
-              "--"
-            } / 100`}
-          </span>
-        </div>
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
+      <div className="text-xs text-gray-400">
+        Forecast Score
+      </div>
 
+      <div className="mt-1 text-lg font-bold text-white">
+        {ai.forecast?.forecastScore ?? "--"} / 100
+      </div>
+    </div>
+
+    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
+      <div className="text-xs text-gray-400">
+        Adjusted Score
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-yellow-300">
+        {ai.signalScore
+          ?.adjustedForecastScore ??
+          ai.forecast?.forecastScore ??
+          "--"}{" "}
+        / 100
+      </div>
+    </div>
+
+  </div>
+
+  {/* Pattern */}
+  <div>
+    <span className="text-gray-400">
+      Pattern:
+    </span>{" "}
+    <span className="text-purple-300 break-all">
+      {ai.signalScore?.patternKey ??
+        "N/A"}
+    </span>
+  </div>
+
+  {/* Historical Win Rate */}
+  <div>
+    <span className="text-gray-400">
+      Historical Win Rate:
+    </span>{" "}
+    <span className="text-green-400">
+      {ai.signalScore?.historicalWinRate ??
+        0}
+      %
+    </span>
+  </div>
+
+  {/* Samples */}
+  <div>
+    <span className="text-gray-400">
+      Samples:
+    </span>{" "}
+    <span className="text-white">
+      {ai.signalScore?.historicalSamples ??
+        0}
+    </span>
+  </div>
+
+  {/* AI Reasoning */}
+  {reasoning.length > 0 && (
+    <div className="pt-3 border-t border-gray-700">
+      <div className="text-gray-300 font-semibold mb-2">
+        AI Reasoning
+      </div>
+
+      <ul className="list-disc list-inside space-y-1 text-gray-400">
+        {reasoning.map((item, index) => (
+          <li key={index}>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+
+  {/* AI Explanation */}
+  {explanation.length > 0 && (
+    <div className="pt-3 border-t border-gray-700">
+      <div className="text-gray-300 font-semibold mb-2">
+        Why?
+      </div>
+
+      <ul className="list-disc list-inside space-y-1 text-gray-400">
+        {explanation.map((item, index) => (
+          <li key={index}>
+            {item}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )}
+
+  {/* Footer */}
+  <div className="pt-2 text-xs text-gray-500">
+    This panel will disappear automatically
+    after 40 seconds.
+  </div>
+
+</div>
 {/* AI Reasoning */}
 {reasoning.length > 0 && (
   <div className="pt-3 border-t border-gray-700">
