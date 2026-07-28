@@ -164,6 +164,9 @@ const aiReasoning = ai?.reasoning || [];
 
 const aiRecommendation = ai?.recommendation || null;
 
+console.log("aiRecommendation =", aiRecommendation);
+console.log("typeof aiRecommendation =", typeof aiRecommendation);
+
 const aiSignalScore = ai?.signalScore || null;
 
 const aiConfidence = ai?.confidence || 0;
@@ -655,7 +658,9 @@ setTimeout(() => {
                 : "text-yellow-400"
             }`}
           >
-            {aiRecommendation || "UNKNOWN"}
+           {typeof aiRecommendation === "object"
+  ? JSON.stringify(aiRecommendation)
+  : aiRecommendation || "UNKNOWN"}
           </div>
         </div>
 
