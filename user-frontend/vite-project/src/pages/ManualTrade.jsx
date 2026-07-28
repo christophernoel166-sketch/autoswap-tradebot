@@ -1013,6 +1013,24 @@ setTimeout(() => {
 
   </div>
 
+  {aiIntegrityAnalysis && (
+    <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
+
+      <div className="text-xs uppercase tracking-wide text-purple-400 font-semibold mb-2">
+        AI Observation
+      </div>
+
+      <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-3">
+
+        <p className="text-sm text-gray-700 dark:text-gray-200">
+          {aiIntegrityAnalysis}
+        </p>
+
+      </div>
+
+    </div>
+  )}
+
 </Section>
 
 
