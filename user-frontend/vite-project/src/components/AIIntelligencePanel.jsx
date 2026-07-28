@@ -30,6 +30,13 @@ const recommendationColor =
       ? ai.recommendation.explanation
       : [];
 
+const reasoning =
+  Array.isArray(
+    ai.recommendation?.reasoning
+  )
+    ? ai.recommendation.reasoning
+    : [];
+
   return (
     <div className="bg-gray-800 rounded-xl p-4 border border-cyan-500/30 transition-all duration-500 ease-in-out">
       <h3 className="text-lg font-semibold text-cyan-300 mb-3">
@@ -118,6 +125,28 @@ const recommendationColor =
             } / 100`}
           </span>
         </div>
+
+{/* AI Reasoning */}
+{reasoning.length > 0 && (
+  <div className="pt-3 border-t border-gray-700">
+
+    <div className="text-gray-300 font-semibold mb-2">
+      AI Reasoning
+    </div>
+
+    <ul className="list-disc list-inside space-y-1 text-gray-400">
+
+      {reasoning.map((item, index) => (
+        <li key={index}>
+          {item}
+        </li>
+      ))}
+
+    </ul>
+
+  </div>
+)}
+
 
         {/* AI Explanation */}
         {explanation.length > 0 && (
