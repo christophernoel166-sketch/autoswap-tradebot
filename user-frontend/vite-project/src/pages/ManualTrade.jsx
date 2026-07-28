@@ -606,6 +606,119 @@ setTimeout(() => {
   </Section>
 ) : null}
 
+{ai && (
+  <Section title="AI Decision Engine">
+
+    <div className="space-y-4">
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+
+        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
+          <div className="text-xs text-gray-400">
+            Recommendation
+          </div>
+
+          <div
+            className={`mt-1 font-semibold ${
+              aiRecommendation === "BUY"
+                ? "text-green-400"
+                : aiRecommendation === "SELL"
+                ? "text-red-400"
+                : "text-yellow-400"
+            }`}
+          >
+            {aiRecommendation || "UNKNOWN"}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
+          <div className="text-xs text-gray-400">
+            Confidence
+          </div>
+
+          <div className="mt-1 font-semibold text-white">
+            {aiConfidence}%
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
+          <div className="text-xs text-gray-400">
+            Signal Score
+          </div>
+
+          <div className="mt-1 font-semibold text-white">
+            {aiSignalScore ?? "—"}
+          </div>
+        </div>
+
+        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
+          <div className="text-xs text-gray-400">
+            Forecast
+          </div>
+
+          <div className="mt-1 font-semibold text-white">
+            {forecast?.verdict || "UNKNOWN"}
+          </div>
+        </div>
+
+      </div>
+
+      {aiInvestmentThesis && (
+        <div>
+          <div className="text-sm font-semibold mb-2">
+            Investment Thesis
+          </div>
+
+          <div className="text-sm text-gray-300">
+            {aiInvestmentThesis}
+          </div>
+        </div>
+      )}
+
+      {aiEvidence.length > 0 && (
+        <div>
+
+          <div className="text-sm font-semibold mb-2">
+            Evidence
+          </div>
+
+          <ul className="list-disc list-inside text-sm space-y-1 text-gray-300">
+
+            {aiEvidence.map((item, index) => (
+              <li key={index}>
+                {item}
+              </li>
+            ))}
+
+          </ul>
+
+        </div>
+      )}
+
+      {aiReasoning.length > 0 && (
+        <div>
+
+          <div className="text-sm font-semibold mb-2">
+            AI Reasoning
+          </div>
+
+          <ul className="list-disc list-inside text-sm space-y-1 text-gray-300">
+
+            {aiReasoning.map((item, index) => (
+              <li key={index}>
+                {item}
+              </li>
+            ))}
+
+          </ul>
+
+        </div>
+      )}
+
+    </div>
+
+  </Section>
+)}
 
 
 <ChartEntrySection
@@ -1012,24 +1125,6 @@ setTimeout(() => {
     </div>
 
   </div>
-
-  {aiIntegrityAnalysis && (
-    <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
-
-      <div className="text-xs uppercase tracking-wide text-purple-400 font-semibold mb-2">
-        AI Observation
-      </div>
-
-      <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-3">
-
-        <p className="text-sm text-gray-700 dark:text-gray-200">
-          {aiIntegrityAnalysis}
-        </p>
-
-      </div>
-
-    </div>
-  )}
 
 </Section>
 
