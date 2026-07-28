@@ -153,68 +153,6 @@ const forecast =
   scanResult?.ai?.forecast ??
   scanResult?.forecast ??
   null;
-
-const ai = scanResult?.ai || null;
-
-const aiAnalyses = ai?.analyses || {};
-
-const aiEvidence = ai?.evidence || [];
-
-const aiReasoning = ai?.reasoning || [];
-
-const aiRecommendation = ai?.recommendation || null;
-
-console.log("aiRecommendation =", aiRecommendation);
-console.log("typeof aiRecommendation =", typeof aiRecommendation);
-
-const aiSignalScore = ai?.signalScore || null;
-
-const aiConfidence = ai?.confidence || 0;
-
-const aiInvestmentThesis = ai?.investmentThesis || "";
-
-
-const getAnalysisSummary = (analysis) => {
-  if (!analysis) return null;
-
-  if (typeof analysis === "string") return analysis;
-
-  if (analysis.summary) return analysis.summary;
-
-  if (analysis.verdict) return analysis.verdict;
-
-  if (analysis.reasoning) return analysis.reasoning;
-
-  if (analysis.description) return analysis.description;
-
-  return null;
-};
-
-const aiIntegrityAnalysis =
-  getAnalysisSummary(aiAnalyses.integrity);
-
-console.log("ai.analyses =", aiAnalyses);
-
-console.log(
-  "ai.analyses.integrity =",
-  aiAnalyses.integrity
-);
-
-console.log(
-  "aiIntegrityAnalysis =",
-  aiIntegrityAnalysis
-);
-
-
-const aiWalletAnalysis =
-  getAnalysisSummary(aiAnalyses.wallets);
-
-const aiMomentumAnalysis =
-  getAnalysisSummary(aiAnalyses.momentum);
-
-const aiRiskAnalysis =
-  getAnalysisSummary(aiAnalyses.rugRisk);
-
 const [showAnalysisSummary, setShowAnalysisSummary] =
   useState(false);
 
@@ -637,123 +575,6 @@ setTimeout(() => {
   </Section>
 ) : null}
 
-{ai && (
-  <Section title="AI Decision Engine">
-
-    <div className="space-y-4">
-
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div className="text-xs text-gray-400">
-            Recommendation
-          </div>
-
-          <div
-            className={`mt-1 font-semibold ${
-    aiRecommendation?.recommendation === "BUY"
-      ? "text-green-400"
-      : aiRecommendation?.recommendation === "SELL"
-      ? "text-red-400"
-      : aiRecommendation?.recommendation === "AVOID"
-      ? "text-red-400"
-      : "text-yellow-400"
-}`}
-          >
-           {aiRecommendation?.recommendation || "UNKNOWN"}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div className="text-xs text-gray-400">
-            Confidence
-          </div>
-
-          <div className="mt-1 font-semibold text-white">
-            {aiConfidence}%
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div className="text-xs text-gray-400">
-            Signal Score
-          </div>
-
-          <div className="mt-1 font-semibold text-white">
-            {aiSignalScore ?? "—"}
-          </div>
-        </div>
-
-        <div className="rounded-lg bg-gray-50 dark:bg-gray-700 p-3">
-          <div className="text-xs text-gray-400">
-            Forecast
-          </div>
-
-          <div className="mt-1 font-semibold text-white">
-            {forecast?.verdict || "UNKNOWN"}
-          </div>
-        </div>
-
-      </div>
-
-      {aiInvestmentThesis && (
-        <div>
-          <div className="text-sm font-semibold mb-2">
-            Investment Thesis
-          </div>
-
-          <div className="text-sm text-gray-300">
-            {aiInvestmentThesis}
-          </div>
-        </div>
-      )}
-
-      {aiEvidence.length > 0 && (
-        <div>
-
-          <div className="text-sm font-semibold mb-2">
-            Evidence
-          </div>
-
-          <ul className="list-disc list-inside text-sm space-y-1 text-gray-300">
-
-            {aiEvidence.map((item, index) => (
-              <li key={index}>
-                {item}
-              </li>
-            ))}
-
-          </ul>
-
-        </div>
-      )}
-
-      {aiReasoning.length > 0 && (
-        <div>
-
-          <div className="text-sm font-semibold mb-2">
-            AI Reasoning
-          </div>
-
-          <ul className="list-disc list-inside text-sm space-y-1 text-gray-300">
-
-            {aiReasoning.map((item, index) => (
-              <li key={index}>
-                {item}
-              </li>
-            ))}
-
-          </ul>
-
-        </div>
-      )}
-
-    </div>
-
-  </Section>
-)}
-
-
 <ChartEntrySection
   chartEntry={chartEntry}
   chartActionColor={chartActionColor}
@@ -1157,25 +978,7 @@ setTimeout(() => {
       </span>
     </div>
 
-   </div>
-
-  {aiIntegrityAnalysis && (
-    <div className="mt-5 border-t border-gray-200 dark:border-gray-700 pt-4">
-
-      <div className="text-xs uppercase tracking-wide text-purple-400 font-semibold mb-2">
-        AI Observation
-      </div>
-
-      <div className="rounded-lg bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800 p-3">
-
-        <p className="text-sm text-gray-700 dark:text-gray-200">
-          {aiIntegrityAnalysis}
-        </p>
-
-      </div>
-
-    </div>
-  )}
+  </div>
 
 </Section>
 
