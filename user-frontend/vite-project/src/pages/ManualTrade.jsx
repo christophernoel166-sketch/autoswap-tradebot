@@ -153,39 +153,6 @@ const forecast =
   scanResult?.ai?.forecast ??
   scanResult?.forecast ??
   null;
-
-const ai = scanResult?.ai || null;
-
-const aiAnalyses = ai?.analyses || {};
-
-const aiEvidence = ai?.evidence || [];
-
-const aiReasoning = ai?.reasoning || [];
-
-const aiRecommendation = ai?.recommendation || null;
-
-const aiSignalScore = ai?.signalScore || null;
-
-const aiConfidence = ai?.confidence || 0;
-
-const aiInvestmentThesis = ai?.investmentThesis || "";
-
-const getAnalysisSummary = (analysis) => {
-  if (!analysis) return null;
-
-  if (typeof analysis === "string") return analysis;
-
-  if (analysis.summary) return analysis.summary;
-
-  if (analysis.verdict) return analysis.verdict;
-
-  if (analysis.reasoning) return analysis.reasoning;
-
-  if (analysis.description) return analysis.description;
-
-  return null;
-};
-
 const [showAnalysisSummary, setShowAnalysisSummary] =
   useState(false);
 
@@ -493,6 +460,8 @@ setTimeout(() => {
               
           </Section>
 
+
+
 {volumeAnalysis &&
  liquidityAnalysis &&
  forecast ? (
@@ -605,9 +574,6 @@ setTimeout(() => {
     </div>
   </Section>
 ) : null}
-
-
-
 
 <ChartEntrySection
   chartEntry={chartEntry}
