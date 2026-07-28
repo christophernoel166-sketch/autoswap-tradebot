@@ -651,16 +651,16 @@ setTimeout(() => {
 
           <div
             className={`mt-1 font-semibold ${
-              aiRecommendation === "BUY"
-                ? "text-green-400"
-                : aiRecommendation === "SELL"
-                ? "text-red-400"
-                : "text-yellow-400"
-            }`}
+    aiRecommendation?.recommendation === "BUY"
+      ? "text-green-400"
+      : aiRecommendation?.recommendation === "SELL"
+      ? "text-red-400"
+      : aiRecommendation?.recommendation === "AVOID"
+      ? "text-red-400"
+      : "text-yellow-400"
+}`}
           >
-           {typeof aiRecommendation === "object"
-  ? JSON.stringify(aiRecommendation)
-  : aiRecommendation || "UNKNOWN"}
+           {aiRecommendation?.recommendation || "UNKNOWN"}
           </div>
         </div>
 
