@@ -175,24 +175,35 @@ export async function fetchVolumeAnalysisData({
       buyGrowthScore * 0.2
   );
 
+// =========================================================
+// Standardized AI Score
+// =========================================================
+
+const score = volumeScore;
+
+
+
   let volumeVerdict = "Bearish";
 
-  if (volumeScore >= 90) {
+if (score >= 90) {
     volumeVerdict = "Explosive";
-  } else if (volumeScore >= 75) {
+}
+else if (score >= 75) {
     volumeVerdict = "Strong";
-  } else if (volumeScore >= 60) {
+}
+else if (score >= 60) {
     volumeVerdict = "Bullish";
-  } else if (volumeScore >= 40) {
+}
+else if (score >= 40) {
     volumeVerdict = "Neutral";
-  }
+}
 
 // =========================================================
 // AI Volume Intelligence
 // =========================================================
 
 const volumeStrength =
-  getVolumeStrength(volumeScore);
+  getVolumeStrength(score);
 
 const volumeTrend =
   getVolumeTrend(volumeAcceleration);
@@ -212,9 +223,9 @@ const organicVolume =
 
 const evidence = {
 
-  confidenceContribution:
+confidenceContribution:
 
-    volumeScore,
+    score,
 
   confidenceWeight:
 
@@ -390,6 +401,116 @@ if (
 
 }
 
+// =========================================================
+// AI Volume Verdict
+// =========================================================
+
+let verdictTitle = "Average Trading Volume";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 60;
+
+if (score >= 90) {
+
+    verdictTitle = "Explosive Volume";
+
+    verdictLevel = "LOW";
+
+    verdictColor = "green";
+
+    verdictConfidence =
+        Math.min(
+            99,
+            65 + Math.round(score * 0.30)
+        );
+
+}
+else if (score >= 75) {
+
+    verdictTitle = "Strong Buying Activity";
+
+    verdictLevel = "LOW_MEDIUM";
+
+    verdictColor = "lime";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round(score * 0.25)
+        );
+
+}
+else if (score >= 60) {
+
+    verdictTitle = "Healthy Trading Volume";
+
+    verdictLevel = "MEDIUM";
+
+    verdictColor = "yellowgreen";
+
+    verdictConfidence =
+        Math.min(
+            92,
+            55 + Math.round(score * 0.20)
+        );
+
+}
+else if (score >= 40) {
+
+    verdictTitle = "Neutral Volume";
+
+    verdictLevel = "MEDIUM";
+
+    verdictColor = "yellow";
+
+    verdictConfidence =
+        Math.min(
+            88,
+            50 + Math.round(score * 0.15)
+        );
+
+}
+else {
+
+    verdictTitle = "Weak Trading Volume";
+
+    verdictLevel = "HIGH";
+
+    verdictColor = "red";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round((100 - score) * 0.25)
+        );
+
+}
+
+const verdict = {
+
+    title: verdictTitle,
+
+    level: verdictLevel,
+
+    color: verdictColor,
+
+    confidence: verdictConfidence,
+
+    summary:
+
+        evidence.strengths.length
+
+            ? evidence.strengths
+
+            : evidence.risks.length
+
+                ? evidence.risks
+
+                : ["Volume profile is neutral."],
+
+};
+
+
 return {
 
   // =======================================================
@@ -440,7 +561,13 @@ return {
   // AI Intelligence
   // =======================================================
 
- volumeStrength,
+score,
+
+confidence: verdictConfidence,
+
+verdict,
+
+volumeStrength,
 
 volumeTrend,
 
@@ -448,13 +575,11 @@ volumeTrendConfidence:
 
   volumeStrength === "VERY_STRONG"
     ? "HIGH"
-
     : volumeStrength === "STRONG"
       ? "MEDIUM"
-
       : "LOW",
 
-  buyPressure: {
+buyPressure: {
 
     ratio: Number(
       buySellRatio.toFixed(3)

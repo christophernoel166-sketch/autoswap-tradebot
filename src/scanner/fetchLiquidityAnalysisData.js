@@ -129,28 +129,27 @@ export async function fetchLiquidityAnalysisData({
       growthScore * 0.3
     );
 
+// =========================================================
+// Standardized AI Score
+// =========================================================
+
+const score = liquidityScore;
+
   let liquidityVerdict =
     "Weak";
 
-  if (liquidityScore >= 90) {
-    liquidityVerdict =
-      "Excellent";
-  } else if (
-    liquidityScore >= 75
-  ) {
-    liquidityVerdict =
-      "Strong";
-  } else if (
-    liquidityScore >= 60
-  ) {
-    liquidityVerdict =
-      "Healthy";
-  } else if (
-    liquidityScore >= 40
-  ) {
-    liquidityVerdict =
-      "Neutral";
-  }
+if (score >= 90) {
+    liquidityVerdict = "Excellent";
+}
+else if (score >= 75) {
+    liquidityVerdict = "Strong";
+}
+else if (score >= 60) {
+    liquidityVerdict = "Healthy";
+}
+else if (score >= 40) {
+    liquidityVerdict = "Neutral";
+}
 
 // =========================================================
 // AI Liquidity Intelligence
@@ -158,7 +157,7 @@ export async function fetchLiquidityAnalysisData({
 
 const liquidityStrength =
   getLiquidityStrength(
-    liquidityScore
+    score
   );
 
 const liquidityTrend =
@@ -173,7 +172,7 @@ const liquidityRisk =
 
 const healthyLiquidity =
   hasHealthyLiquidity(
-    liquidityScore
+    score
   );
 
 // =========================================================
@@ -183,7 +182,7 @@ const healthyLiquidity =
 const evidence = {
 
   confidenceContribution:
-    liquidityScore,
+    score,
 
   confidenceWeight:
     5,
@@ -333,6 +332,106 @@ if (
 
 }
 
+// =========================================================
+// AI Liquidity Verdict
+// =========================================================
+
+let verdictTitle = "Average Liquidity";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 60;
+
+if (score >= 90) {
+
+    verdictTitle = "Excellent Liquidity";
+    verdictLevel = "LOW";
+    verdictColor = "green";
+
+    verdictConfidence =
+        Math.min(
+            99,
+            65 + Math.round(score * 0.30)
+        );
+
+}
+else if (score >= 75) {
+
+    verdictTitle = "Strong Liquidity";
+    verdictLevel = "LOW_MEDIUM";
+    verdictColor = "lime";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round(score * 0.25)
+        );
+
+}
+else if (score >= 60) {
+
+    verdictTitle = "Healthy Liquidity";
+    verdictLevel = "MEDIUM";
+    verdictColor = "yellowgreen";
+
+    verdictConfidence =
+        Math.min(
+            92,
+            55 + Math.round(score * 0.20)
+        );
+
+}
+else if (score >= 40) {
+
+    verdictTitle = "Neutral Liquidity";
+    verdictLevel = "MEDIUM";
+    verdictColor = "yellow";
+
+    verdictConfidence =
+        Math.min(
+            88,
+            50 + Math.round(score * 0.15)
+        );
+
+}
+else {
+
+    verdictTitle = "Weak Liquidity";
+    verdictLevel = "HIGH";
+    verdictColor = "red";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round((100 - score) * 0.25)
+        );
+
+}
+
+const verdict = {
+
+    title: verdictTitle,
+
+    level: verdictLevel,
+
+    color: verdictColor,
+
+    confidence: verdictConfidence,
+
+    summary:
+
+        evidence.strengths.length
+
+            ? evidence.strengths
+
+            : evidence.risks.length
+
+                ? evidence.risks
+
+                : ["Liquidity profile is neutral."],
+
+};
+
+
  return {
 
   // =======================================================
@@ -357,15 +456,21 @@ if (
 
   liquidityVerdict,
 
-  // =======================================================
-  // AI Intelligence
-  // =======================================================
+// =======================================================
+// AI Intelligence
+// =======================================================
 
-  liquidityStrength,
+score,
 
-  liquidityTrend,
+confidence: verdictConfidence,
 
-  liquidityTrendConfidence:
+verdict,
+
+liquidityStrength,
+
+liquidityTrend,
+
+liquidityTrendConfidence:
 
     liquidityStrength === "VERY_STRONG"
       ? "HIGH"

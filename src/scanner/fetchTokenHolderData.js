@@ -470,13 +470,110 @@ const healthyDistribution =
   );
 
 // =========================================================
+// Standardized AI Score
+// =========================================================
+
+  let holderWarning = null;
+
+  if (!includedHolders.length) {
+    holderWarning = "No valid holders could be resolved";
+  } else if (largestHolderPercent > 25) {
+    holderWarning =
+      "Very large holder detected — possible LP/AMM/exchange wallet still present";
+  }
+
+const score = decentralizationScore;
+
+// =========================================================
+// AI Holder Verdict
+// =========================================================
+
+let verdictTitle = "Average Holder Distribution";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 60;
+
+if (score >= 85) {
+
+  verdictTitle = "Excellent Holder Distribution";
+  verdictLevel = "LOW";
+  verdictColor = "green";
+
+  verdictConfidence =
+    Math.min(
+      99,
+      65 + Math.round(score * 0.30)
+    );
+
+}
+else if (score >= 65) {
+
+  verdictTitle = "Healthy Holder Distribution";
+  verdictLevel = "LOW_MEDIUM";
+  verdictColor = "lime";
+
+  verdictConfidence =
+    Math.min(
+      95,
+      60 + Math.round(score * 0.25)
+    );
+
+}
+else if (score >= 45) {
+
+  verdictTitle = "Mixed Holder Distribution";
+  verdictLevel = "MEDIUM";
+  verdictColor = "yellow";
+
+  verdictConfidence =
+    Math.min(
+      90,
+      55 + Math.round(score * 0.20)
+    );
+
+}
+else {
+
+  verdictTitle = "Poor Holder Distribution";
+  verdictLevel = "HIGH";
+  verdictColor = "red";
+
+  verdictConfidence =
+    Math.min(
+      95,
+      60 + Math.round((100 - score) * 0.25)
+    );
+
+}
+
+const verdict = {
+
+  title: verdictTitle,
+
+  level: verdictLevel,
+
+  color: verdictColor,
+
+  confidence: verdictConfidence,
+
+  summary:
+
+    holderWarning
+      ? [holderWarning]
+      : healthyDistribution
+          ? ["Holder distribution appears healthy."]
+          : ["Holder concentration is elevated."],
+
+};
+
+// =========================================================
 // AI Evidence
 // =========================================================
 
 const evidence = {
 
   confidenceContribution:
-    decentralizationScore,
+    score,
 
   confidenceWeight:
     5,
@@ -608,9 +705,7 @@ if (healthyDistribution) {
 
 }
 
-if (
-  decentralizationScore >= 80
-) {
+if (score >= 80) {
 
   evidence.convictionDrivers.push(
     "Excellent decentralization"
@@ -646,14 +741,7 @@ if (
 
 }
 
-  let holderWarning = null;
 
-  if (!includedHolders.length) {
-    holderWarning = "No valid holders could be resolved";
-  } else if (largestHolderPercent > 25) {
-    holderWarning =
-      "Very large holder detected — possible LP/AMM/exchange wallet still present";
-  }
 
   return {
 
@@ -679,15 +767,21 @@ if (
   // AI Intelligence
   // =======================================================
 
-  holderStrength,
+ score,
 
-  whaleRisk,
+confidence: verdictConfidence,
 
-  distributionQuality,
+verdict,
 
-  decentralizationScore,
+holderStrength,
 
-  healthyDistribution,
+whaleRisk,
+
+distributionQuality,
+
+decentralizationScore,
+
+healthyDistribution,
 
   holderHealth:
 

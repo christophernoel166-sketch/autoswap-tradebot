@@ -162,14 +162,37 @@ function getStructure(price, ema20Val, ema50Val, ema200Val, rsiVal) {
 
 function buildEmptyResult(reason) {
   return {
+
     ok: false,
-    action: "avoid",
-    setupType: "no_setup",
-    structure: "range",
-    confidence: 0,
+
     score: 0,
+
+    confidence: 0,
+
+    verdict: {
+
+        title: "No Chart Data",
+
+        level: "UNKNOWN",
+
+        color: "gray",
+
+        confidence: 0,
+
+        summary: [reason],
+
+    },
+
+    action: "avoid",
+
+    setupType: "no_setup",
+
+    structure: "range",
+
     reasons: [],
+
     warnings: [reason],
+
     entryZone: { low: null, high: null, ideal: null },
     stopLoss: null,
     invalidation: null,
@@ -416,15 +439,82 @@ const ema200 = ema(closes, Math.min(100, clean.length));
       ? clamp(score - 5, 40, 85)
       : clamp(score - 15, 0, 60);
 
+
+// =========================================================
+// AI Chart Verdict
+// =========================================================
+
+let verdictTitle = "Neutral Chart";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+
+if (action === "enter_now") {
+
+  verdictTitle = "High Probability Entry";
+  verdictLevel = "LOW";
+  verdictColor = "green";
+
+}
+else if (action === "wait_pullback") {
+
+  verdictTitle = "Wait For Pullback";
+  verdictLevel = "LOW_MEDIUM";
+  verdictColor = "lime";
+
+}
+else if (action === "wait_breakout") {
+
+  verdictTitle = "Await Breakout";
+  verdictLevel = "MEDIUM";
+  verdictColor = "orange";
+
+}
+else {
+
+  verdictTitle = "Avoid Entry";
+  verdictLevel = "HIGH";
+  verdictColor = "red";
+
+}
+
+const verdict = {
+
+  title: verdictTitle,
+
+  level: verdictLevel,
+
+  color: verdictColor,
+
+  confidence,
+
+  summary:
+    warnings.length
+      ? warnings
+      : reasons,
+
+};
+
+
   return {
+
     ok: true,
-    action,
-    setupType,
-    structure,
-    confidence,
+
     score,
+
+    confidence,
+
+    verdict,
+
+    action,
+
+    setupType,
+
+    structure,
+
     reasons,
+
     warnings,
+
     entryZone: {
       low: round(entryZone.low),
       high: round(entryZone.high),

@@ -109,15 +109,51 @@ export async function fetchWalletIntelligenceData({
 
     const topHolders = holderData?.topHolders || [];
 
-    if (!Array.isArray(topHolders) || topHolders.length === 0) {
-      return {
-        smartDegenCount: 0,
-        botDegenCount: 0,
-        ratTraderCount: 0,
-        sniperWalletCount: 0,
-        walletIntelligenceWarning: "No holder data available",
-      };
-    }
+if (!Array.isArray(topHolders) || topHolders.length === 0) {
+  return {
+
+    score: 0,
+
+    confidence: 0,
+
+    verdict: {
+      title: "No Wallet Data",
+      level: "UNKNOWN",
+      color: "gray",
+      confidence: 0,
+      summary: [
+        "Wallet intelligence could not be evaluated."
+      ],
+    },
+
+    smartDegenCount: 0,
+    botDegenCount: 0,
+    ratTraderCount: 0,
+    sniperWalletCount: 0,
+
+    walletScore: 0,
+    walletQuality: "UNKNOWN",
+    smartMoneyBias: "UNKNOWN",
+    botRisk: "UNKNOWN",
+
+    walletHealth: "UNKNOWN",
+    smartMoneyConfidence: "UNKNOWN",
+
+    walletIntelligenceWarning: "No holder data available",
+
+    evidence: {
+      confidenceContribution: 0,
+      confidenceWeight: 5,
+      strengths: [],
+      weaknesses: [],
+      risks: [],
+      assumptions: [],
+      convictionDrivers: [],
+      monitoringPriorities: [],
+    },
+
+  };
+}
 
     let smartDegenCount = 0;
     let botDegenCount = 0;
@@ -202,6 +238,91 @@ const botRisk =
   getBotRisk(
     botDegenCount
   );
+
+// =========================================================
+// AI Wallet Verdict
+// =========================================================
+
+let verdictTitle = "Average Wallet Quality";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 60;
+
+if (walletScore >= 85) {
+
+  verdictTitle = "Elite Smart Money";
+  verdictLevel = "LOW";
+  verdictColor = "green";
+
+  verdictConfidence =
+    Math.min(
+      99,
+      65 +
+      Math.round(walletScore * 0.30)
+    );
+
+}
+else if (walletScore >= 65) {
+
+  verdictTitle = "Healthy Wallet Activity";
+  verdictLevel = "LOW_MEDIUM";
+  verdictColor = "lime";
+
+  verdictConfidence =
+    Math.min(
+      95,
+      60 +
+      Math.round(walletScore * 0.25)
+    );
+
+}
+else if (walletScore >= 45) {
+
+  verdictTitle = "Mixed Wallet Signals";
+  verdictLevel = "MEDIUM";
+  verdictColor = "yellow";
+
+  verdictConfidence =
+    Math.min(
+      90,
+      55 +
+      Math.round(walletScore * 0.20)
+    );
+
+}
+else {
+
+  verdictTitle = "Weak Wallet Activity";
+  verdictLevel = "HIGH";
+  verdictColor = "red";
+
+  verdictConfidence =
+    Math.min(
+      95,
+      60 +
+      Math.round((100 - walletScore) * 0.25)
+    );
+
+}
+
+const verdict = {
+
+  title: verdictTitle,
+
+  level: verdictLevel,
+
+  color: verdictColor,
+
+  confidence: verdictConfidence,
+
+  summary:
+    warnings.length > 0
+      ? warnings
+      : [
+          "Wallet activity appears healthy."
+        ],
+
+};
 
 // =========================================================
 // AI Evidence
@@ -361,13 +482,19 @@ context.evidence.wallets =
   // AI Intelligence
   // =======================================================
 
-  walletScore,
+score: walletScore,
 
-  walletQuality,
+confidence: verdictConfidence,
 
-  smartMoneyBias,
+verdict,
 
-  botRisk,
+walletScore,
+
+walletQuality,
+
+smartMoneyBias,
+
+botRisk,
 
   walletHealth:
 
@@ -397,11 +524,47 @@ context.evidence.wallets =
     console.error("fetchWalletIntelligenceData error:", err);
 
     return {
-      smartDegenCount: 0,
-      botDegenCount: 0,
-      ratTraderCount: 0,
-      sniperWalletCount: 0,
-      walletIntelligenceWarning: "Wallet intelligence failed",
-    };
+
+  score: 0,
+
+  confidence: 0,
+
+  verdict: {
+    title: "Wallet Intelligence Failed",
+    level: "UNKNOWN",
+    color: "gray",
+    confidence: 0,
+    summary: [
+      "Wallet intelligence could not be evaluated."
+    ],
+  },
+
+  smartDegenCount: 0,
+  botDegenCount: 0,
+  ratTraderCount: 0,
+  sniperWalletCount: 0,
+
+  walletScore: 0,
+  walletQuality: "UNKNOWN",
+  smartMoneyBias: "UNKNOWN",
+  botRisk: "UNKNOWN",
+
+  walletHealth: "UNKNOWN",
+  smartMoneyConfidence: "UNKNOWN",
+
+  walletIntelligenceWarning: "Wallet intelligence failed",
+
+  evidence: {
+    confidenceContribution: 0,
+    confidenceWeight: 5,
+    strengths: [],
+    weaknesses: [],
+    risks: [],
+    assumptions: [],
+    convictionDrivers: [],
+    monitoringPriorities: [],
+  },
+
+};
   }
 }

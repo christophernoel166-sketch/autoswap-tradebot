@@ -1351,6 +1351,24 @@ const aiRecommendation =
 
     signalScore,
 
+    momentumData,
+
+    profitWalletData,
+
+    rugRiskData,
+
+    volumeAnalysis,
+
+    liquidityAnalysis,
+
+    marketIntegrity: integrityData,
+
+    holderSafety: response.evaluation,
+
+    walletIntelligence: walletIntel,
+
+    chartAnalysis: chartEntry,
+
   });
 
 // Store recommendation

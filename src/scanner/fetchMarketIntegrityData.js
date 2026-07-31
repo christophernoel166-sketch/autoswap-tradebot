@@ -61,6 +61,7 @@ export async function fetchMarketIntegrityData({
   context = {},
 } = {}) {
   const warnings = [];
+const reasons = [];
 
   const metrics = market?.metrics || {};
   const recentTrades = safeArray(context?.recentTrades);
@@ -251,7 +252,10 @@ export async function fetchMarketIntegrityData({
 let verdictTitle = "Mixed Signals";
 let verdictLevel = "MEDIUM";
 let verdictColor = "yellow";
-let verdictConfidence = 70;
+
+// Confidence starts neutral and grows stronger
+// as more evidence supports the verdict.
+let verdictConfidence = 50;
 
 // Strong organic market
 if (
@@ -264,7 +268,36 @@ if (
   verdictTitle = "Organic Market";
   verdictLevel = "LOW";
   verdictColor = "green";
-  verdictConfidence = 95;
+  verdictConfidence = 60;
+
+// Strong wallet participation
+verdictConfidence +=
+  Math.round(walletParticipationScore * 0.18);
+
+// Low wash risk increases confidence
+verdictConfidence +=
+  Math.round((100 - washTradingRiskScore) * 0.08);
+
+// Low bundle suspicion
+verdictConfidence +=
+  Math.round((100 - bundleSuspicionScore) * 0.06);
+
+// Healthy velocity
+verdictConfidence +=
+  Math.round(velocitySanityScore * 0.08);
+
+// Artificial activity reduces confidence
+if (fakeMomentumFlag)
+  verdictConfidence -= 15;
+
+if (artificialVolumeFlag)
+  verdictConfidence -= 10;
+
+verdictConfidence = clamp(
+  verdictConfidence,
+  60,
+  99
+);
 }
 
 // High manipulation risk
@@ -276,7 +309,33 @@ else if (
   verdictTitle = "Manipulated Market";
   verdictLevel = "HIGH";
   verdictColor = "red";
-  verdictConfidence = 92;
+  verdictConfidence = 45;
+
+// High wash trading greatly increases confidence
+verdictConfidence +=
+  Math.round(washTradingRiskScore * 0.25);
+
+// Bundle manipulation evidence
+verdictConfidence +=
+  Math.round(bundleSuspicionScore * 0.18);
+
+// Weak participation
+verdictConfidence +=
+  Math.round((100 - walletParticipationScore) * 0.10);
+
+// Fake momentum
+if (fakeMomentumFlag)
+  verdictConfidence += 15;
+
+// Artificial volume
+if (artificialVolumeFlag)
+  verdictConfidence += 10;
+
+verdictConfidence = clamp(
+  verdictConfidence,
+  60,
+  99
+);
 }
 
 // Moderate concern
@@ -288,7 +347,35 @@ else if (
   verdictTitle = "Suspicious Activity";
   verdictLevel = "MEDIUM_HIGH";
   verdictColor = "orange";
-  verdictConfidence = 82;
+  verdictConfidence = 50;
+
+// Moderate wash evidence
+verdictConfidence +=
+  Math.round(washTradingRiskScore * 0.15);
+
+// Moderate bundle evidence
+verdictConfidence +=
+  Math.round(bundleSuspicionScore * 0.10);
+
+// Poor participation
+verdictConfidence +=
+  Math.round((100 - walletParticipationScore) * 0.08);
+
+// Weak velocity
+verdictConfidence +=
+  Math.round((100 - velocitySanityScore) * 0.05);
+
+if (fakeMomentumFlag)
+  verdictConfidence += 10;
+
+if (artificialVolumeFlag)
+  verdictConfidence += 8;
+
+verdictConfidence = clamp(
+  verdictConfidence,
+  55,
+  95
+);
 }
 
 const verdict = {
@@ -305,6 +392,38 @@ const verdict = {
           "No significant integrity issues detected.",
         ],
 };
+
+// =====================================================
+// STANDARD AI SCORE
+// =====================================================
+
+// Higher is better
+// Uses the underlying market integrity metrics instead
+// of fixed values.
+
+let score = Math.round(
+
+  walletParticipationScore * 0.40 +
+
+  velocitySanityScore * 0.30 +
+
+  (100 - washTradingRiskScore) * 0.20 +
+
+  (100 - bundleSuspicionScore) * 0.10
+
+);
+
+// Fake momentum is a strong warning signal.
+if (fakeMomentumFlag) {
+  score -= 12;
+}
+
+// Artificial volume is another negative factor.
+if (artificialVolumeFlag) {
+  score -= 8;
+}
+
+score = clamp(score, 0, 100);
 
   return {
     tokenMint: tokenMint || null,
@@ -329,7 +448,13 @@ const verdict = {
     artificialVolumeFlag,
     fakeMomentumFlag,
 
-    integrityWarning: warnings.length ? warnings.join(" | ") : null,
+    integrityWarning: warnings.length
+  ? warnings.join(" | ")
+  : null,
+
+score,
+
+confidence: verdictConfidence,
 
 verdict,
   };

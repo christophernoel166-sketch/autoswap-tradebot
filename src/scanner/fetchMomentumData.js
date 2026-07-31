@@ -146,6 +146,11 @@ export async function fetchMomentumData({
   else if (ageMinutes > 720) warnings.push("Momentum may be late-stage");
 
   momentumScore = clamp(Math.round(momentumScore), 0, 100);
+// =========================================================
+// Standardized AI Score
+// =========================================================
+
+const score = momentumScore;
 
   // =========================
   // VELOCITY BREAKOUT SCORE
@@ -188,11 +193,11 @@ export async function fetchMomentumData({
 
 const momentumStage = getMomentumStage(
   ageMinutes,
-  momentumScore
+  score
 );
 
 const momentumStrength = getMomentumStrength(
-  momentumScore
+  score
 );
 
 const buyPressureLevel = getBuyPressureLevel(
@@ -208,7 +213,7 @@ const breakoutStrength = getBreakoutStrength(
 
 const continuationProbability =
   getContinuationProbability(
-    momentumScore,
+    score,
     velocityBreakoutScore
   );
 
@@ -218,7 +223,7 @@ const continuationProbability =
 
 const evidence = {
 
-  confidenceContribution: momentumScore,
+  confidenceContribution: score,
 
   confidenceWeight: 3,
 
@@ -363,6 +368,105 @@ if (context && typeof context === "object") {
 
 }
 
+// =========================================================
+// AI Momentum Verdict
+// =========================================================
+
+let verdictTitle = "Average Momentum";
+let verdictLevel = "MEDIUM";
+let verdictColor = "yellow";
+let verdictConfidence = 60;
+
+if (score >= 90) {
+
+    verdictTitle = "Explosive Momentum";
+    verdictLevel = "LOW";
+    verdictColor = "green";
+
+    verdictConfidence =
+        Math.min(
+            99,
+            65 + Math.round(score * 0.30)
+        );
+
+}
+else if (score >= 75) {
+
+    verdictTitle = "Strong Momentum";
+    verdictLevel = "LOW_MEDIUM";
+    verdictColor = "lime";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round(score * 0.25)
+        );
+
+}
+else if (score >= 55) {
+
+    verdictTitle = "Building Momentum";
+    verdictLevel = "MEDIUM";
+    verdictColor = "yellowgreen";
+
+    verdictConfidence =
+        Math.min(
+            92,
+            55 + Math.round(score * 0.20)
+        );
+
+}
+else if (score >= 35) {
+
+    verdictTitle = "Weak Momentum";
+    verdictLevel = "MEDIUM";
+    verdictColor = "yellow";
+
+    verdictConfidence =
+        Math.min(
+            88,
+            50 + Math.round(score * 0.15)
+        );
+
+}
+else {
+
+    verdictTitle = "Momentum Fading";
+    verdictLevel = "HIGH";
+    verdictColor = "red";
+
+    verdictConfidence =
+        Math.min(
+            95,
+            60 + Math.round((100 - score) * 0.25)
+        );
+
+}
+
+const verdict = {
+
+    title: verdictTitle,
+
+    level: verdictLevel,
+
+    color: verdictColor,
+
+    confidence: verdictConfidence,
+
+    summary:
+
+        evidence.strengths.length
+
+            ? evidence.strengths
+
+            : evidence.risks.length
+
+                ? evidence.risks
+
+                : ["Momentum profile is neutral."],
+
+};
+
   return {
 
   tokenMint: tokenMint || null,
@@ -381,13 +485,19 @@ if (context && typeof context === "object") {
       ? warnings.join(" | ")
       : null,
 
-  // =======================================================
-  // AI Intelligence
-  // =======================================================
+ // =======================================================
+// AI Intelligence
+// =======================================================
 
-  momentumStage,
+score,
 
-  momentumStrength,
+confidence: verdictConfidence,
+
+verdict,
+
+momentumStage,
+
+momentumStrength,
 
   buyPressure: {
 
