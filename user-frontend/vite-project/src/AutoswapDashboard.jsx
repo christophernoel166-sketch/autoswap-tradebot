@@ -21,7 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-
+import AIDecisionCard from "./components/manualTrade/AIDecisionCard";
 import { getSocket } from "./services/socket";
 import {
     AICommandCenter,
