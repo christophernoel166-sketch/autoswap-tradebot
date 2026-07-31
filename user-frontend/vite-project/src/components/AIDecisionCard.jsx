@@ -1,3 +1,34 @@
+function getScoreColor(score) {
+  if (score >= 85) return "text-green-400";
+
+  if (score >= 70) return "text-cyan-300";
+
+  if (score >= 55) return "text-yellow-400";
+
+  return "text-red-400";
+}
+
+
+function ScannerScore({
+  title,
+  score,
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-gray-900 p-2">
+
+      <span className="text-sm text-gray-300">
+        {title}
+      </span>
+
+      <span
+        className={`font-bold ${getScoreColor(score)}`}
+      >
+        {score}
+      </span>
+
+    </div>
+  );
+}
 
 
 export default function AIDecisionCard({ ai }) {
@@ -55,6 +86,27 @@ export default function AIDecisionCard({ ai }) {
   const historicalSamples =
     ai.signalScore
       ?.historicalSamples ?? 0;
+
+const momentumScore =
+  ai.momentumData?.score ?? 0;
+
+const volumeScore =
+  ai.volumeAnalysis?.score ?? 0;
+
+const liquidityScore =
+  ai.liquidityAnalysis?.score ?? 0;
+
+const securityScore =
+  ai.securityAnalysis?.score ?? 0;
+
+const walletScore =
+  ai.walletIntelligence?.score ?? 0;
+
+const holderScore =
+  ai.holderSafety?.score ?? 0;
+
+const chartScore =
+  ai.chartAnalysis?.score ?? 0;
 
   const patternKey =
     ai.signalScore?.patternKey ??
@@ -200,6 +252,54 @@ export default function AIDecisionCard({ ai }) {
 
 </div>
           
+
+<div className="border-t border-gray-700 pt-4">
+
+  <h4 className="mb-3 font-semibold text-gray-300">
+    Scanner Scores
+  </h4>
+
+  <div className="grid grid-cols-3 gap-3">
+
+    <ScannerScore
+      title="Momentum"
+      score={momentumScore}
+    />
+
+    <ScannerScore
+      title="Volume"
+      score={volumeScore}
+    />
+
+    <ScannerScore
+      title="Liquidity"
+      score={liquidityScore}
+    />
+
+    <ScannerScore
+      title="Security"
+      score={securityScore}
+    />
+
+    <ScannerScore
+      title="Wallet"
+      score={walletScore}
+    />
+
+    <ScannerScore
+      title="Holder"
+      score={holderScore}
+    />
+
+    <ScannerScore
+      title="Chart"
+      score={chartScore}
+    />
+
+  </div>
+
+</div>
+
 
         {/* Pattern Intelligence */}
         <div className="space-y-3">
