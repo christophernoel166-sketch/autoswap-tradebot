@@ -1,22 +1,6 @@
-function SummaryCard({
-  title,
-  value,
-  valueClass = "text-white",
-}) {
-  return (
-    <div className="bg-gray-900 rounded-lg border border-gray-700 p-3">
-      <div className="text-xs text-gray-400">
-        {title}
-      </div>
 
-      <div className={`mt-1 text-lg font-bold ${valueClass}`}>
-        {value}
-      </div>
-    </div>
-  );
-}
 
-export default function AIIntelligencePanel({ ai }) {
+export default function AIDecisionCard({ ai }) {
   if (!ai) return null;
 
   const recommendation =
@@ -126,33 +110,96 @@ export default function AIIntelligencePanel({ ai }) {
 
       <div className="space-y-5 text-sm">
 
-        {/* Summary */}
-        <div className="grid grid-cols-2 gap-3">
+      
+<div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-5">
 
-          <SummaryCard
-            title="Recommendation"
-            value={recommendationLabel}
-            valueClass={recommendationColor}
-          />
+  <div className="flex items-center justify-between">
 
-          <SummaryCard
-            title="Confidence"
-            value={`${confidence}%`}
-            valueClass="text-cyan-300"
-          />
+    <div>
 
-          <SummaryCard
-            title="Forecast Score"
-            value={`${forecastScore} / 100`}
-          />
+      <div className="text-sm text-gray-400">
+        AI Recommendation
+      </div>
 
-          <SummaryCard
-            title="Adjusted Score"
-            value={`${adjustedScore} / 100`}
-            valueClass="text-yellow-300"
-          />
+      <div
+        className={`mt-1 text-3xl font-bold ${recommendationColor}`}
+      >
+        {recommendationLabel}
+      </div>
 
-        </div>
+    </div>
+
+    <div className="text-right">
+
+      <div className="text-sm text-gray-400">
+        Confidence
+      </div>
+
+      <div className="text-4xl font-bold text-cyan-300">
+        {confidence}%
+      </div>
+
+    </div>
+
+  </div>
+
+  <div className="mt-5">
+
+    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+
+      <div
+        className="h-full rounded-full bg-cyan-400 transition-all duration-500"
+        style={{
+          width: `${confidence}%`,
+        }}
+      />
+
+    </div>
+
+  </div>
+
+  <div className="mt-5 grid grid-cols-3 gap-4">
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+        Forecast
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-white">
+        {forecastScore}
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+        AI Score
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-cyan-300">
+        {adjustedScore}
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+        Pattern Win Rate
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-green-400">
+        {historicalWinRate}%
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+          
 
         {/* Pattern Intelligence */}
         <div className="space-y-3">
@@ -229,9 +276,7 @@ export default function AIIntelligencePanel({ ai }) {
           </div>
         )}
 
-        <div className="border-t border-gray-700 pt-3 text-xs text-gray-500">
-          This panel will disappear automatically after 40 seconds.
-        </div>
+        
 
       </div>
 
