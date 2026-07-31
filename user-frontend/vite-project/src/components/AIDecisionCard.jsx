@@ -111,7 +111,7 @@ export default function AIDecisionCard({ ai }) {
       <div className="space-y-5 text-sm">
 
       
-<div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-5">
+<div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-4">
 
   <div className="flex items-center justify-between">
 
@@ -122,7 +122,7 @@ export default function AIDecisionCard({ ai }) {
       </div>
 
       <div
-        className={`mt-1 text-3xl font-bold ${recommendationColor}`}
+        className={`mt-1 text-2xl font-bold ${recommendationColor}`}
       >
         {recommendationLabel}
       </div>
@@ -135,7 +135,7 @@ export default function AIDecisionCard({ ai }) {
         Confidence
       </div>
 
-      <div className="text-4xl font-bold text-cyan-300">
+      <div className="text-3xl font-bold text-cyan-300">
         {confidence}%
       </div>
 
@@ -143,9 +143,9 @@ export default function AIDecisionCard({ ai }) {
 
   </div>
 
-  <div className="mt-5">
+  <div className="mt-3">
 
-    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+    <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
 
       <div
         className="h-full rounded-full bg-cyan-400 transition-all duration-500"
@@ -158,39 +158,39 @@ export default function AIDecisionCard({ ai }) {
 
   </div>
 
-  <div className="mt-5 grid grid-cols-3 gap-4">
+  <div className="mt-3 grid grid-cols-3 gap-3">
 
-    <div className="rounded-lg bg-gray-800 p-3">
+    <div className="rounded-lg bg-gray-800 p-2.5">
 
       <div className="text-xs text-gray-400">
         Forecast
       </div>
 
-      <div className="mt-1 text-xl font-bold text-white">
-        {forecastScore}
-      </div>
+      <div className="mt-1 text-lg font-bold text-white">
+  {forecastScore}
+</div>
 
     </div>
 
-    <div className="rounded-lg bg-gray-800 p-3">
+    <div className="rounded-lg bg-gray-800 p-2.5">
 
       <div className="text-xs text-gray-400">
         AI Score
       </div>
 
-      <div className="mt-1 text-xl font-bold text-cyan-300">
+      <div className="mt-1 text-lg font-bold text-cyan-300">
         {adjustedScore}
       </div>
 
     </div>
 
-    <div className="rounded-lg bg-gray-800 p-3">
+    <div className="rounded-lg bg-gray-800 p-2.5">
 
       <div className="text-xs text-gray-400">
         Pattern Win Rate
       </div>
 
-      <div className="mt-1 text-xl font-bold text-green-400">
+      <div className="mt-1 text-lg font-bold text-green-400">
         {historicalWinRate}%
       </div>
 
