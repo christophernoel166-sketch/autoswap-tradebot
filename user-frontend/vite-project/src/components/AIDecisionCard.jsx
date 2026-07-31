@@ -1,6 +1,6 @@
 
 
-
+export default function AIDecisionCard({ ai }) {
   if (!ai) return null;
 
   const recommendation =
