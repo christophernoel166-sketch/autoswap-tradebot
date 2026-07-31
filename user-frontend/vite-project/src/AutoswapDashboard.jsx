@@ -21,7 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-import AIIntelligencePanel from "./components/AIIntelligencePanel";
+
 import { getSocket } from "./services/socket";
 import {
     AICommandCenter,
@@ -1654,7 +1654,9 @@ console.log(
 
 {showAiPanel && scanResult?.ai ? (
   // 🧠 AI Intelligence Panel
-  <AIIntelligencePanel ai={scanResult.ai} />
+  <AIDecisionCard
+    ai={scanResult.ai}
+/>
 ) : (
   // 🔔 Existing Notifications Panel
   <div className="bg-gray-800 rounded-xl p-4">
