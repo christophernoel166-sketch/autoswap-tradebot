@@ -132,27 +132,16 @@ const chartScore =
 const consensus =
   ai.consensus ?? 0;
 
-const consensus =
-  ai.recommendation?.consensus ??
-  ai.consensus ??
-  0;
-
 const positiveVotes =
-  ai.recommendation?.positiveVotes ??
-  ai.positiveVotes ??
-  0;
+  ai.positiveVotes ?? 0;
 
 const totalVotes =
-  ai.recommendation?.scannerVotes
-    ? Object.keys(ai.recommendation.scannerVotes).length
-    : ai.scannerVotes
+  ai.scannerVotes
     ? Object.keys(ai.scannerVotes).length
     : 7;
 
 const contradictions =
-  ai.recommendation?.contradictions ??
-  ai.contradictions ??
-  [];
+  ai.contradictions ?? [];
 
 
   const patternKey =
