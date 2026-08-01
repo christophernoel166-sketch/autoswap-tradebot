@@ -201,6 +201,7 @@ const contradictions =
       
 <div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-4">
 
+  {/* Top Row */}
   <div className="flex items-center justify-between">
 
     <div>
@@ -231,7 +232,8 @@ const contradictions =
 
   </div>
 
-  <div className="mt-3">
+  {/* Confidence Progress */}
+  <div className="mt-4">
 
     <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
 
@@ -246,43 +248,144 @@ const contradictions =
 
   </div>
 
-  <div className="mt-3 grid grid-cols-3 gap-3">
+  {/* Main Metrics */}
+  <div className="mt-4 grid grid-cols-3 gap-3">
 
-    <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="rounded-lg bg-gray-800 p-3">
 
       <div className="text-xs text-gray-400">
         Forecast
       </div>
 
-      <div className="mt-1 text-lg font-bold text-white">
-  {forecastScore}
-</div>
+      <div className="mt-1 text-xl font-bold text-white">
+        {forecastScore}
+      </div>
 
     </div>
 
-    <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="rounded-lg bg-gray-800 p-3">
 
       <div className="text-xs text-gray-400">
         AI Score
       </div>
 
-      <div className="mt-1 text-lg font-bold text-cyan-300">
+      <div className="mt-1 text-xl font-bold text-cyan-300">
         {adjustedScore}
       </div>
 
     </div>
 
-    <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="rounded-lg bg-gray-800 p-3">
 
       <div className="text-xs text-gray-400">
         Pattern Win Rate
       </div>
 
-      <div className="mt-1 text-lg font-bold text-green-400">
+      <div className="mt-1 text-xl font-bold text-green-400">
         {historicalWinRate}%
       </div>
 
     </div>
+
+  </div>
+
+  {/* Scanner Consensus */}
+  <div className="mt-5 border-t border-gray-700 pt-4">
+
+    <div className="flex items-center justify-between">
+
+      <div>
+
+        <div className="text-sm text-gray-400">
+          Scanner Consensus
+        </div>
+
+        <div className="mt-1 text-3xl font-bold text-cyan-300">
+          {consensus}%
+        </div>
+
+      </div>
+
+      <div className="text-right">
+
+        <div className="text-sm text-gray-400">
+          Agreement
+        </div>
+
+        <div className="text-2xl font-bold text-green-400">
+          {positiveVotes}/{totalVotes}
+        </div>
+
+      </div>
+
+    </div>
+
+    <div className="mt-3">
+
+      <div className="h-2 w-full overflow-hidden rounded-full bg-gray-800">
+
+        <div
+          className="h-full rounded-full bg-green-400 transition-all duration-500"
+          style={{
+            width: `${consensus}%`,
+          }}
+        />
+
+      </div>
+
+    </div>
+
+    <div className="mt-4 grid grid-cols-2 gap-3">
+
+      <div className="rounded-lg bg-gray-800 p-3">
+
+        <div className="text-xs text-gray-400">
+          Positive Scanners
+        </div>
+
+        <div className="mt-1 text-xl font-bold text-green-400">
+          {positiveVotes}
+        </div>
+
+      </div>
+
+      <div className="rounded-lg bg-gray-800 p-3">
+
+        <div className="text-xs text-gray-400">
+          Total Scanners
+        </div>
+
+        <div className="mt-1 text-xl font-bold text-cyan-300">
+          {totalVotes}
+        </div>
+
+      </div>
+
+    </div>
+
+    {contradictions.length > 0 && (
+
+      <div className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
+
+        <div className="mb-2 font-semibold text-red-300">
+          Scanner Conflicts
+        </div>
+
+        <ul className="list-disc list-inside space-y-1 text-sm text-red-200">
+
+          {contradictions.map((item, index) => (
+
+            <li key={index}>
+              {item}
+            </li>
+
+          ))}
+
+        </ul>
+
+      </div>
+
+    )}
 
   </div>
 
@@ -337,80 +440,6 @@ const contradictions =
 </div>
 
 
-<div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-4">
-
-  <div className="flex items-center justify-between">
-
-    <div>
-
-      <div className="text-sm text-gray-400">
-        Scanner Consensus
-      </div>
-
-      <div className="mt-1 text-3xl font-bold text-cyan-300">
-        {consensus}%
-      </div>
-
-    </div>
-
-    <div className="text-right">
-
-      <div className="text-sm text-gray-400">
-        Agreement
-      </div>
-
-      <div className="text-2xl font-bold text-green-400">
-        {positiveVotes}/{totalVotes}
-      </div>
-
-    </div>
-
-  </div>
-
-  <div className="mt-4">
-
-    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
-
-      <div
-        className="h-full rounded-full bg-cyan-400 transition-all duration-500"
-        style={{
-          width: `${consensus}%`,
-        }}
-      />
-
-    </div>
-
-  </div>
-
-  <div className="mt-4 grid grid-cols-2 gap-3">
-
-    <div className="rounded-lg bg-gray-800 p-3">
-
-      <div className="text-xs text-gray-400">
-        Positive Scanners
-      </div>
-
-      <div className="mt-1 text-xl font-bold text-green-400">
-        {positiveVotes}
-      </div>
-
-    </div>
-
-    <div className="rounded-lg bg-gray-800 p-3">
-
-      <div className="text-xs text-gray-400">
-        Total Scanners
-      </div>
-
-      <div className="mt-1 text-xl font-bold text-cyan-300">
-        {totalVotes}
-      </div>
-
-    </div>
-
-  </div>
-
-</div>
 
 
 
