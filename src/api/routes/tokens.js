@@ -1355,7 +1355,7 @@ const aiRecommendation =
 
     profitWalletData,
 
-    rugRiskData,
+    securityAnalysis: liquidityLock,
 
     volumeAnalysis,
 
@@ -1369,7 +1369,7 @@ const aiRecommendation =
 
     chartAnalysis: chartEntry,
 
-  });
+});
 
 // Store recommendation
 aiContext.analyses.aiRecommendation =
