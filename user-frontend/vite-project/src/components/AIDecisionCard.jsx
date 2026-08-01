@@ -103,7 +103,10 @@ console.log(
     ai.signalScore
       ?.historicalSamples ?? 0;
 
-const scores = ai.scannerScores ?? {};
+const scores =
+  ai.recommendation?.scannerScores ??
+  ai.scannerScores ??
+  {};
 
 const momentumScore =
   scores.momentum ?? 0;
