@@ -253,6 +253,107 @@ let finalScore = Math.round(
 );
 
 // =====================================================
+// SCANNER CONSENSUS
+// =====================================================
+
+const scannerVotes = {
+
+  momentum:
+    scannerScores.momentum >= 60,
+
+  volume:
+    scannerScores.volume >= 60,
+
+  liquidity:
+    scannerScores.liquidity >= 60,
+
+  security:
+    scannerScores.security >= 60,
+
+  wallet:
+    scannerScores.wallet >= 60,
+
+  holder:
+    scannerScores.holder >= 60,
+
+  chart:
+    scannerScores.chart >= 60,
+
+};
+
+const positiveVotes =
+  Object.values(scannerVotes)
+    .filter(Boolean).length;
+
+const totalVotes =
+  Object.keys(scannerVotes).length;
+
+const consensus =
+  Math.round(
+    (positiveVotes / totalVotes) * 100
+  );
+
+
+// =====================================================
+// CONTRADICTION DETECTION
+// =====================================================
+
+const contradictions = [];
+
+if (
+  scannerScores.momentum >= 80 &&
+  scannerScores.chart < 35
+) {
+  contradictions.push(
+    "Momentum is strong but chart structure is weak."
+  );
+}
+
+if (
+  scannerScores.volume >= 80 &&
+  scannerScores.liquidity < 40
+) {
+  contradictions.push(
+    "High volume with weak liquidity."
+  );
+}
+
+if (
+  scannerScores.wallet >= 80 &&
+  scannerScores.security < 40
+) {
+  contradictions.push(
+    "Strong wallet activity but poor security."
+  );
+}
+
+if (
+  scannerScores.holder >= 80 &&
+  scannerScores.security < 40
+) {
+  contradictions.push(
+    "Healthy holders but dangerous contract."
+  );
+}
+
+if (
+  scannerScores.chart >= 80 &&
+  scannerScores.momentum < 40
+) {
+  contradictions.push(
+    "Chart setup exists but momentum is weak."
+  );
+}
+
+
+if (contradictions.length > 0) {
+
+  finalScore -= contradictions.length * 5;
+
+}
+
+
+// =====================================================
 // AI SAFETY GATES
 // =====================================================
 
@@ -342,6 +443,14 @@ return {
   blockers: uniqueBlockers,
 
   scannerScores,
+
+  scannerVotes,
+
+  positiveVotes,
+
+  consensus,
+
+  contradictions,
 
 };
 
