@@ -2416,23 +2416,31 @@ momentum: momentumData,
 profitWallets: profitWalletData,
 
 ai: {
-  version: "v2",
 
-  generatedAt: new Date().toISOString(),
+    version: "v3",
 
-  forecast,
+    generatedAt: scanTimestamp,
 
-  signalScore,
+    confidence: aiRecommendation.confidence,
 
-  recommendation: aiRecommendation,
+    recommendation: aiRecommendation,
 
-  confidence: aiContext.confidence,
+    scannerScores:
+        aiRecommendation.scannerScores,
 
-  evidence: aiContext.evidence,
+    signalScore,
 
-  reasoning: aiContext.reasoning,
+    forecast,
 
-  investmentThesis: aiContext.investmentThesis,
+    analyses: aiContext.analyses,
+
+    evidence: aiContext.evidence,
+
+    reasoning: aiContext.reasoning,
+
+    investmentThesis:
+        aiContext.investmentThesis,
+
 },
 
 });

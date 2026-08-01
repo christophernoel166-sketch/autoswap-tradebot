@@ -88,26 +88,28 @@ console.log("AI DATA:", ai);
     ai.signalScore
       ?.historicalSamples ?? 0;
 
+const scores = ai.scannerScores ?? {};
+
 const momentumScore =
-  ai.momentumData?.score ?? 0;
+  scores.momentum ?? 0;
 
 const volumeScore =
-  ai.volumeAnalysis?.score ?? 0;
+  scores.volume ?? 0;
 
 const liquidityScore =
-  ai.liquidityAnalysis?.score ?? 0;
+  scores.liquidity ?? 0;
 
 const securityScore =
-  ai.securityAnalysis?.score ?? 0;
+  scores.security ?? 0;
 
 const walletScore =
-  ai.walletIntelligence?.score ?? 0;
+  scores.wallet ?? 0;
 
 const holderScore =
-  ai.holderSafety?.score ?? 0;
+  scores.holder ?? 0;
 
 const chartScore =
-  ai.chartAnalysis?.score ?? 0;
+  scores.chart ?? 0;
 
   const patternKey =
     ai.signalScore?.patternKey ??

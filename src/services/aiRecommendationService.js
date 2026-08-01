@@ -60,42 +60,72 @@ export function buildAIRecommendation({
   const reasons = [];
 const blockers = [];
 
-  // =====================================================
-// STANDARDIZED SCANNER SCORES
+// =====================================================
+// NORMALIZED SCANNER SCORES
+// Single source of truth for the entire application.
 // =====================================================
 
+const scannerScores = {
 
+  momentum:
+    Number(
+      momentumData?.score ??
+      momentumData?.momentumScore
+    ) || 0,
 
-const momentumScore =
-  Number(momentumData?.score ?? momentumData?.momentumScore) || 0;
+  volume:
+    Number(
+      volumeAnalysis?.score ??
+      volumeAnalysis?.volumeScore
+    ) || 0,
 
-const volumeScore =
-  Number(volumeAnalysis?.score ?? volumeAnalysis?.volumeScore) || 0;
+  liquidity:
+    Number(
+      liquidityAnalysis?.score ??
+      liquidityAnalysis?.liquidityScore
+    ) || 0,
 
-const liquidityScore =
-  Number(liquidityAnalysis?.score ?? liquidityAnalysis?.liquidityScore) || 0;
+  security:
+    Number(
+      securityAnalysis?.score ??
+      securityAnalysis?.securityScore ??
+      securityAnalysis?.rugRiskScore
+    ) || 0,
 
-// Existing services
-const walletQuality =
-  Number(profitWalletData?.walletQualityScore) || 0;
+  wallet:
+    Number(
+      profitWalletData?.walletQualityScore
+    ) || 0,
 
+  holder:
+    Number(
+      holderSafety?.score ??
+      holderSafety?.holderSafetyScore ??
+      holderSafety?.evaluationScore
+    ) || 0,
 
+  chart:
+    Number(
+      chartAnalysis?.score ??
+      chartAnalysis?.trendStrength ??
+      chartAnalysis?.metrics?.trendStrength
+    ) || 0,
 
-// New standardized scanners
-const integrityScore =
-  Number(marketIntegrity?.score) || 0;
+};
 
-const holderSafetyScore =
-  Number(holderSafety?.score) || 0;
+const momentumScore = scannerScores.momentum;
+const volumeScore = scannerScores.volume;
+const liquidityScore = scannerScores.liquidity;
+const securityScore = scannerScores.security;
+const walletQuality = scannerScores.wallet;
+const holderSafetyScore = scannerScores.holder;
+const chartScore = scannerScores.chart;
 
 const walletIntelligenceScore =
-  Number(walletIntelligence?.score) || 0;
-
-const chartScore =
-  Number(chartAnalysis?.score) || 0;
-
-const securityScore =
-  Number(securityAnalysis?.score) || 0;
+  Number(
+    walletIntelligence?.score ??
+    walletIntelligence?.walletIntelligenceScore
+  ) || 0;
 
 // =====================================================
 // MERGE SCANNER EVIDENCE
@@ -205,13 +235,21 @@ if (signalScore?.matched) {
 // =====================================================
 
 let finalScore = Math.round(
-  momentumScore * 0.25 +
-  volumeScore * 0.20 +
-  securityScore * 0.20 +
-  liquidityScore * 0.15 +
+
+  scannerScores.momentum * 0.25 +
+
+  scannerScores.volume * 0.20 +
+
+  scannerScores.security * 0.20 +
+
+  scannerScores.liquidity * 0.15 +
+
   walletIntelligenceScore * 0.10 +
-  holderSafetyScore * 0.05 +
-  chartScore * 0.05
+
+  scannerScores.holder * 0.05 +
+
+  scannerScores.chart * 0.05
+
 );
 
 // =====================================================
@@ -288,9 +326,14 @@ const uniqueBlockers = [...new Set(blockers)];
   // =====================================================
 
 return {
+
   recommendation,
 
   confidence: finalScore,
+
+  finalScore,
+
+  action: recommendation,
 
   explanation: uniqueReasons,
 
@@ -298,9 +341,8 @@ return {
 
   blockers: uniqueBlockers,
 
-  action: recommendation,
+  scannerScores,
 
-  finalScore,
 };
 
 }
