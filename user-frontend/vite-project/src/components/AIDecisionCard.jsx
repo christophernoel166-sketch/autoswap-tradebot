@@ -32,7 +32,22 @@ function ScannerScore({
 
 
 export default function AIDecisionCard({ ai }) {
-console.log("AI DATA:", ai);
+console.log("AI DATA", ai);
+
+console.log(
+  "SCANNER SCORES",
+  ai.scannerScores
+);
+
+console.log(
+  "RECOMMENDATION",
+  ai.recommendation
+);
+
+console.log(
+  "RECOMMENDATION SCANNER SCORES",
+  ai.recommendation?.scannerScores
+);
   if (!ai) return null;
 
   const recommendation =
