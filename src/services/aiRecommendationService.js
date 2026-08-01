@@ -350,6 +350,8 @@ if (contradictions.length > 0) {
 
   finalScore -= contradictions.length * 5;
 
+  finalScore = Math.max(0, finalScore);
+
 }
 
 

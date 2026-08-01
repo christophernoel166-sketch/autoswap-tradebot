@@ -129,6 +129,21 @@ const holderScore =
 const chartScore =
   scores.chart ?? 0;
 
+const consensus =
+  ai.consensus ?? 0;
+
+const positiveVotes =
+  ai.positiveVotes ?? 0;
+
+const totalVotes =
+  ai.scannerVotes
+    ? Object.keys(ai.scannerVotes).length
+    : 7;
+
+const contradictions =
+  ai.contradictions ?? [];
+
+
   const patternKey =
     ai.signalScore?.patternKey ??
     "N/A";
@@ -320,6 +335,83 @@ const chartScore =
   </div>
 
 </div>
+
+
+<div className="rounded-xl border border-cyan-500/20 bg-gray-900 p-4">
+
+  <div className="flex items-center justify-between">
+
+    <div>
+
+      <div className="text-sm text-gray-400">
+        Scanner Consensus
+      </div>
+
+      <div className="mt-1 text-3xl font-bold text-cyan-300">
+        {consensus}%
+      </div>
+
+    </div>
+
+    <div className="text-right">
+
+      <div className="text-sm text-gray-400">
+        Agreement
+      </div>
+
+      <div className="text-2xl font-bold text-green-400">
+        {positiveVotes}/{totalVotes}
+      </div>
+
+    </div>
+
+  </div>
+
+  <div className="mt-4">
+
+    <div className="h-3 w-full overflow-hidden rounded-full bg-gray-800">
+
+      <div
+        className="h-full rounded-full bg-cyan-400 transition-all duration-500"
+        style={{
+          width: `${consensus}%`,
+        }}
+      />
+
+    </div>
+
+  </div>
+
+  <div className="mt-4 grid grid-cols-2 gap-3">
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+        Positive Scanners
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-green-400">
+        {positiveVotes}
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+        Total Scanners
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-cyan-300">
+        {totalVotes}
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
 
 
         {/* Pattern Intelligence */}
