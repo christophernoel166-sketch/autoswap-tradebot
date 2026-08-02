@@ -42,6 +42,34 @@ function getRecommendation(score) {
   return "AVOID";
 }
 
+// =====================================================
+// SCANNER TRUST WEIGHTS
+// Total = 100
+// =====================================================
+
+const SCANNER_WEIGHTS = {
+
+  security: 25,
+
+  liquidity: 20,
+
+  momentum: 15,
+
+  wallet: 15,
+
+  chart: 10,
+
+  volume: 10,
+
+  holder: 5,
+
+};
+
+const TOTAL_SCANNER_WEIGHT =
+  Object.values(SCANNER_WEIGHTS)
+    .reduce((a, b) => a + b, 0);
+
+
 export function buildAIRecommendation({
   signalScore,
   momentumData,
@@ -232,25 +260,27 @@ if (signalScore?.matched) {
 
 // =====================================================
 // MASTER AI SCORE
+// Uses the global scanner weight table
 // =====================================================
 
-let finalScore = Math.round(
+let weightedScore = 0;
 
-  scannerScores.momentum * 0.25 +
+for (const [scanner, score] of Object.entries(scannerScores)) {
 
-  scannerScores.volume * 0.20 +
+  weightedScore +=
+    (Number(score) / 100) *
+    (SCANNER_WEIGHTS[scanner] ?? 0);
 
-  scannerScores.security * 0.20 +
+}
 
-  scannerScores.liquidity * 0.15 +
+// Wallet Intelligence currently isn't part of scannerScores,
+// so add it separately.
 
-  walletIntelligenceScore * 0.10 +
+weightedScore +=
+  (walletIntelligenceScore / 100) * 10;
 
-  scannerScores.holder * 0.05 +
-
-  scannerScores.chart * 0.05
-
-);
+let finalScore =
+  Math.round(weightedScore);
 
 // =====================================================
 // SCANNER CONSENSUS
@@ -281,16 +311,55 @@ const scannerVotes = {
 
 };
 
+
+// =====================================================
+// TRUST SCORE
+// =====================================================
+
+let trustPoints = 0;
+
+for (const [scanner, score] of Object.entries(scannerScores)) {
+
+  const weight =
+    SCANNER_WEIGHTS[scanner] ?? 0;
+
+  trustPoints +=
+    (Number(score) / 100) * weight;
+
+}
+
+const trustScore =
+  Math.round(trustPoints);
+
+// =====================================================
+// WEIGHTED SCANNER CONSENSUS
+// =====================================================
+
+let positiveWeight = 0;
+
+for (const [scanner, passed] of Object.entries(scannerVotes)) {
+
+  if (passed) {
+
+    positiveWeight +=
+      SCANNER_WEIGHTS[scanner] ?? 0;
+
+  }
+
+}
+
 const positiveVotes =
   Object.values(scannerVotes)
-    .filter(Boolean).length;
+    .filter(Boolean)
+    .length;
 
 const totalVotes =
-  Object.keys(scannerVotes).length;
+  Object.keys(scannerVotes)
+    .length;
 
 const consensus =
   Math.round(
-    (positiveVotes / totalVotes) * 100
+    (positiveWeight / TOTAL_SCANNER_WEIGHT) * 100
   );
 
 
@@ -418,6 +487,85 @@ if (blockers.length > 0) {
   recommendation = "AVOID";
 }
 
+// =====================================================
+// AI CONFIDENCE ENGINE
+// =====================================================
+
+let confidence = finalScore;
+
+// High Trust → Increase confidence
+if (trustScore >= 90) {
+
+  confidence += 10;
+
+}
+else if (trustScore >= 80) {
+
+  confidence += 6;
+
+}
+else if (trustScore >= 70) {
+
+  confidence += 3;
+
+}
+else if (trustScore < 40) {
+
+  confidence -= 10;
+
+}
+else if (trustScore < 55) {
+
+  confidence -= 5;
+
+}
+
+
+// Strong Consensus → Increase confidence
+
+if (consensus >= 90) {
+
+  confidence += 10;
+
+}
+else if (consensus >= 80) {
+
+  confidence += 5;
+
+}
+else if (consensus < 40) {
+
+  confidence -= 10;
+
+}
+else if (consensus < 60) {
+
+  confidence -= 5;
+
+}
+
+
+// Contradictions reduce confidence
+
+confidence -= contradictions.length * 5;
+
+
+// Safety blockers destroy confidence
+
+if (blockers.length > 0) {
+
+  confidence = Math.min(confidence, 20);
+
+}
+
+
+// Clamp
+
+confidence = Math.max(
+  0,
+  Math.min(100, Math.round(confidence))
+);
+
 
 const uniqueReasons = [...new Set(reasons)];
 const uniqueBlockers = [...new Set(blockers)];
@@ -430,7 +578,7 @@ return {
 
   recommendation,
 
-  confidence: finalScore,
+  confidence,
 
   finalScore,
 
@@ -449,6 +597,8 @@ return {
   positiveVotes,
 
   consensus,
+
+  trustScore,
 
   contradictions,
 

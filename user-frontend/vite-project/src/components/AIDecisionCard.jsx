@@ -134,6 +134,11 @@ const consensus =
   ai.consensus ??
   0;
 
+const trustScore =
+  ai.recommendation?.trustScore ??
+  ai.trustScore ??
+  0;
+
 const positiveVotes =
   ai.recommendation?.positiveVotes ??
   ai.positiveVotes ??
@@ -256,45 +261,63 @@ const contradictions =
   </div>
 
   {/* Main Metrics */}
-  <div className="mt-4 grid grid-cols-3 gap-3">
+  <div className="mt-3 grid grid-cols-3 gap-3">
 
-    <div className="rounded-lg bg-gray-800 p-3">
-
-      <div className="text-xs text-gray-400">
-        Forecast
-      </div>
-
-      <div className="mt-1 text-xl font-bold text-white">
-        {forecastScore}
-      </div>
-
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      Forecast
     </div>
-
-    <div className="rounded-lg bg-gray-800 p-3">
-
-      <div className="text-xs text-gray-400">
-        AI Score
-      </div>
-
-      <div className="mt-1 text-xl font-bold text-cyan-300">
-        {adjustedScore}
-      </div>
-
+    <div className="mt-1 text-lg font-bold text-white">
+      {forecastScore}
     </div>
-
-    <div className="rounded-lg bg-gray-800 p-3">
-
-      <div className="text-xs text-gray-400">
-        Pattern Win Rate
-      </div>
-
-      <div className="mt-1 text-xl font-bold text-green-400">
-        {historicalWinRate}%
-      </div>
-
-    </div>
-
   </div>
+
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      AI Score
+    </div>
+    <div className="mt-1 text-lg font-bold text-cyan-300">
+      {adjustedScore}
+    </div>
+  </div>
+
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      Pattern Win Rate
+    </div>
+    <div className="mt-1 text-lg font-bold text-green-400">
+      {historicalWinRate}%
+    </div>
+  </div>
+
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      Consensus
+    </div>
+    <div className="mt-1 text-lg font-bold text-cyan-300">
+      {consensus}%
+    </div>
+  </div>
+
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      Trust Score
+    </div>
+    <div className="mt-1 text-lg font-bold text-green-400">
+      {trustScore}%
+    </div>
+  </div>
+
+  <div className="rounded-lg bg-gray-800 p-2.5">
+    <div className="text-xs text-gray-400">
+      Agreement
+    </div>
+    <div className="mt-1 text-lg font-bold text-white">
+      {positiveVotes} / {totalVotes}
+    </div>
+  </div>
+
+</div>
 
   {/* Scanner Consensus */}
   <div className="mt-5 border-t border-gray-700 pt-4">
