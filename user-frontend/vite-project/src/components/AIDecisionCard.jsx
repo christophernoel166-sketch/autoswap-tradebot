@@ -319,6 +319,152 @@ const contradictions =
 
 </div>
 
+
+{/* ===========================================
+    HISTORICAL INTELLIGENCE
+=========================================== */}
+
+<div className="mt-6 rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+
+  <div className="flex items-center justify-between">
+
+    <div>
+
+      <div className="text-sm text-gray-400">
+
+        Historical Intelligence
+
+      </div>
+
+      <div className="mt-1 text-lg font-semibold text-purple-300">
+
+        AI Memory Engine
+
+      </div>
+
+    </div>
+
+    <div className="text-right">
+
+      <div className="text-xs text-gray-400">
+
+        Memory Confidence
+
+      </div>
+
+      <div className="text-2xl font-bold text-purple-300">
+
+        {ai.signalScore?.memoryConfidence ?? "--"}%
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div className="mt-5 grid grid-cols-3 gap-3">
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Similar Tokens
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-white">
+
+        {ai.signalScore?.historicalSamples ?? "--"}
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Win Rate
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-green-400">
+
+        {ai.signalScore?.historicalWinRate ?? "--"}%
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Moonshot Rate
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-cyan-300">
+
+        {ai.signalScore?.moonshotRate ?? "--"}%
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Rug Rate
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-red-400">
+
+        {ai.signalScore?.rugRate ?? "--"}%
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Expected Peak
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-green-400">
+
+        {ai.signalScore?.expectedPeakReturn ?? "--"}%
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Expected ROI
+
+      </div>
+
+      <div className="mt-1 text-lg font-bold text-green-400">
+
+        {ai.signalScore?.expectedROI ?? "--"}%
+
+      </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
   {/* Scanner Consensus */}
   <div className="mt-5 border-t border-gray-700 pt-4">
 

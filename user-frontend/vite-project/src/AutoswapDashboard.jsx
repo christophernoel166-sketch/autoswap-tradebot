@@ -22,6 +22,7 @@ import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
 import AIDecisionCard from "./components/AIDecisionCard";
+import AIThinkingCard from "./components/AIThinkingCard";
 import { getSocket } from "./services/socket";
 import {
     AICommandCenter,
@@ -68,6 +69,13 @@ const [showChartConfirm, setShowChartConfirm] = useState(false);
 const [newTokens, setNewTokens] = useState([]);
 const [loadingNewTokens, setLoadingNewTokens] = useState(false);
 const [showAiPanel, setShowAiPanel] = useState(false);
+// =====================================================
+// AI DISPLAY MODE
+// =====================================================
+
+const [aiMode, setAiMode] =
+  useState("command");
+
 const positionsValueUsd =
   positions.reduce(
     (sum, p) =>
@@ -542,17 +550,7 @@ useEffect(() => {
   return () => clearTimeout(timer);
 }, [showLinkPopup]);
 
-useEffect(() => {
-  if (!scanResult?.ai) return;
 
-  setShowAiPanel(true);
-
-  const timer = setTimeout(() => {
-    setShowAiPanel(false);
-  }, 40000);
-
-  return () => clearTimeout(timer);
-}, [scanResult?.ai]);
 
 
 // ===================================================
@@ -688,15 +686,18 @@ async function fetchUserSettings() {
   }
 }
 
-// SCANNING MANUAL TOKEN
 async function scanManualToken() {
   try {
+
+    // AI enters thinking mode immediately
+    setAiMode("thinking");
+
     setScanLoading(true);
     setScanError("");
     setScanResult(null);
     setChartEntry(null);
-setChartError("");
-setChartLoading(false);
+    setChartError("");
+    setChartLoading(false);
 
     if (!walletAddress) {
       throw new Error("Connect wallet first");
@@ -728,6 +729,17 @@ setChartLoading(false);
     }
 
     setScanResult(data);
+if (data.ai) {
+
+    setAiMode("decision");
+
+} else {
+
+    setAiMode("command");
+
+}
+
+
   } catch (err) {
     setScanError(err.message || "Failed to scan token");
   } finally {
@@ -737,6 +749,7 @@ setChartLoading(false);
 
 async function handleChartAnalysis() {
   try {
+setAiMode("thinking");
     setChartLoading(true);
     setChartError("");
     setChartEntry(null);
@@ -770,6 +783,17 @@ async function handleChartAnalysis() {
 }
 
     setChartEntry(data.chartEntry || null);
+
+if (data.chartEntry) {
+
+    setAiMode("decision");
+
+} else {
+
+    setAiMode("command");
+
+}
+
   } catch (err) {
     setChartError(err.message || "Chart analysis failed");
   } finally {
@@ -1551,7 +1575,19 @@ console.log(
 >
  <div className="space-y-6">
 
-    <AICommandCenter />
+    {aiMode === "command" && (
+  <AICommandCenter />
+)}
+
+{aiMode === "thinking" && (
+  <AIThinkingCard />
+)}
+
+{aiMode === "decision" && scanResult?.ai && (
+  <AIDecisionCard
+    ai={scanResult.ai}
+  />
+)}
 
     <PerformanceSummary
       totalPnl={totalPnl}
@@ -1652,48 +1688,40 @@ console.log(
   withdrawDisabled={onChainBalance < 0.001}
 />
 
-{showAiPanel && scanResult?.ai ? (
-  // 🧠 AI Intelligence Panel
-  <AIDecisionCard
-    ai={scanResult.ai}
-/>
-) : (
-  // 🔔 Existing Notifications Panel
-  <div className="bg-gray-800 rounded-xl p-4">
-    <h3 className="text-lg font-semibold text-white mb-3">
-      Notifications ({notifications.length})
-    </h3>
+<div className="bg-gray-800 rounded-xl p-4">
+  <h3 className="text-lg font-semibold text-white mb-3">
+    Notifications ({notifications.length})
+  </h3>
 
-    <div className="space-y-2 max-h-64 overflow-y-auto">
-      {notifications.length === 0 ? (
-        <div className="text-sm text-gray-400">
-          No notifications
-        </div>
-      ) : (
-        notifications.map((n) => (
-          <div
-            key={n._id}
-            className={`p-2 rounded text-sm ${
-              n.type === "error"
-                ? "bg-red-500/10 border border-red-500/20"
-                : n.type === "success"
-                ? "bg-green-500/10 border border-green-500/20"
-                : "bg-blue-500/10 border border-blue-500/20"
-            }`}
-          >
-            <div className="font-semibold text-white">
-              {n.title}
-            </div>
-
-            <div className="text-gray-300">
-              {n.message}
-            </div>
+  <div className="space-y-2 max-h-64 overflow-y-auto">
+    {notifications.length === 0 ? (
+      <div className="text-sm text-gray-400">
+        No notifications
+      </div>
+    ) : (
+      notifications.map((n) => (
+        <div
+          key={n._id}
+          className={`p-2 rounded text-sm ${
+            n.type === "error"
+              ? "bg-red-500/10 border border-red-500/20"
+              : n.type === "success"
+              ? "bg-green-500/10 border border-green-500/20"
+              : "bg-blue-500/10 border border-blue-500/20"
+          }`}
+        >
+          <div className="font-semibold text-white">
+            {n.title}
           </div>
-        ))
-      )}
-    </div>
+
+          <div className="text-gray-300">
+            {n.message}
+          </div>
+        </div>
+      ))
+    )}
   </div>
-)}
+</div>
 
 <div className="bg-gray-800 rounded-xl p-4">
   <button
