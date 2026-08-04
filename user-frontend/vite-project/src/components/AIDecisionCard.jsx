@@ -961,7 +961,7 @@ const contradictions =
 
         <span>
 
-          Wallet quality and holder distribution appear healthy.
+                    Wallet quality and holder distribution appear healthy.
 
         </span>
 
@@ -988,5 +988,22 @@ const contradictions =
   </div>
 
 </div>
+
+{/* ===========================================
+    END AI EXPLANATION
+=========================================== */}
+
+</div>
+
+{/* ===========================================
+    END CONTENT WRAPPER (space-y-5)
+=========================================== */}
+
+</div>
+
+{/* ===========================================
+    END MAIN AI CARD
+=========================================== */}
+
 );
 }
