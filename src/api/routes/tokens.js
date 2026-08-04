@@ -33,6 +33,9 @@ import { fetchLiquidityAnalysisData }
 from "../../scanner/fetchLiquidityAnalysisData.js";
 import TokenOutcome from "../../../models/TokenOutcome.js";
 import { scoreSignal } from "../../services/signalScoringService.js";
+import {
+  findSimilarPatterns,
+} from "../../services/ai/findSimilarPatterns.js";
 import { buildAIRecommendation } from "../../services/aiRecommendationService.js";
 import {
     scanStarted,
@@ -1337,6 +1340,45 @@ const signalScore = await scoreSignal({
   context: aiContext,
 });
 
+// =====================================================
+// HISTORICAL MEMORY ENGINE
+// =====================================================
+
+const historicalMemory =
+  await findSimilarPatterns({
+
+    developerTrustScore:
+      liquidityLock?.score ?? 0,
+
+    consensus:
+      signalScore?.consensus ?? 0,
+
+    trustScore:
+      signalScore?.trustScore ?? 0,
+
+    forecastScore:
+      forecast?.forecastScore ?? 0,
+
+    chartScore:
+      chartEntry?.metrics?.trendStrength ?? 0,
+
+    momentumScore:
+      momentumData?.momentumScore ?? 0,
+
+    liquidityScore:
+      liquidityAnalysis?.liquidityScore ?? 0,
+
+    walletQualityScore:
+      profitWalletData?.walletQualityScore ?? 0,
+
+    holderSafetyScore:
+      response?.evaluation?.score ?? 0,
+
+  });
+
+aiContext.analyses.historicalMemory =
+  historicalMemory;
+
 // Store signal scoring
 aiContext.analyses.signalScore =
   signalScore;
@@ -1344,6 +1386,11 @@ aiContext.analyses.signalScore =
 // Build AI recommendation
 const aiRecommendation =
   buildAIRecommendation({
+
+historicalMemory,
+
+memoryProfile:
+  historicalMemory?.memoryProfile,
 
     context: aiContext,
 

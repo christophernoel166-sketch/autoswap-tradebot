@@ -20,6 +20,60 @@ function mergeEvidence(reasons, blockers, evidence) {
   }
 }
 
+// =====================================================
+// HISTORICAL MEMORY COMPARISON
+// =====================================================
+
+function compareToHistorical(
+  current,
+  historical,
+  label,
+  reasons
+) {
+
+  if (
+    !Number.isFinite(current) ||
+    !Number.isFinite(historical)
+  ) {
+    return;
+  }
+
+  const difference =
+    current - historical;
+
+  if (difference >= 10) {
+
+    reasons.push(
+      `${label} is ${difference} points stronger than historical winners.`
+    );
+
+  } else if (difference >= 5) {
+
+    reasons.push(
+      `${label} is slightly above the historical winning average.`
+    );
+
+  } else if (difference <= -10) {
+
+    reasons.push(
+      `${label} is ${Math.abs(difference)} points below historical winners.`
+    );
+
+  } else if (difference <= -5) {
+
+    reasons.push(
+      `${label} is slightly weaker than the historical winning average.`
+    );
+
+  } else {
+
+    reasons.push(
+      `${label} closely matches historical winning patterns.`
+    );
+
+  }
+
+}
 
 
 function getRecommendation(score) {
@@ -71,6 +125,7 @@ const TOTAL_SCANNER_WEIGHT =
 
 
 export function buildAIRecommendation({
+
   signalScore,
   momentumData,
   profitWalletData,
@@ -83,6 +138,9 @@ export function buildAIRecommendation({
   holderSafety,
   walletIntelligence,
   chartAnalysis,
+memoryProfile,
+  historicalMemory,
+
 }) {
 
   const reasons = [];
@@ -155,6 +213,75 @@ const walletIntelligenceScore =
     walletIntelligence?.walletIntelligenceScore
   ) || 0;
 
+
+// =====================================================
+// AI MEMORY ENGINE
+// =====================================================
+
+const memoryConfidence =
+  Number(
+    historicalMemory?.memoryConfidence ??
+    historicalMemory?.confidence
+  ) || 0;
+
+const historicalWinRate =
+  Number(
+    historicalMemory?.winRate
+  ) || 0;
+
+const historicalMoonshotRate =
+  Number(
+    historicalMemory?.moonshotRate
+  ) || 0;
+
+const historicalRugRate =
+  Number(
+    historicalMemory?.rugRate
+  ) || 0;
+
+const similarHistoricalScans =
+  Number(
+    historicalMemory?.similarScans
+  ) || 0;
+
+
+// =====================================================
+// HISTORICAL PREDICTION
+// =====================================================
+
+const prediction =
+  historicalMemory?.prediction ?? {};
+
+const expectedROI =
+  Number(
+    prediction.expectedROI
+  ) || 0;
+
+const expectedPeakReturn =
+  Number(
+    prediction.expectedPeakReturn
+  ) || 0;
+
+const winnerProbability =
+  Number(
+    prediction.winnerProbability
+  ) || 0;
+
+const moonshotProbability =
+  Number(
+    prediction.moonshotProbability
+  ) || 0;
+
+const rugProbability =
+  Number(
+    prediction.rugProbability
+  ) || 0;
+
+const loserProbability =
+  Number(
+    prediction.loserProbability
+  ) || 0;
+
 // =====================================================
 // MERGE SCANNER EVIDENCE
 // =====================================================
@@ -207,7 +334,55 @@ mergeEvidence(
   chartAnalysis?.evidence
 );
 
+// =====================================================
+// COMPARE TO HISTORICAL WINNING PROFILE
+// =====================================================
 
+if (memoryProfile) {
+
+  compareToHistorical(
+    scannerScores.momentum,
+    memoryProfile.momentum,
+    "Momentum",
+    reasons
+  );
+
+  compareToHistorical(
+    scannerScores.liquidity,
+    memoryProfile.liquidity,
+    "Liquidity",
+    reasons
+  );
+
+  compareToHistorical(
+    scannerScores.wallet,
+    memoryProfile.wallet,
+    "Wallet Quality",
+    reasons
+  );
+
+  compareToHistorical(
+    scannerScores.holder,
+    memoryProfile.holder,
+    "Holder Quality",
+    reasons
+  );
+
+  compareToHistorical(
+    scannerScores.chart,
+    memoryProfile.chart,
+    "Chart Structure",
+    reasons
+  );
+
+  compareToHistorical(
+    scannerScores.security,
+    memoryProfile.trustScore,
+    "Security",
+    reasons
+  );
+
+}
 
   // =====================================================
   // WALLET QUALITY
@@ -259,6 +434,38 @@ if (signalScore?.matched) {
 }
 
 // =====================================================
+// HISTORICAL PREDICTION SUMMARY
+// =====================================================
+
+if (similarHistoricalScans > 0) {
+
+  reasons.push(
+    `AI analyzed ${similarHistoricalScans} similar historical tokens.`
+  );
+
+  reasons.push(
+    `Expected winner probability: ${winnerProbability}%.`
+  );
+
+  reasons.push(
+    `Expected moonshot probability: ${moonshotProbability}%.`
+  );
+
+  reasons.push(
+    `Expected rug probability: ${rugProbability}%.`
+  );
+
+  reasons.push(
+    `Expected average ROI: ${expectedROI}%.`
+  );
+
+  reasons.push(
+    `Expected peak return: ${expectedPeakReturn}%.`
+  );
+
+}
+
+// =====================================================
 // MASTER AI SCORE
 // Uses the global scanner weight table
 // =====================================================
@@ -278,6 +485,65 @@ for (const [scanner, score] of Object.entries(scannerScores)) {
 
 weightedScore +=
   (walletIntelligenceScore / 100) * 10;
+
+// ========================================
+// AI MEMORY CONTRIBUTION
+// ========================================
+
+weightedScore +=
+  (memoryConfidence / 100) * 15;
+
+// Memory with many historical examples
+// deserves a small additional bonus.
+
+if (similarHistoricalScans >= 100) {
+
+  weightedScore += 3;
+
+}
+else if (similarHistoricalScans >= 50) {
+
+  weightedScore += 2;
+
+}
+else if (similarHistoricalScans >= 20) {
+
+  weightedScore += 1;
+
+}
+
+// ========================================
+// HISTORICAL PREDICTION CONTRIBUTION
+// ========================================
+
+// Historical winners increase score
+weightedScore +=
+  (winnerProbability / 100) * 8;
+
+// Historical moonshots receive a smaller bonus
+weightedScore +=
+  (moonshotProbability / 100) * 5;
+
+// Historical rugs reduce confidence
+weightedScore -=
+  (rugProbability / 100) * 10;
+
+// Strong expected ROI deserves a bonus
+if (expectedROI >= 100) {
+
+  weightedScore += 5;
+
+}
+else if (expectedROI >= 50) {
+
+  weightedScore += 3;
+
+}
+else if (expectedROI >= 20) {
+
+  weightedScore += 1;
+
+}
 
 let finalScore =
   Math.round(weightedScore);
@@ -492,6 +758,123 @@ if (blockers.length > 0) {
 // =====================================================
 
 let confidence = finalScore;
+
+// =====================================================
+// MEMORY CONFIDENCE
+// =====================================================
+
+if (memoryConfidence >= 90) {
+
+  confidence += 10;
+
+}
+else if (memoryConfidence >= 80) {
+
+  confidence += 7;
+
+}
+else if (memoryConfidence >= 70) {
+
+  confidence += 4;
+
+}
+else if (memoryConfidence >= 60) {
+
+  confidence += 2;
+
+}
+else if (memoryConfidence < 30) {
+
+  confidence -= 10;
+
+}
+else if (memoryConfidence < 50) {
+
+  confidence -= 5;
+
+}
+
+// =====================================================
+// SAMPLE SIZE CONFIDENCE
+// =====================================================
+
+if (similarHistoricalScans >= 500) {
+
+  confidence += 10;
+
+}
+else if (similarHistoricalScans >= 250) {
+
+  confidence += 7;
+
+}
+else if (similarHistoricalScans >= 100) {
+
+  confidence += 5;
+
+}
+else if (similarHistoricalScans >= 50) {
+
+  confidence += 3;
+
+}
+else if (similarHistoricalScans >= 20) {
+
+  confidence += 1;
+
+}
+else if (similarHistoricalScans < 5) {
+
+  confidence -= 5;
+
+}
+
+// =====================================================
+// HISTORICAL PERFORMANCE
+// =====================================================
+
+if (historicalWinRate >= 80) {
+
+  confidence += 6;
+
+}
+else if (historicalWinRate >= 70) {
+
+  confidence += 4;
+
+}
+else if (historicalWinRate >= 60) {
+
+  confidence += 2;
+
+}
+
+if (historicalMoonshotRate >= 20) {
+
+  confidence += 4;
+
+}
+else if (historicalMoonshotRate >= 10) {
+
+  confidence += 2;
+
+}
+
+if (historicalRugRate >= 40) {
+
+  confidence -= 10;
+
+}
+else if (historicalRugRate >= 25) {
+
+  confidence -= 6;
+
+}
+else if (historicalRugRate >= 15) {
+
+  confidence -= 3;
+
+}
 
 // High Trust → Increase confidence
 if (trustScore >= 90) {

@@ -142,6 +142,42 @@ const TokenOutcomeSchema = new mongoose.Schema(
     insiderRiskScore: Number,
     rugRiskScore: Number,
 
+
+// =====================================================
+// DEVELOPER INTELLIGENCE
+// =====================================================
+
+developerWallet: {
+  type: String,
+  default: null,
+  index: true,
+},
+
+developerTrustScore: {
+  type: Number,
+  default: null,
+},
+
+developerTokensCreated: {
+  type: Number,
+  default: 0,
+},
+
+developerWinRate: {
+  type: Number,
+  default: 0,
+},
+
+developerRugRate: {
+  type: Number,
+  default: 0,
+},
+
+developerMoonshots: {
+  type: Number,
+  default: 0,
+},
+
     // =====================================================
     // FORECAST
     // =====================================================
@@ -249,10 +285,24 @@ entryAnalysis: {
     default: {},
   },
 
-  metadata: {
-    type: mongoose.Schema.Types.Mixed,
-    default: {},
-  },
+developer: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {},
+},
+
+consensus: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {},
+},
+
+ai: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {},
+},
+
+metadata: {
+  type: mongoose.Schema.Types.Mixed,
+  default: {},
 },
 
     // =====================================================

@@ -1,6 +1,15 @@
 import TokenOutcome from "../../models/TokenOutcome.js";
 import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 
+import { updateDeveloperProfile }
+from "../learning/updateDeveloperProfile.js";
+
+import { updatePatternStats }
+from "../learning/updatePatternStats.js";
+
+import { saveAITrainingExample }
+from "../learning/saveAITrainingExample.js";
+
 // =====================================================
 // DEVELOPMENT MODE
 // Final outcome is evaluated after 3 hours instead of
@@ -193,13 +202,15 @@ export async function processTokenOutcomes() {
         }
 
         outcome.label = determineLabelFromPeak(
-          peakReturn,
-          outcome.return24h
-        );
+  peakReturn,
+  outcome.return24h
+);
 
-        outcome.trackingComplete = true;
+outcome.trackingComplete = true;
 
-        updated = true;
+
+
+updated = true;
 
         console.log(
           `🎯 Finalized tracking for ${outcome.mintAddress}`
@@ -215,20 +226,60 @@ export async function processTokenOutcomes() {
         });
       }
 
-      if (updated) {
-        await outcome.save();
+if (updated) {
 
-        console.log(
-          `💾 Outcome updated for ${outcome.mintAddress}`
-        );
-      }
+  await outcome.save();
 
-      await sleep(REQUEST_DELAY_MS);
-    } catch (err) {
-      console.error(
-        `❌ Outcome tracking failed for ${outcome.mintAddress}:`,
-        err?.message || err
+  // ========================================
+  // AI LEARNING
+  // ========================================
+
+  if (outcome.trackingComplete) {
+
+    try {
+
+      await Promise.all([
+
+        updateDeveloperProfile(outcome),
+
+        updatePatternStats(outcome),
+
+        saveAITrainingExample(outcome),
+
+      ]);
+
+      console.log(
+        `🧠 AI learning updated for ${outcome.mintAddress}`
       );
+
+    } catch (learningError) {
+
+      console.error(
+        `❌ AI learning failed for ${outcome.mintAddress}:`,
+        learningError?.message || learningError
+      );
+
     }
+
   }
+
+  console.log(
+    `💾 Outcome updated for ${outcome.mintAddress}`
+  );
+
+}
+
+await sleep(REQUEST_DELAY_MS);
+
+} catch (err) {
+
+  console.error(
+    `❌ Outcome tracking failed for ${outcome.mintAddress}:`,
+    err?.message || err
+  );
+
+}
+
+}
+
 }

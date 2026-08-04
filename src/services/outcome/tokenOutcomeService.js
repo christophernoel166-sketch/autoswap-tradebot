@@ -12,13 +12,16 @@ export async function saveTokenOutcome({
     momentumData,
     integrityData,
     riskStructureData,
-    rugRiskData,
+        rugRiskData,
 
-    forecast,
-    signalScore,
+    developerProfile,
 
-    aiRecommendation,
-    aiContext,
+   forecast,
+signalScore,
+
+
+aiRecommendation,
+aiContext,
 
 }) {
 
@@ -189,6 +192,32 @@ export async function saveTokenOutcome({
         rugRiskScore:
             rugRiskData?.rugRiskScore,
 
+
+        // =====================================================
+        // Developer Intelligence
+        // =====================================================
+
+        developerWallet:
+            developerProfile?.wallet ??
+            rugRiskData?.developerWallet ??
+            null,
+
+        developerTrustScore:
+            developerProfile?.trustScore ?? 50,
+
+        developerTokensCreated:
+            developerProfile?.tokensCreated ?? 0,
+
+        developerWinRate:
+            developerProfile?.winRate ?? 0,
+
+        developerRugRate:
+            developerProfile?.rugRate ?? 0,
+
+        developerMoonshots:
+            developerProfile?.moonshots ?? 0,
+
+
         // =====================================================
         // Forecast
         // =====================================================
@@ -215,6 +244,26 @@ export async function saveTokenOutcome({
         overallConfidence:
             aiContext?.confidence ?? null,
 
+
+// =====================================================
+// AI Metrics
+// =====================================================
+
+consensus:
+    aiRecommendation?.consensus ?? 0,
+
+trustScore:
+    aiRecommendation?.trustScore ?? 0,
+
+agreement:
+    aiRecommendation?.agreement ?? 0,
+
+positiveVotes:
+    aiRecommendation?.positiveVotes ?? 0,
+
+scannerVotes:
+    aiRecommendation?.scannerVotes ?? {},
+
         // =====================================================
         // AI Snapshot
         // =====================================================
@@ -239,9 +288,127 @@ export async function saveTokenOutcome({
                 [],
 
             pipelineVersion:
-                "AI_PIPELINE_V2",
+                "AI_PIPELINE_V3",
 
         },
+
+// =====================================================
+// ENTRY ANALYSIS SNAPSHOT
+// =====================================================
+
+entryAnalysis: {
+
+    chart:
+        aiContext?.chartAnalysis ?? {},
+
+    forecast:
+        forecast ?? {},
+
+    momentum:
+        momentumData ?? {},
+
+    liquidity:
+        aiContext?.liquidityAnalysis ?? {},
+
+    volume:
+        aiContext?.volumeAnalysis ?? {},
+
+    walletIntelligence:
+        walletIntel ?? {},
+
+    holders:
+        holderData ?? {},
+
+    rugRisk:
+        rugRiskData ?? {},
+
+    integrity:
+        integrityData ?? {},
+
+   developer: {
+
+    wallet:
+        developerProfile?.wallet ??
+        rugRiskData?.developerWallet ??
+        null,
+
+    trustScore:
+        developerProfile?.trustScore ?? 50,
+
+    winRate:
+        developerProfile?.winRate ?? 0,
+
+    rugRate:
+        developerProfile?.rugRate ?? 0,
+
+    moonshots:
+        developerProfile?.moonshots ?? 0,
+
+    tokensCreated:
+        developerProfile?.tokensCreated ?? 0,
+
+},
+
+    consensus: {
+
+        percentage:
+            aiRecommendation?.consensus ?? 0,
+
+        trustScore:
+            aiRecommendation?.trustScore ?? 0,
+
+        positiveVotes:
+            aiRecommendation?.positiveVotes ?? 0,
+
+        totalVotes:
+            aiRecommendation?.scannerVotes
+                ? Object.keys(
+                    aiRecommendation.scannerVotes
+                  ).length
+                : 0,
+
+        scannerVotes:
+            aiRecommendation?.scannerVotes ?? {},
+
+        contradictions:
+            aiRecommendation?.contradictions ?? [],
+
+    },
+
+    ai: {
+
+        recommendation:
+            aiRecommendation?.action ?? null,
+
+        confidence:
+            aiRecommendation?.confidence ?? 0,
+
+        finalScore:
+            aiRecommendation?.finalScore ?? 0,
+
+        trustScore:
+            aiRecommendation?.trustScore ?? 0,
+
+        consensus:
+            aiRecommendation?.consensus ?? 0,
+
+        reasoning:
+            aiRecommendation?.reasoning ?? [],
+
+        blockers:
+            aiRecommendation?.blockers ?? [],
+
+    },
+
+    metadata: {
+
+        scannerVersion:
+            "AI_PIPELINE_V3",
+
+    },
+
+},
+
 
         // =====================================================
         // Initial State
