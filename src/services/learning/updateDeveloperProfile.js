@@ -1,4 +1,5 @@
-import DeveloperProfile from "../../models/DeveloperProfile.js";
+import DeveloperProfile
+from "../../../models/DeveloperProfile.js";
 
 function safeAverage(currentAverage, currentCount, newValue) {
 
