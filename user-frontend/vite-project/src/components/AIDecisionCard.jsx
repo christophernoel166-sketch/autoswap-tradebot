@@ -842,48 +842,149 @@ const contradictions =
 
         </div>
 
-        {/* AI Reasoning */}
-        {reasoning.length > 0 && (
-          <div className="border-t border-gray-700 pt-4">
+      {/* ===========================================
+    AI EXPLANATION
+=========================================== */}
 
-            <h4 className="mb-2 font-semibold text-gray-300">
-              AI Reasoning
-            </h4>
+<div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            <ul className="list-disc list-inside space-y-1 text-gray-400">
-              {reasoning.map((item, index) => (
-                <li key={index}>
-                  {item}
-                </li>
-              ))}
-            </ul>
+  {/* --------------------------------------- */}
+  {/* AI REASONING */}
+  {/* --------------------------------------- */}
 
-          </div>
-        )}
+  <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 p-5">
 
-        {/* AI Explanation */}
-        {explanation.length > 0 && (
-          <div className="border-t border-gray-700 pt-4">
+    <h3 className="text-lg font-semibold text-white mb-4">
 
-            <h4 className="mb-2 font-semibold text-gray-300">
-              Why?
-            </h4>
+      🧠 AI Reasoning
 
-            <ul className="list-disc list-inside space-y-1 text-gray-400">
-              {explanation.map((item, index) => (
-                <li key={index}>
-                  {item}
-                </li>
-              ))}
-            </ul>
+    </h3>
 
-          </div>
-        )}
+    <ul className="space-y-3">
 
-        
+      {reasoning.map((reason, index) => (
 
-      </div>
+        <li
+          key={index}
+          className="flex items-start gap-3 text-gray-300"
+        >
 
-    </div>
-  );
-}
+          <span className="text-cyan-400 mt-1">
+
+            •
+
+          </span>
+
+          <span>
+
+            {reason}
+
+          </span>
+
+        </li>
+
+      ))}
+
+    </ul>
+
+  </div>
+
+  {/* --------------------------------------- */}
+  {/* WHY AI CHOSE THIS TRADE */}
+  {/* --------------------------------------- */}
+
+  <div className="rounded-xl border border-green-500/20 bg-green-500/5 p-5">
+
+    <h3 className="text-lg font-semibold text-white mb-4">
+
+      💡 Why AI Chose This Trade
+
+    </h3>
+
+    <ul className="space-y-3 text-gray-300">
+
+      <li className="flex gap-3">
+
+        <span className="text-green-400">
+
+          ✓
+
+        </span>
+
+        <span>
+
+          Multiple scanners agreed on this opportunity.
+
+        </span>
+
+      </li>
+
+      <li className="flex gap-3">
+
+        <span className="text-green-400">
+
+          ✓
+
+        </span>
+
+        <span>
+
+          Historical pattern has produced similar winners.
+
+        </span>
+
+      </li>
+
+      <li className="flex gap-3">
+
+        <span className="text-green-400">
+
+          ✓
+
+        </span>
+
+        <span>
+
+          Liquidity profile supports healthier trading.
+
+        </span>
+
+      </li>
+
+      <li className="flex gap-3">
+
+        <span className="text-green-400">
+
+          ✓
+
+        </span>
+
+        <span>
+
+          Wallet quality and holder distribution appear healthy.
+
+        </span>
+
+      </li>
+
+      <li className="flex gap-3">
+
+        <span className="text-green-400">
+
+          ✓
+
+        </span>
+
+        <span>
+
+          AI confidence exceeded the minimum trading threshold.
+
+        </span>
+
+      </li>
+
+    </ul>
+
+  </div>
+
+</div>
