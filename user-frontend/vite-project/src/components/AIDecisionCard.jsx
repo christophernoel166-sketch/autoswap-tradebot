@@ -139,6 +139,41 @@ const trustScore =
   ai.trustScore ??
   0;
 
+// ===========================================
+// Developer Intelligence
+// ===========================================
+
+const developerWallet =
+  ai.developerWallet ??
+  ai.signalScore?.developerWallet ??
+  "Unknown";
+
+const developerTrust =
+  ai.developerTrustScore ??
+  ai.signalScore?.developerTrustScore ??
+  trustScore;
+
+const developerVerdict =
+  ai.signalScore?.developerVerdict ??
+  "UNKNOWN";
+
+const previousLaunches =
+  ai.signalScore?.previousLaunches ??
+  "--";
+
+const successfulLaunches =
+  ai.signalScore?.successfulLaunches ??
+  "--";
+
+const ruggedLaunches =
+  ai.signalScore?.ruggedLaunches ??
+  "--";
+
+const blacklistStatus =
+  ai.signalScore?.blacklisted
+    ? "BLACKLISTED"
+    : "CLEAN";
+
 const positiveVotes =
   ai.recommendation?.positiveVotes ??
   ai.positiveVotes ??
@@ -457,6 +492,157 @@ const contradictions =
         {ai.signalScore?.expectedROI ?? "--"}%
 
       </div>
+
+    </div>
+
+  </div>
+
+</div>
+
+
+{/* ===========================================
+    DEVELOPER INTELLIGENCE
+=========================================== */}
+
+<div className="mt-6 rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-4">
+
+  <div className="flex items-center justify-between">
+
+    <div>
+
+      <div className="text-sm text-gray-400">
+
+        Developer Intelligence
+
+      </div>
+
+      <div className="mt-1 text-lg font-semibold text-emerald-300">
+
+        👨‍💻 Wallet Reputation Engine
+
+      </div>
+
+    </div>
+
+    <div className="text-right">
+
+      <div className="text-xs text-gray-400">
+
+        Trust Score
+
+      </div>
+
+      <div className="text-2xl font-bold text-emerald-300">
+
+        {developerTrust}%
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div className="mt-5 rounded-lg bg-gray-800 p-3">
+
+    <div className="text-xs text-gray-400">
+
+      Developer Wallet
+
+    </div>
+
+    <div className="mt-1 break-all font-mono text-sm text-white">
+
+      {developerWallet}
+
+    </div>
+
+  </div>
+
+  <div className="mt-4 grid grid-cols-2 gap-3">
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Previous Launches
+
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-white">
+
+        {previousLaunches}
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Successful Launches
+
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-green-400">
+
+        {successfulLaunches}
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Rugged Launches
+
+      </div>
+
+      <div className="mt-1 text-xl font-bold text-red-400">
+
+        {ruggedLaunches}
+
+      </div>
+
+    </div>
+
+    <div className="rounded-lg bg-gray-800 p-3">
+
+      <div className="text-xs text-gray-400">
+
+        Blacklist Status
+
+      </div>
+
+      <div
+        className={`mt-1 text-lg font-bold ${
+          blacklistStatus === "CLEAN"
+            ? "text-green-400"
+            : "text-red-400"
+        }`}
+      >
+
+        {blacklistStatus}
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <div className="mt-4 rounded-lg border border-emerald-500/20 bg-gray-900 p-3">
+
+    <div className="text-xs text-gray-400">
+
+      Overall Verdict
+
+    </div>
+
+    <div className="mt-1 text-xl font-bold text-emerald-300">
+
+      {developerVerdict}
 
     </div>
 
