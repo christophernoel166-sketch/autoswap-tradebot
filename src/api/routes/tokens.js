@@ -1529,6 +1529,44 @@ ai: {
 
     recommendation: aiRecommendation,
 
+
+prediction: {
+
+    winnerProbability:
+        historicalMemory?.prediction?.winnerProbability ?? 0,
+
+    moonshotProbability:
+        historicalMemory?.prediction?.moonshotProbability ?? 0,
+
+    rugProbability:
+        historicalMemory?.prediction?.rugProbability ?? 0,
+
+    loserProbability:
+        historicalMemory?.prediction?.loserProbability ?? 0,
+
+    expectedROI:
+        historicalMemory?.prediction?.expectedROI ?? 0,
+
+    expectedPeakReturn:
+        historicalMemory?.prediction?.expectedPeakReturn ?? 0,
+
+    confidence:
+        historicalMemory?.memoryConfidence ?? 0,
+
+    similarHistoricalScans:
+        historicalMemory?.similarScans ?? 0,
+
+    sampleConfidence:
+        historicalMemory?.sampleConfidence ?? 0,
+
+    similarityConfidence:
+        historicalMemory?.similarityConfidence ?? 0,
+
+    performanceConfidence:
+        historicalMemory?.performanceConfidence ?? 0,
+
+},
+
     signalScore,
 
     forecast,

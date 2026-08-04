@@ -2,13 +2,13 @@ import TokenOutcome from "../../models/TokenOutcome.js";
 import { fetchTokenMarketData } from "../scanner/fetchTokenMarketData.js";
 
 import { updateDeveloperProfile }
-from "../learning/updateDeveloperProfile.js";
+from "./learning/updateDeveloperProfile.js";
 
 import { updatePatternStats }
-from "../learning/updatePatternStats.js";
+from "./learning/updatePatternStats.js";
 
 import { saveAITrainingExample }
-from "../learning/saveAITrainingExample.js";
+from "./learning/saveAITrainingExample.js";
 
 // =====================================================
 // DEVELOPMENT MODE
