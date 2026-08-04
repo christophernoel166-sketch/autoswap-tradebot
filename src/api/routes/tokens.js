@@ -33,9 +33,8 @@ import { fetchLiquidityAnalysisData }
 from "../../scanner/fetchLiquidityAnalysisData.js";
 import TokenOutcome from "../../../models/TokenOutcome.js";
 import { scoreSignal } from "../../services/signalScoringService.js";
-import {
-  findSimilarPatterns,
-} from "../../services/ai/findSimilarPatterns.js";
+import { findSimilarPatterns }
+from "../../services/learning/findSimilarPatterns.js";
 import { buildAIRecommendation } from "../../services/aiRecommendationService.js";
 import {
     scanStarted,
