@@ -988,3 +988,5 @@ const contradictions =
   </div>
 
 </div>
+);
+}
