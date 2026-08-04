@@ -1,4 +1,4 @@
-import PatternStats from "../../../models/PatternStats.js";
+import PatternStats from "../../models/PatternStats.js";
 
 export async function updatePatternStats({
     key,
