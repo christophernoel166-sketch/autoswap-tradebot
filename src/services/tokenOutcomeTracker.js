@@ -5,7 +5,7 @@ import { updateDeveloperProfile }
 from "./learning/updateDeveloperProfile.js";
 
 import { updatePatternStats }
-from "./learning/updatePatternStats.js";
+from "./updatePatternStats.js";
 
 
 
