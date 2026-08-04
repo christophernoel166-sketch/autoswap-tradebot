@@ -1,4 +1,4 @@
-import TokenOutcome from "../../models/TokenOutcome.js";
+import TokenOutcome from "../../../models/TokenOutcome.js";
 
 // =====================================================
 // Feature Importance
