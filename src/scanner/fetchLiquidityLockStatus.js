@@ -24,6 +24,8 @@ export async function fetchLiquidityLockStatus(tokenMint) {
 
     const data = res.data || {};
 
+
+
     const market = data.markets?.[0] || {};
     const lp = market.lp || {};
 
@@ -87,31 +89,42 @@ export async function fetchLiquidityLockStatus(tokenMint) {
     // RugCheck Intelligence
     // -----------------------------
 
-    const rugcheck = {
-      score:
-        data.score ?? null,
+ const rugcheck = {
+    score: data.score ?? null,
 
-      normalizedScore:
+    normalizedScore:
         data.score_normalised ?? null,
 
-      risks,
+    risks,
 
-      rugged:
+    rugged:
         data.rugged ?? false,
 
-      graphInsidersDetected:
+    graphInsidersDetected:
         data.graphInsidersDetected ?? 0,
 
-      freezeAuthority:
+    freezeAuthority:
         data.freezeAuthority ?? null,
 
-      mintAuthority:
+    mintAuthority:
         data.mintAuthority ?? null,
 
-      launchpad:
+    launchpad:
         data.launchpad?.platform ?? null,
-    };
 
+    // NEW
+    creator:
+        data.creator ?? null,
+
+    creatorBalance:
+        data.creatorBalance ?? null,
+
+    creatorTokens:
+        data.creatorTokens ?? null,
+
+    knownAccounts:
+        data.knownAccounts ?? {},
+};
 // -----------------------------
 // Build Evidence
 // -----------------------------
@@ -290,7 +303,20 @@ if (score >= 90) {
   lpLockedUsd,
 
   // Provider intelligence
-  rugcheck,
+rugcheck,
+
+developerWallet:
+    rugcheck.creator,
+
+developerBalance:
+    rugcheck.creatorBalance,
+
+developerKnownAccounts:
+    rugcheck.knownAccounts,
+
+developerTokens:
+    rugcheck.creatorTokens,
+
 score,
 confidence,
 verdict,

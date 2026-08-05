@@ -45,6 +45,8 @@ import {
 import {
     saveTokenOutcome,
 } from "../../services/outcome/tokenOutcomeService.js";
+import { fetchDeveloperProfile }
+from "../../scanner/fetchDeveloperProfile.js";
 
 const router = express.Router();
 const MANUAL_BUY_CHANNEL_ID = "manual_dashboard";
@@ -956,6 +958,24 @@ await fetchProfitWalletData({
 
 aiContext.analyses.profitWallets =
   profitWalletData;
+
+// =====================================================
+// DEVELOPER INTELLIGENCE
+// =====================================================
+
+const developerWallet =
+    liquidityLock.developerWallet || null;
+
+const developerProfile =
+    developerWallet
+        ? await fetchDeveloperProfile(
+              developerWallet
+          )
+        : null;
+
+aiContext.analyses.developer =
+    developerProfile;
+
     // ================= METRICS =================
 const rawMetrics = {
   ageMinutes: market.metrics.ageMinutes,
@@ -1400,6 +1420,7 @@ memoryProfile:
     momentumData,
 
     profitWalletData,
+developerProfile,
 
     securityAnalysis: liquidityLock,
 
@@ -1527,6 +1548,16 @@ ai: {
     confidence: aiContext.confidence,
 
     recommendation: aiRecommendation,
+developer: developerProfile,
+
+developerWallet: {
+    wallet: liquidityLock.developerWallet,
+    balance: liquidityLock.developerBalance,
+    knownAccounts:
+        liquidityLock.developerKnownAccounts,
+    creatorTokens:
+        liquidityLock.developerTokens,
+},
 
 
 prediction: {
