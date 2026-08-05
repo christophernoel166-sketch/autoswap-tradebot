@@ -1,4 +1,4 @@
-import DeveloperProfile from "../models/DeveloperProfile.js";
+import DeveloperProfile from "../../models/DeveloperProfile.js";
 
 // =====================================================
 // Fetch Developer Intelligence
