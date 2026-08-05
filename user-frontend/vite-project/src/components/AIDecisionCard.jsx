@@ -167,17 +167,21 @@ const developerVerdict =
   ai.signalScore?.developerVerdict ??
   "UNKNOWN";
 
+// ===========================================
+// Developer Historical Statistics
+// ===========================================
+
 const previousLaunches =
-  ai.signalScore?.previousLaunches ??
-  "--";
+  ai.developer?.tokensCreated ??
+  0;
 
 const successfulLaunches =
-  ai.signalScore?.successfulLaunches ??
-  "--";
+  ai.developer?.successfulTokens ??
+  0;
 
 const ruggedLaunches =
-  ai.signalScore?.ruggedLaunches ??
-  "--";
+  ai.developer?.rugs ??
+  0;
 
 const blacklistStatus =
   ai.signalScore?.blacklisted
