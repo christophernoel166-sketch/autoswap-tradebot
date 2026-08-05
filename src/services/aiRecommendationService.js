@@ -140,6 +140,7 @@ export function buildAIRecommendation({
   chartAnalysis,
 memoryProfile,
   historicalMemory,
+developerProfile,
 
 }) {
 
@@ -211,6 +212,35 @@ const walletIntelligenceScore =
   Number(
     walletIntelligence?.score ??
     walletIntelligence?.walletIntelligenceScore
+  ) || 0;
+
+// =====================================================
+// DEVELOPER INTELLIGENCE
+// =====================================================
+
+const developerTrust =
+  Number(
+    developerProfile?.trustScore
+  ) || 0;
+
+const developerWinRate =
+  Number(
+    developerProfile?.winRate
+  ) || 0;
+
+const developerRugRate =
+  Number(
+    developerProfile?.rugRate
+  ) || 0;
+
+const developerMoonshots =
+  Number(
+    developerProfile?.moonshots
+  ) || 0;
+
+const developerTokens =
+  Number(
+    developerProfile?.tokensCreated
   ) || 0;
 
 
@@ -466,6 +496,50 @@ if (similarHistoricalScans > 0) {
 }
 
 // =====================================================
+// DEVELOPER INTELLIGENCE SUMMARY
+// =====================================================
+
+if (developerTokens > 0) {
+
+  reasons.push(
+    `Developer has launched ${developerTokens} previous token${developerTokens === 1 ? "" : "s"}.`
+  );
+
+  reasons.push(
+    `Developer historical win rate: ${developerWinRate}%.`
+  );
+
+  reasons.push(
+    `Developer rug rate: ${developerRugRate}%.`
+  );
+
+  if (developerMoonshots > 0) {
+    reasons.push(
+      `Developer previously launched ${developerMoonshots} moonshot token${developerMoonshots === 1 ? "" : "s"}.`
+    );
+  }
+
+  if (developerTrust >= 85) {
+    reasons.push(
+      "Developer has an excellent historical trust score."
+    );
+  } else if (developerTrust >= 70) {
+    reasons.push(
+      "Developer has a strong historical reputation."
+    );
+  } else if (developerTrust >= 50) {
+    reasons.push(
+      "Developer has a mixed launch history."
+    );
+  } else {
+    blockers.push(
+      "Developer has a poor historical track record."
+    );
+  }
+
+}
+
+// =====================================================
 // MASTER AI SCORE
 // Uses the global scanner weight table
 // =====================================================
@@ -540,6 +614,50 @@ else if (expectedROI >= 50) {
 
 }
 else if (expectedROI >= 20) {
+
+  weightedScore += 1;
+
+}
+
+// ========================================
+// DEVELOPER INTELLIGENCE CONTRIBUTION
+// ========================================
+
+// Strong developer trust
+weightedScore +=
+  (developerTrust / 100) * 8;
+
+// Successful launch history
+weightedScore +=
+  (developerWinRate / 100) * 6;
+
+// Previous moonshots
+weightedScore +=
+  Math.min(developerMoonshots, 5);
+
+// Rug history reduces score
+weightedScore -=
+  (developerRugRate / 100) * 8;
+
+// Developers with many launches get
+// a small reliability bonus.
+
+if (developerTokens >= 50) {
+
+  weightedScore += 4;
+
+}
+else if (developerTokens >= 20) {
+
+  weightedScore += 3;
+
+}
+else if (developerTokens >= 10) {
+
+  weightedScore += 2;
+
+}
+else if (developerTokens >= 5) {
 
   weightedScore += 1;
 
@@ -758,6 +876,71 @@ if (blockers.length > 0) {
 // =====================================================
 
 let confidence = finalScore;
+
+// =====================================================
+// DEVELOPER CONFIDENCE
+// =====================================================
+
+if (developerTokens >= 5) {
+
+  confidence += 2;
+
+}
+
+if (developerTokens >= 20) {
+
+  confidence += 2;
+
+}
+
+if (developerTrust >= 80) {
+
+  confidence += 5;
+
+}
+else if (developerTrust >= 65) {
+
+  confidence += 3;
+
+}
+else if (developerTrust <= 30) {
+
+  confidence -= 5;
+
+}
+
+if (developerWinRate >= 75) {
+
+  confidence += 4;
+
+}
+else if (developerWinRate >= 60) {
+
+  confidence += 2;
+
+}
+else if (developerWinRate <= 30) {
+
+  confidence -= 4;
+
+}
+
+if (developerRugRate >= 40) {
+
+  confidence -= 6;
+
+}
+else if (developerRugRate >= 20) {
+
+  confidence -= 3;
+
+}
+
+if (developerMoonshots >= 3) {
+
+  confidence += 3;
+
+}
 
 // =====================================================
 // MEMORY CONFIDENCE

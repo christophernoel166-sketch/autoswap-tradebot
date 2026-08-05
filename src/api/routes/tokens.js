@@ -1359,6 +1359,8 @@ const signalScore = await scoreSignal({
   context: aiContext,
 });
 
+
+
 // =====================================================
 // HISTORICAL MEMORY ENGINE
 // =====================================================
@@ -1394,6 +1396,22 @@ const historicalMemory =
       response?.evaluation?.score ?? 0,
 
   });
+
+signalScore.rugRate =
+    historicalMemory?.prediction?.rugProbability ?? 0;
+
+signalScore.expectedROI =
+    historicalMemory?.prediction?.expectedROI ?? 0;
+
+signalScore.expectedPeakReturn =
+    historicalMemory?.prediction?.expectedPeakReturn ?? 0;
+
+signalScore.winRate =
+    historicalMemory?.prediction?.winnerProbability ?? 0;
+
+signalScore.moonshotRate =
+    historicalMemory?.prediction?.moonshotProbability ?? 0;
+
 
 aiContext.analyses.historicalMemory =
   historicalMemory;
