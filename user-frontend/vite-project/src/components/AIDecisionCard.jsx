@@ -144,9 +144,19 @@ const trustScore =
 // ===========================================
 
 const developerWallet =
-  ai.developerWallet ??
+  ai.developerWallet?.wallet ??
+  ai.developer?.wallet ??
   ai.signalScore?.developerWallet ??
   "Unknown";
+
+const developerBalance =
+  ai.developerWallet?.balance ?? 0;
+
+const developerKnownAccounts =
+  ai.developerWallet?.knownAccounts ?? {};
+
+const developerTokens =
+  ai.developerWallet?.creatorTokens ?? [];
 
 const developerTrust =
   ai.developerTrustScore ??
