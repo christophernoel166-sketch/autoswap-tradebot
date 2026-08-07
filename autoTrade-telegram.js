@@ -92,6 +92,8 @@ import {
     createPipelineContext,
 } from "./src/ai/core/createPipelineContext.js";
 
+import { saveAIStateToRedis } from "../services/saveAIStateToRedis.js";
+
 let recoverySchedulerStarted = false;
 
 redis.ping().then((res) => {
@@ -2607,43 +2609,69 @@ try {
     // Run Exit Pipeline
     // ==========================================
 
-    const pipelineResult =
+   const pipelineResult =
+    await processAIExitPipeline(
+        context
+    );
 
-        await processAIExitPipeline(
-            context
-        );
+// ==========================================
+// Persist AI state for dashboard
+// ==========================================
 
-    if (
+try {
 
-        !pipelineResult?.approved
+    await saveAIStateToRedis(
+        pipelineResult.context
+    );
 
-    ) {
+}
+catch (err) {
 
-        LOG.info(
-            {
-                walletAddress:
-                    context.walletAddress,
+    LOG.error(
+        {
+            err,
+            walletAddress:
+                context.walletAddress,
 
-                mint:
-                    context.mint,
+            mint:
+                context.mint,
+        },
+        "Failed to persist AI dashboard state"
+    );
 
-            },
-            "🧠 Exit pipeline rejected execution."
-        );
+}
 
-        return {
+if (
 
-            success: true,
+    !pipelineResult?.approved
 
-            action: "CONTINUE",
+) {
 
-            executionState: "SKIPPED",
+    LOG.info(
+        {
+            walletAddress:
+                context.walletAddress,
 
-            reason: "Exit pipeline rejected.",
+            mint:
+                context.mint,
 
-        };
+        },
+        "🧠 Exit pipeline rejected execution."
+    );
 
-    }
+    return {
+
+        success: true,
+
+        action: "CONTINUE",
+
+        executionState: "SKIPPED",
+
+        reason: "Exit pipeline rejected.",
+
+    };
+
+}
 
     // ==========================================
     // Execute Approved Trade Plan
