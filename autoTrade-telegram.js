@@ -92,7 +92,7 @@ import {
     createPipelineContext,
 } from "./src/ai/core/createPipelineContext.js";
 
-import { saveAIStateToRedis } from "../services/saveAIStateToRedis.js";
+import { saveAIStateToRedis } from "./src/services/saveAIStateToRedis.js";
 
 let recoverySchedulerStarted = false;
 
