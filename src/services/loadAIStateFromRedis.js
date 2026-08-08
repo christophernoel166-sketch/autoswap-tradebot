@@ -125,11 +125,11 @@ export async function loadAIStateFromRedis(
         aiConfidence:
             Number(saved.aiConfidence || 0),
 
-        aiRecommendation:
-            saved.aiRecommendation || "HOLD",
+       aiRecommendation:
+    saved.aiRecommendation || null,
 
-        aiAction:
-            saved.aiAction || "HOLD",
+aiAction:
+    saved.aiAction || null,
 
     };
 
