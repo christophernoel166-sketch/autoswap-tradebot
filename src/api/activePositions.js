@@ -92,6 +92,37 @@ console.log(
     walletAddress,
     mint,
 
+// ==========================================
+// AI Live State
+// ==========================================
+
+aiStatus:
+    pos.aiStatus || "IDLE",
+
+aiStage:
+    pos.aiStage || "WAITING",
+
+aiHealth:
+    pos.aiHealth || "UNKNOWN",
+
+aiTrend:
+    pos.aiTrend || "UNKNOWN",
+
+aiProtection:
+    pos.aiProtection || "NONE",
+
+aiTask:
+    pos.aiTask || "Monitoring",
+
+aiConfidence:
+    Number(pos.aiConfidence || 0),
+
+aiRecommendation:
+    pos.aiRecommendation || "HOLD",
+
+aiAction:
+    pos.aiAction || "HOLD",
+
     sourceChannel:
       pos.sourceChannel || null,
 
@@ -146,6 +177,31 @@ console.log(
     status: p.status,
     tokenAmount: p.tokenAmount
   }))
+);
+
+console.log(
+    "\n================ AI POSITIONS SENT TO FRONTEND ================\n"
+);
+
+console.dir(
+    positions.map((p) => ({
+        mint: p.mint,
+        aiStatus: p.aiStatus,
+        aiStage: p.aiStage,
+        aiTask: p.aiTask,
+        aiConfidence: p.aiConfidence,
+        aiHealth: p.aiHealth,
+        aiRecommendation: p.aiRecommendation,
+        aiAction: p.aiAction,
+    })),
+    {
+        depth: null,
+        colors: true,
+    }
+);
+
+console.log(
+    "\n===============================================================\n"
 );
 
 return res.json({

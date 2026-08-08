@@ -22,6 +22,113 @@ export async function saveAIStateToRedis(context) {
     const pipeline =
         context.pipeline || {};
 
+// -----------------------------
+// AI Evolution Memory
+// -----------------------------
+
+let aiMemory =
+    context.aiMemory || {};
+
+// ==========================================
+// Restore existing memory from Redis
+// ==========================================
+
+try {
+
+    const existing = await redis.hget(
+        positionKey(
+            context.walletAddress,
+            context.mint
+        ),
+        "aiMemory"
+    );
+
+    if (existing) {
+
+        aiMemory = {
+
+            ...JSON.parse(existing),
+
+            ...aiMemory,
+
+        };
+
+    }
+
+}
+catch (err) {
+
+    console.warn(
+        "Failed to restore AI memory:",
+        err.message
+    );
+
+}
+
+// ==========================================
+// Build AI Snapshot
+// ==========================================
+
+const snapshot = {
+
+    timestamp: new Date().toISOString(),
+
+    health:
+        positionHealth.overallHealth || null,
+
+    trend:
+        positionHealth.trend || null,
+
+    confidence:
+        protection.confidence ?? null,
+
+    protection:
+        protection.protectionLevel || null,
+
+    recommendation:
+        tradeDecision.recommendation || null,
+
+    action:
+        tradePlan.action || null,
+
+    pnl:
+        context.changePercent ?? null,
+
+    highestPrice:
+        context.highestPrice ?? null,
+
+};
+
+// ==========================================
+// Update AI Timeline
+// ==========================================
+
+const timeline = Array.isArray(
+    aiMemory.timeline
+)
+    ? [...aiMemory.timeline]
+    : [];
+
+timeline.push(snapshot);
+
+// Keep only latest 20 observations
+
+if (timeline.length > 20) {
+
+    timeline.splice(
+        0,
+        timeline.length - 20
+    );
+
+}
+
+aiMemory.timeline = timeline;
+
+aiMemory.lastSnapshot = snapshot;
+
+aiMemory.lastUpdated = new Date();
+
+
     await redis.hset(
         positionKey(
             context.walletAddress,
@@ -92,6 +199,12 @@ export async function saveAIStateToRedis(context) {
 
             aiTradePlan:
                 JSON.stringify(tradePlan),
+// -----------------------------
+// AI Memory
+// -----------------------------
+
+aiMemory:
+    JSON.stringify(aiMemory),
 
         }
     );

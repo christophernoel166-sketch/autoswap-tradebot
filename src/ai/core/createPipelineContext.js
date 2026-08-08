@@ -292,6 +292,27 @@ decisionMemory: {
 
 },
 
+
+// ==================================================
+// AI Evolution Memory
+// ==================================================
+
+aiMemory: {
+
+    // Rolling history of AI observations
+    timeline: [],
+
+    // Most recent AI snapshot
+    lastSnapshot: null,
+
+    // Last refresh time
+    lastUpdated: null,
+
+    // Memory schema version
+    version: 1,
+
+},
+
         // ==================================================
         // Review State
         // ==================================================

@@ -13,6 +13,9 @@
  * ✔ Evaluate confidence trend
  * ✔ Evaluate conviction trend
  * ✔ Evaluate risk trend
+ * ✔ Analyze AI historical timeline
+ * ✔ Detect sustained weakening
+ * ✔ Detect protection escalation
  * ✔ Build alerts
  * ✔ Build watch items
  * ✔ Build opportunities
@@ -29,12 +32,14 @@
  */
 
 import {
-
     setPositionHealth,
-
     addDebug,
-
 } from "../core/AIContextUtils.js";
+
+import {
+    analyzeAITimeline,
+} from "./AITimelineAnalyzer.js";
+
 
 // ==========================================================
 // Constants
@@ -56,6 +61,7 @@ const HEALTH = Object.freeze({
 
 });
 
+
 const TREND = Object.freeze({
 
     STRONGLY_IMPROVING:
@@ -75,6 +81,7 @@ const TREND = Object.freeze({
 
 });
 
+
 const DIRECTION = Object.freeze({
 
     INCREASING:
@@ -87,6 +94,7 @@ const DIRECTION = Object.freeze({
         "UNCHANGED",
 
 });
+
 
 // ==========================================================
 // Helpers
@@ -104,6 +112,7 @@ function getConfidence(
 
 }
 
+
 function getRecommendation(
     context
 ) {
@@ -112,6 +121,7 @@ function getRecommendation(
 
 }
 
+
 function getPreviousPosition(
     context
 ) {
@@ -119,6 +129,7 @@ function getPreviousPosition(
     return context?.previousPositionIntelligence ?? {};
 
 }
+
 
 // ==========================================================
 // Direction Comparator
@@ -137,11 +148,13 @@ function compareDirection(
         current ?? previous
     );
 
+
     if (current > previous) {
 
         return DIRECTION.INCREASING;
 
     }
+
 
     if (current < previous) {
 
@@ -149,9 +162,11 @@ function compareDirection(
 
     }
 
+
     return DIRECTION.UNCHANGED;
 
 }
+
 
 // ==========================================================
 // Position Health
@@ -164,21 +179,27 @@ function calculateHealth(
     if (confidence >= 90)
         return HEALTH.EXCELLENT;
 
+
     if (confidence >= 80)
         return HEALTH.STRONG;
+
 
     if (confidence >= 65)
         return HEALTH.GOOD;
 
+
     if (confidence >= 50)
         return HEALTH.STABLE;
+
 
     if (confidence >= 35)
         return HEALTH.WEAK;
 
+
     return HEALTH.CRITICAL;
 
 }
+
 
 // ==========================================================
 // Overall Trend
@@ -191,18 +212,23 @@ function calculateTrend(
     if (confidence >= 90)
         return TREND.STRONGLY_IMPROVING;
 
+
     if (confidence >= 70)
         return TREND.IMPROVING;
+
 
     if (confidence >= 50)
         return TREND.STABLE;
 
+
     if (confidence >= 30)
         return TREND.WEAKENING;
+
 
     return TREND.STRONGLY_WEAKENING;
 
 }
+
 
 // ==========================================================
 // Confidence Trend
@@ -222,6 +248,7 @@ function calculateConfidenceTrend(
     );
 
 }
+
 
 // ==========================================================
 // Conviction Trend
@@ -246,6 +273,7 @@ function calculateConvictionTrend(
 
     };
 
+
     return compareDirection(
 
         ranking[
@@ -259,6 +287,7 @@ function calculateConvictionTrend(
     );
 
 }
+
 
 // ==========================================================
 // Risk Trend
@@ -283,6 +312,7 @@ function calculateRiskTrend(
 
     };
 
+
     return compareDirection(
 
         ranking[
@@ -297,15 +327,18 @@ function calculateRiskTrend(
 
 }
 
+
 // ==========================================================
 // Alerts
 // ==========================================================
 
 function buildAlerts(
-    recommendation
+    recommendation,
+    timelineAnalysis
 ) {
 
     const alerts = [];
+
 
     if (
         recommendation.riskLevel === "HIGH" ||
@@ -318,6 +351,7 @@ function buildAlerts(
 
     }
 
+
     if (
         recommendation.action === "FULL_EXIT"
     ) {
@@ -327,6 +361,7 @@ function buildAlerts(
         );
 
     }
+
 
     if (
         recommendation.action === "PARTIAL_EXIT"
@@ -338,19 +373,82 @@ function buildAlerts(
 
     }
 
+
+    // ======================================================
+    // Historical AI deterioration alerts
+    // ======================================================
+
+    if (
+        timelineAnalysis?.evolution?.state ===
+        "STRONGLY_DETERIORATING"
+    ) {
+
+        alerts.push(
+            "AI history shows strong position deterioration."
+        );
+
+    }
+    else if (
+        timelineAnalysis?.evolution?.state ===
+        "DETERIORATING"
+    ) {
+
+        alerts.push(
+            "AI history shows sustained position deterioration."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.confidence?.declining
+    ) {
+
+        alerts.push(
+            "AI confidence is declining across recent observations."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.trend?.transitionToDistribution
+    ) {
+
+        alerts.push(
+            "Trend has transitioned from bullish conditions toward distribution."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.protection?.escalating
+    ) {
+
+        alerts.push(
+            "AI protection requirements are escalating."
+        );
+
+    }
+
+
     return alerts;
 
 }
+
 
 // ==========================================================
 // Watch Items
 // ==========================================================
 
 function buildWatchItems(
-    recommendation
+    recommendation,
+    timelineAnalysis
 ) {
 
     const watchItems = [];
+
 
     if (
         recommendation.action === "HOLD"
@@ -362,6 +460,7 @@ function buildWatchItems(
 
     }
 
+
     if (
         recommendation.action === "ACCUMULATE"
     ) {
@@ -371,6 +470,7 @@ function buildWatchItems(
         );
 
     }
+
 
     if (
         recommendation.riskLevel === "MEDIUM"
@@ -382,19 +482,71 @@ function buildWatchItems(
 
     }
 
+
+    // ======================================================
+    // Historical deterioration watch items
+    // ======================================================
+
+    if (
+        timelineAnalysis?.confidence?.declining
+    ) {
+
+        watchItems.push(
+            "Monitor continued AI confidence deterioration."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.health?.weakening
+    ) {
+
+        watchItems.push(
+            "Monitor weakening position health."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.trend?.weakening
+    ) {
+
+        watchItems.push(
+            "Monitor for continued trend deterioration."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.protection?.escalating
+    ) {
+
+        watchItems.push(
+            "Monitor escalating protection requirements."
+        );
+
+    }
+
+
     return watchItems;
 
 }
+
 
 // ==========================================================
 // Opportunities
 // ==========================================================
 
 function buildOpportunities(
-    recommendation
+    recommendation,
+    timelineAnalysis
 ) {
 
     const opportunities = [];
+
 
     if (
         recommendation.action === "STRONG_BUY"
@@ -406,6 +558,7 @@ function buildOpportunities(
 
     }
 
+
     if (
         recommendation.action === "BUY"
     ) {
@@ -415,6 +568,7 @@ function buildOpportunities(
         );
 
     }
+
 
     if (
         recommendation.action === "ACCUMULATE"
@@ -426,9 +580,39 @@ function buildOpportunities(
 
     }
 
+
+    // ======================================================
+    // Historical improvement opportunities
+    // ======================================================
+
+    if (
+        timelineAnalysis?.evolution?.state ===
+        "IMPROVING"
+    ) {
+
+        opportunities.push(
+            "Recent AI observations show improving position conditions."
+        );
+
+    }
+
+
+    if (
+        timelineAnalysis?.evolution?.state ===
+        "STRENGTHENING"
+    ) {
+
+        opportunities.push(
+            "Position conditions are strengthening across recent AI observations."
+        );
+
+    }
+
+
     return opportunities;
 
 }
+
 
 // ==========================================================
 // Recommendation Trend
@@ -459,6 +643,7 @@ function calculateRecommendationTrend(
 
     };
 
+
     return compareDirection(
 
         ranking[
@@ -473,38 +658,53 @@ function calculateRecommendationTrend(
 
 }
 
+
 // ==========================================================
 // Summary
 // ==========================================================
+
 function generateSummary({
+
     health,
+
     trend,
+
     recommendation = {},
+
     confidenceTrend,
+
     riskTrend,
+
+    timelineAnalysis,
+
 }) {
 
     const action = String(
         recommendation?.action ?? "UNKNOWN"
     );
 
+
     const safeHealth = String(
         health ?? "UNKNOWN"
     );
+
 
     const safeTrend = String(
         trend ?? "UNKNOWN"
     );
 
+
     const safeConfidenceTrend = String(
         confidenceTrend ?? "UNKNOWN"
     );
+
 
     const safeRiskTrend = String(
         riskTrend ?? "UNKNOWN"
     );
 
-    return [
+
+    const summary = [
 
         `Position health is ${safeHealth
             .toLowerCase()}.`,
@@ -523,9 +723,57 @@ function generateSummary({
             .toLowerCase()
             .replaceAll("_", " ")}.`,
 
-    ].join(" ");
+    ];
+
+
+    // ======================================================
+    // Historical AI summary
+    // ======================================================
+
+    if (
+        timelineAnalysis?.available
+    ) {
+
+        const evolution =
+            timelineAnalysis?.evolution?.state;
+
+        if (evolution) {
+
+            summary.push(
+                `Recent AI evolution is ${String(evolution)
+                    .toLowerCase()
+                    .replaceAll("_", " ")}.`
+            );
+
+        }
+
+        if (
+            timelineAnalysis?.confidence?.declining
+        ) {
+
+            summary.push(
+                "Recent AI confidence is declining."
+            );
+
+        }
+
+        if (
+            timelineAnalysis?.trend?.weakening
+        ) {
+
+            summary.push(
+                "Recent trend observations show weakening."
+            );
+
+        }
+
+    }
+
+
+    return summary.join(" ");
 
 }
+
 
 // ==========================================================
 // Builder
@@ -538,24 +786,34 @@ function buildPositionIntelligence(
     const confidence =
         getConfidence(context);
 
+
     const recommendation =
         getRecommendation(context);
+
 
     const previous =
         getPreviousPosition(context);
 
+
     const previousRecommendation =
         previous.recommendation || {};
+
+
+    // ======================================================
+    // Existing Position Intelligence
+    // ======================================================
 
     const health =
         calculateHealth(
             confidence
         );
 
+
     const trend =
         calculateTrend(
             confidence
         );
+
 
     const confidenceTrend =
         calculateConfidenceTrend(
@@ -566,6 +824,7 @@ function buildPositionIntelligence(
 
         );
 
+
     const convictionTrend =
         calculateConvictionTrend(
 
@@ -574,6 +833,7 @@ function buildPositionIntelligence(
             recommendation
 
         );
+
 
     const riskTrend =
         calculateRiskTrend(
@@ -584,6 +844,7 @@ function buildPositionIntelligence(
 
         );
 
+
     const recommendationTrend =
         calculateRecommendationTrend(
 
@@ -593,11 +854,70 @@ function buildPositionIntelligence(
 
         );
 
+
+    // ======================================================
+    // 🧠 AI TIMELINE ANALYSIS
+    // ======================================================
+    //
+    // Uses the AI observation history already stored inside
+    // context.aiMemory.
+    //
+    // IMPORTANT:
+    // This performs NO RPC calls and does not modify Redis.
+    //
+    // ======================================================
+
+    const aiMemory =
+        context?.aiMemory || {};
+
+
+    const timelineAnalysis =
+        analyzeAITimeline(
+            aiMemory,
+            {
+                windowSize: 10,
+            }
+        );
+
+
+    // ======================================================
+    // Build Alerts / Watches / Opportunities
+    // ======================================================
+
+    const alerts =
+        buildAlerts(
+            recommendation,
+            timelineAnalysis
+        );
+
+
+    const watchItems =
+        buildWatchItems(
+            recommendation,
+            timelineAnalysis
+        );
+
+
+    const opportunities =
+        buildOpportunities(
+            recommendation,
+            timelineAnalysis
+        );
+
+
+    // ======================================================
+    // Final Intelligence
+    // ======================================================
+
     return {
+
+        // --------------------------------------------------
+        // Core Position Health
+        // --------------------------------------------------
 
         overallHealth:
             health,
-           
+
 
         confidence,
 
@@ -613,20 +933,38 @@ function buildPositionIntelligence(
 
         recommendationTrend,
 
-        alerts:
-            buildAlerts(
-                recommendation
-            ),
 
-        watchItems:
-            buildWatchItems(
-                recommendation
-            ),
+        // --------------------------------------------------
+        // 🧠 Historical AI Intelligence
+        // --------------------------------------------------
 
-        opportunities:
-            buildOpportunities(
-                recommendation
-            ),
+        timelineAnalysis,
+
+
+        // --------------------------------------------------
+        // Alerts
+        // --------------------------------------------------
+
+        alerts,
+
+
+        // --------------------------------------------------
+        // Watch Items
+        // --------------------------------------------------
+
+        watchItems,
+
+
+        // --------------------------------------------------
+        // Opportunities
+        // --------------------------------------------------
+
+        opportunities,
+
+
+        // --------------------------------------------------
+        // Summary
+        // --------------------------------------------------
 
         summary:
 
@@ -642,20 +980,30 @@ function buildPositionIntelligence(
 
                 riskTrend,
 
+                timelineAnalysis,
+
             }),
+
+
+        // --------------------------------------------------
+        // Metadata
+        // --------------------------------------------------
 
         generatedAt:
             new Date(),
 
+
         engine:
             "PositionIntelligenceEngine",
 
+
         version:
-            "1.0.0",
+            "1.1.0",
 
     };
 
 }
+
 
 // ==========================================================
 // Generate Position Intelligence
@@ -675,11 +1023,13 @@ export function evaluatePositionHealth(
 
     }
 
+
     const intelligence =
 
         buildPositionIntelligence(
             context
         );
+
 
     setPositionHealth(
 
@@ -688,6 +1038,7 @@ export function evaluatePositionHealth(
         intelligence
 
     );
+
 
     addDebug(
 
@@ -715,13 +1066,27 @@ export function evaluatePositionHealth(
             recommendationTrend:
                 intelligence.recommendationTrend,
 
+            timelineAvailable:
+                intelligence.timelineAnalysis?.available,
+
+            timelineState:
+                intelligence.timelineAnalysis?.evolution?.state,
+
+            timelineWeakeningCount:
+                intelligence.timelineAnalysis?.evolution?.weakeningCount,
+
+            timelineImprovingCount:
+                intelligence.timelineAnalysis?.evolution?.improvingCount,
+
         }
 
     );
 
+
     return context;
 
 }
+
 
 // ==========================================================
 // Default Export
