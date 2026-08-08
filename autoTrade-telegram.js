@@ -2039,6 +2039,43 @@ if (shouldRefreshAI) {
                 }
             );
 
+
+LOG.info(
+    {
+        walletAddress,
+        mint,
+
+        timelineAvailable:
+            timelineAnalysis.available,
+
+        sampleCount:
+            timelineAnalysis.sampleCount,
+
+        evolution:
+            timelineAnalysis.evolution,
+
+        confidence:
+            timelineAnalysis.confidence,
+
+        health:
+            timelineAnalysis.health,
+
+        trend:
+            timelineAnalysis.trend,
+
+        protection:
+            timelineAnalysis.protection,
+
+        recommendation:
+            timelineAnalysis.recommendation,
+
+        action:
+            timelineAnalysis.action,
+    },
+    "🧠 COMPLETE AI TIMELINE INTELLIGENCE"
+);
+
+
         // ==========================================
         // Attach Timeline Intelligence
         // ==========================================
