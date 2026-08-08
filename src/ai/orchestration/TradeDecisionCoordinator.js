@@ -616,99 +616,116 @@ function buildCoordinatorReport(
 ) {
 
     const decisions =
-
         collectDecisions(
             context
         );
 
     const conflicts =
-
         detectConflicts(
             decisions
         );
 
     const consensus =
-
         calculateConsensus(
             decisions
         );
 
     const finalDecision =
-
         determineFinalDecision(
-
             context,
-
             decisions
-
         );
+
+    // ======================================================
+    // Recommendation Engine Output
+    // ======================================================
+
+    const recommendation =
+        decisions.recommendation?.action ??
+        null;
+
+    const recommendationConfidence =
+        decisions.recommendation?.confidence ??
+        0;
+
+    // ======================================================
+    // Build Final Coordinator Report
+    // ======================================================
 
     return {
 
+        // --------------------------------------------------
+        // Final coordinated decision
+        // --------------------------------------------------
+
         approved:
-
-    determineApproval(
-
-        finalDecision,
-
-        consensus    
-
-    ),
+            determineApproval(
+                finalDecision,
+                consensus
+            ),
 
         action:
-
             finalDecision.action,
 
         executionIntent:
-
             determineExecutionIntent(
-
                 finalDecision.action
-
             ),
 
         confidence:
-
             finalDecision.confidence,
 
         source:
-
             finalDecision.source,
+
+        // --------------------------------------------------
+        // Recommendation Engine result
+        // --------------------------------------------------
+
+        recommendation,
+
+        recommendationConfidence,
+
+        // --------------------------------------------------
+        // Consensus
+        // --------------------------------------------------
 
         consensus,
 
         conflicts,
 
+        // --------------------------------------------------
+        // Reasons
+        // --------------------------------------------------
+
         reasons:
-
             buildReasons(
-
                 decisions,
-
                 finalDecision,
-
                 conflicts
-
             ),
 
-        evidence:
+        // --------------------------------------------------
+        // Full evidence from all AI engines
+        // --------------------------------------------------
 
+        evidence:
             decisions,
 
-        generatedAt:
+        // --------------------------------------------------
+        // Metadata
+        // --------------------------------------------------
 
+        generatedAt:
             new Date(),
 
         engine:
-
             "TradeDecisionCoordinator",
 
         version:
-
             "1.0.0",
 
     };
-
 }
 
 // ==========================================================
@@ -742,37 +759,34 @@ context.execution = context.execution || {};
 
 context.execution.tradeDecision = report;
 
-    addDebug(
+addDebug(
+    context,
 
-        context,
+    "Trade decision coordinated.",
 
-        "Trade decision coordinated.",
+    {
+        action:
+            report.action,
 
-        {
+        recommendation:
+            report.recommendation,
 
-            action:
+        recommendationConfidence:
+            report.recommendationConfidence,
 
-                report.action,
+        confidence:
+            report.confidence,
 
-            confidence:
+        source:
+            report.source,
 
-                report.confidence,
+        consensus:
+            report.consensus,
 
-            source:
-
-                report.source,
-
-            consensus:
-
-                report.consensus,
-
-            conflicts:
-
-                report.conflicts,
-
-        }
-
-    );
+        conflicts:
+            report.conflicts,
+    }
+);
 
     return context;
 
