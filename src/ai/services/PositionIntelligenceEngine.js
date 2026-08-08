@@ -38,7 +38,7 @@ import {
 
 import {
     analyzeAITimeline,
-} from "./AITimelineAnalyzer.js";
+} from "../../services/AITimelineAnalyzer.js";
 
 
 // ==========================================================
