@@ -1911,11 +1911,103 @@ async function monitorUser(mint, price, walletAddress, info, state) {
   entryPrice: storedEntryPrice,
 } = info;
 
-  const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
-  if (!entry) return;
 
-  const change = ((price - entry) / entry) * 100;
-  if (typeof info.tpStage === "undefined") info.tpStage = 0;
+// ===================================================
+// Resolve and validate position prices
+// ===================================================
+
+const rawEntry =
+    state.entryPrices.get(walletAddress) ??
+    storedEntryPrice;
+
+const entry =
+    Number(rawEntry);
+
+const currentPrice =
+    Number(price);
+
+
+// ===================================================
+// Validate entry price
+// ===================================================
+
+if (
+    !Number.isFinite(entry) ||
+    entry <= 0
+) {
+
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            rawEntry,
+        },
+        "⚠️ monitorUser skipped — invalid entry price"
+    );
+
+    return;
+}
+
+
+// ===================================================
+// Validate current market price
+// ===================================================
+
+if (
+    !Number.isFinite(currentPrice) ||
+    currentPrice <= 0
+) {
+
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            price,
+        },
+        "⚠️ monitorUser skipped — invalid current price"
+    );
+
+    return;
+}
+
+
+// ===================================================
+// Calculate PNL
+// ===================================================
+
+const change =
+    ((currentPrice - entry) / entry) * 100;
+
+
+// ===================================================
+// Final PNL safety check
+// ===================================================
+
+if (!Number.isFinite(change)) {
+
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            entry,
+            currentPrice,
+            change,
+        },
+        "⚠️ monitorUser skipped — invalid PNL calculation"
+    );
+
+    return;
+}
+
+
+if (
+    typeof info.tpStage === "undefined"
+) {
+
+    info.tpStage = 0;
+
+}
+
 
 // ===================================================
 // Refresh AI every 10 seconds
@@ -1964,7 +2056,7 @@ if (shouldRefreshAI) {
 
                 entryPrice: entry,
 
-                currentPrice: price,
+                currentPrice: currentPrice,
 
                 highestPrice:
                     state.highestPrices?.get(
@@ -4029,21 +4121,86 @@ try {
   await redis.sadd(walletKey, mint);
 
   await redis.hset(posKey, {
-    [POSITION_FIELDS.walletAddress]: user.walletAddress,
-    [POSITION_FIELDS.mint]: mint,
-    [POSITION_FIELDS.sourceChannel]: sourceChannel,
 
-    [POSITION_FIELDS.solAmount]: String(solAmount),
-     tokenAmount: String(tokenAmount),
-    [POSITION_FIELDS.entryPrice]: String(entryPrice ?? 0),
-    [POSITION_FIELDS.buyTxid]: String(buyTxid),
+  // ===================================================
+  // POSITION IDENTITY
+  // ===================================================
 
-    [POSITION_FIELDS.tpStage]: "0",
-    [POSITION_FIELDS.highestPrice]: String(entryPrice ?? 0),
-    status: "open",
+  [POSITION_FIELDS.walletAddress]:
+    user.walletAddress,
 
-    [POSITION_FIELDS.openedAt]: String(Date.now()),
-  });
+  [POSITION_FIELDS.mint]:
+    mint,
+
+  [POSITION_FIELDS.sourceChannel]:
+    sourceChannel,
+
+
+  // ===================================================
+  // POSITION AMOUNTS
+  // ===================================================
+
+  [POSITION_FIELDS.solAmount]:
+    String(solAmount),
+
+  tokenAmount:
+    String(tokenAmount),
+
+
+  // ===================================================
+  // ENTRY
+  // ===================================================
+
+  [POSITION_FIELDS.entryPrice]:
+    String(entryPrice ?? 0),
+
+  [POSITION_FIELDS.buyTxid]:
+    String(buyTxid),
+
+
+  // ===================================================
+  // POSITION MANAGEMENT
+  // ===================================================
+
+  [POSITION_FIELDS.tpStage]:
+    "0",
+
+  [POSITION_FIELDS.highestPrice]:
+    String(entryPrice ?? 0),
+
+  status:
+    "open",
+
+  [POSITION_FIELDS.openedAt]:
+    String(Date.now()),
+
+
+  // ===================================================
+  // 🧠 RESET AI MEMORY FOR NEW POSITION
+  //
+  // IMPORTANT:
+  // This is a BRAND-NEW position.
+  //
+  // Do not inherit the previous position's
+  // AI timeline.
+  // ===================================================
+
+  aiMemory:
+    JSON.stringify({
+
+      timeline: [],
+
+      lastSnapshot: null,
+
+      lastUpdated: null,
+
+      version: 1,
+
+    }),
+
+});
+
+
 
   // ✅ verify the write landed (super important for debugging)
   const status = await redis.hget(posKey, "status");
