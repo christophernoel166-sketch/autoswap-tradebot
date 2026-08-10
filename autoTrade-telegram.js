@@ -103,9 +103,20 @@ import {
     generateTradeDecision,
 } from "./src/ai/orchestration/TradeDecisionCoordinator.js";
 
+import {
+    runAIExitEngine,
+} from "./src/ai/core/AIExitEngine.js";
+
+import {
+    buildTradeManagementPlan,
+} from "./src/ai/orchestration/TradeManagementPlanner.js";
+
 import { saveAIStateToRedis } from "./src/services/saveAIStateToRedis.js";
 import { loadAIStateFromRedis } from "./src/services/loadAIStateFromRedis.js";
 import { analyzeAITimeline } from "./src/services/AITimelineAnalyzer.js";
+import {
+    runRecommendationEngine,
+} from "./src/ai/services/RecommendationEngine.js";
 
 let recoverySchedulerStarted = false;
 
@@ -1934,283 +1945,431 @@ const previousAI =
 
 if (shouldRefreshAI) {
 
-  try {
+    try {
 
-    // ==========================================
-    // Create fresh AI context
-    // ==========================================
+        // ==========================================
+        // Create a FRESH AI context
+        // ==========================================
 
-    const aiContext =
-      createPipelineContext({
+        const aiContext =
+            createPipelineContext({
 
-        walletAddress,
+                walletAddress,
 
-        wallet: info.wallet,
+                wallet: info.wallet,
 
-        user: info.user,
+                user: info.user,
 
-        mint,
+                mint,
 
-        entryPrice: entry,
+                entryPrice: entry,
 
-        currentPrice: price,
+                currentPrice: price,
 
-        highestPrice:
-          state.highestPrices?.get(
-            walletAddress
-          ),
+                highestPrice:
+                    state.highestPrices?.get(
+                        walletAddress
+                    ),
 
-        changePercent: change,
+                changePercent: change,
 
-        solAmount:
-          info.solAmount,
+                solAmount:
+                    info.solAmount,
 
-        tokenAmount:
-          info.tokenAmount,
+                tokenAmount:
+                    info.tokenAmount,
 
-        buyTxid:
-          info.buyTxid,
+                buyTxid:
+                    info.buyTxid,
 
-        sourceChannel:
-          info.sourceChannel,
+                sourceChannel:
+                    info.sourceChannel,
 
-        slippageBps:
-          info.slippageBps,
+                slippageBps:
+                    info.slippageBps,
 
-        profile,
+                profile,
 
-        state,
+                state,
 
-        info,
+                info,
 
-        metadata: {
+                metadata: {
 
-          source:
-            "LIVE_MONITOR",
+                    source:
+                        "LIVE_MONITOR",
 
-          monitoredAt:
-            new Date(),
+                    monitoredAt:
+                        new Date(),
 
-        },
+                },
 
-      });
+            });
 
 
-    // ==========================================
-    // RESTORE PREVIOUS AI MEMORY
-    // ==========================================
+        // ==========================================
+        // RESTORE AI MEMORY
+        // ==========================================
 
-    if (previousAI?.aiMemory) {
+        if (previousAI?.aiMemory) {
 
-      aiContext.aiMemory = {
+            aiContext.aiMemory = {
 
-        ...(aiContext.aiMemory || {}),
+                ...(aiContext.aiMemory || {}),
 
-        ...previousAI.aiMemory,
+                ...previousAI.aiMemory,
 
-        timeline:
-          Array.isArray(
-            previousAI.aiMemory.timeline
-          )
-            ? [
-                ...previousAI.aiMemory.timeline,
-              ]
-            : [],
+                timeline:
+                    Array.isArray(
+                        previousAI.aiMemory.timeline
+                    )
+                        ? [
+                            ...previousAI.aiMemory.timeline,
+                        ]
+                        : [],
 
-      };
+            };
 
-    }
-
-
-    // ==========================================
-    // RESTORE PREVIOUS AI STATE
-    // ==========================================
-
-    if (previousAI) {
-
-      // ------------------------------------------
-      // Previous pipeline
-      // ------------------------------------------
-
-      if (previousAI.pipeline) {
-
-        aiContext.pipeline =
-          previousAI.pipeline;
-
-      }
-
-      // ------------------------------------------
-      // Previous position health
-      // ------------------------------------------
-
-      if (previousAI.positionHealth) {
-
-        aiContext.positionHealth =
-          previousAI.positionHealth;
-
-      }
-
-      // ------------------------------------------
-      // Previous protection strategy
-      // ------------------------------------------
-
-      if (previousAI.protectionStrategy) {
-
-        aiContext.protectionStrategy =
-          previousAI.protectionStrategy;
-
-      }
-
-      // ------------------------------------------
-      // Previous trade decision
-      // ------------------------------------------
-
-      if (previousAI.tradeDecision) {
-
-        aiContext.tradeDecision =
-          previousAI.tradeDecision;
-
-      }
-
-      // ------------------------------------------
-      // Previous trade plan
-      // ------------------------------------------
-
-      if (previousAI.tradePlan) {
-
-        aiContext.tradePlan =
-          previousAI.tradePlan;
-
-      }
-
-    }
-
-
-    // ==========================================
-    // AI POSITION INTELLIGENCE
-    // ==========================================
-
-    evaluatePositionHealth(
-      aiContext
-    );
-
-
-    // ==========================================
-    // AI PROTECTION STRATEGY
-    // ==========================================
-
-    runProtectionStrategyEngine(
-      aiContext
-    );
-
-
-    // ==========================================
-    // AI TRADE DECISION
-    // ==========================================
-    //
-    // Generates the AI recommendation.
-    //
-    // IMPORTANT:
-    // This does NOT execute a trade.
-    //
-    // Actual execution remains behind
-    // processAIExitPipeline() and
-    // executeTradePlan().
-    // ==========================================
-
-    generateTradeDecision(
-      aiContext
-    );
-
-
-    // ==========================================
-    // SAVE CURRENT AI STATE + NEW SNAPSHOT
-    // ==========================================
-
-    await saveAIStateToRedis(
-      aiContext
-    );
-
-
-    // ==========================================
-    // ANALYZE UPDATED AI TIMELINE
-    // ==========================================
-
-    const timelineAnalysis =
-      analyzeAITimeline(
-        aiContext.aiMemory,
-        {
-          windowSize: 10,
         }
-      );
 
 
-    // ==========================================
-    // TIMELINE DEBUG
-    // ==========================================
+        // ==========================================
+        // RESTORE PREVIOUS AI OUTPUTS
+        //
+        // IMPORTANT:
+        // Do NOT restore the entire pipeline object.
+        // The current cycle must have its own
+        // pipeline lifecycle.
+        // ==========================================
 
-    LOG.info(
-      {
+        if (previousAI) {
+
+            if (previousAI.positionHealth) {
+
+                aiContext.positionHealth =
+                    previousAI.positionHealth;
+
+            }
+
+            if (previousAI.protectionStrategy) {
+
+                aiContext.protectionStrategy =
+                    previousAI.protectionStrategy;
+
+            }
+
+            if (previousAI.exitDecision) {
+
+                aiContext.exitDecision =
+                    previousAI.exitDecision;
+
+            }
+
+            if (previousAI.tradeDecision) {
+
+                aiContext.tradeDecision =
+                    previousAI.tradeDecision;
+
+            }
+
+            if (previousAI.tradePlan) {
+
+                aiContext.tradePlan =
+                    previousAI.tradePlan;
+
+            }
+
+        }
+
+
+        // ==========================================
+        // RESET CURRENT LIVE PIPELINE STATE
+        // ==========================================
+
+        aiContext.pipeline = {
+
+            ...(aiContext.pipeline || {}),
+
+            name: "EXIT_PIPELINE",
+
+            version: "2.0.0",
+
+            stage: "LIVE_MONITOR",
+
+            status: "RUNNING",
+
+            currentEngine: null,
+
+            progress: 0,
+
+            startedAt:
+                new Date(),
+
+            completedAt:
+                null,
+
+        };
+
+
+      // ==========================================
+// AI POSITION INTELLIGENCE
+// ==========================================
+
+aiContext.pipeline.stage =
+    "POSITION_HEALTH";
+
+evaluatePositionHealth(
+    aiContext
+);
+
+
+// ==========================================
+// AI PROTECTION STRATEGY
+// ==========================================
+
+aiContext.pipeline.stage =
+    "PROTECTION_STRATEGY";
+
+runProtectionStrategyEngine(
+    aiContext
+);
+
+
+// ==========================================
+// AI RECOMMENDATION
+//
+// Generates the current AI recommendation
+// and stores it in:
+//
+//     aiContext.recommendation
+//
+// This must happen BEFORE
+// generateTradeDecision().
+// ==========================================
+
+aiContext.pipeline.stage =
+    "RECOMMENDATION";
+
+runRecommendationEngine(
+    aiContext
+);
+
+
+// ==========================================
+// LIVE AI RECOMMENDATION DEBUG
+// ==========================================
+
+LOG.info(
+    {
         walletAddress,
 
         mint,
-
-        timelineAvailable:
-          timelineAnalysis.available,
-
-        sampleCount:
-          timelineAnalysis.sampleCount,
-
-        evolution:
-          timelineAnalysis.evolution,
-
-        confidence:
-          timelineAnalysis.confidence,
-
-        health:
-          timelineAnalysis.health,
-
-        trend:
-          timelineAnalysis.trend,
-
-        protection:
-          timelineAnalysis.protection,
 
         recommendation:
-          timelineAnalysis.recommendation,
+            aiContext.recommendation
+                ?.recommendation ??
+            aiContext.recommendation
+                ?.action ??
+            null,
 
-        action:
-          timelineAnalysis.action,
+        recommendationConfidence:
+            aiContext.recommendation
+                ?.confidence ??
+            null,
 
-      },
+        recommendationSource:
+            aiContext.recommendation
+                ? "RecommendationEngine"
+                : "NONE",
 
-      "🧠 COMPLETE AI TIMELINE INTELLIGENCE"
+    },
 
-    );
+    "🧠 LIVE AI RECOMMENDATION"
+);
 
 
-    // ==========================================
-    // AI REFRESH SUCCESSFUL
-    // ==========================================
+// ==========================================
+// AI EXIT INTELLIGENCE
+//
+// Evaluates the EXISTING position.
+//
+// This remains independent from the
+// market recommendation.
+// ==========================================
 
-    info._lastAIUpdateAt =
-      Date.now();
+aiContext.pipeline.stage =
+    "EXIT_DECISION";
 
-  }
+runAIExitEngine(
+    aiContext
+);
 
-  catch (err) {
 
-    LOG.warn(
-      {
-        err,
-        walletAddress,
-        mint,
-      },
+// ==========================================
+// AI TRADE DECISION
+//
+// Combines:
+//
+// - Recommendation
+// - Position Health
+// - Protection Strategy
+// - Exit Decision
+//
+// The exit decision has higher priority
+// for an already-open position.
+// ==========================================
 
-      "Live AI monitoring failed"
-    );
+aiContext.pipeline.stage =
+    "TRADE_DECISION";
 
-  }
+generateTradeDecision(
+    aiContext
+);
+
+
+// ==========================================
+// AI TRADE MANAGEMENT PLAN
+//
+// Converts the coordinated decision into
+// the actual management action:
+//
+// HOLD
+// PARTIAL_EXIT
+// SCALE_OUT
+// FULL_EXIT
+// ==========================================
+
+aiContext.pipeline.stage =
+    "TRADE_PLANNING";
+
+buildTradeManagementPlan(
+    aiContext
+);
+
+        // ==========================================
+        // COMPLETE CURRENT AI CYCLE
+        // ==========================================
+
+        aiContext.pipeline.stage =
+            "COMPLETED";
+
+        aiContext.pipeline.status =
+            "COMPLETED";
+
+        aiContext.pipeline.completedAt =
+            new Date();
+
+
+        // ==========================================
+        // SAVE CURRENT AI STATE
+        // ==========================================
+
+        await saveAIStateToRedis(
+            aiContext
+        );
+
+
+        // ==========================================
+        // ANALYZE UPDATED AI TIMELINE
+        // ==========================================
+
+        const timelineAnalysis =
+            analyzeAITimeline(
+                aiContext.aiMemory,
+                {
+                    windowSize: 10,
+                }
+            );
+
+
+        // ==========================================
+        // FINAL AI CONSISTENCY LOG
+        // ==========================================
+
+        LOG.info(
+            {
+
+                walletAddress,
+
+                mint,
+
+                pnl:
+                    change,
+
+                health:
+                    aiContext.positionHealth
+                        ?.overallHealth,
+
+                trend:
+                    aiContext.positionHealth
+                        ?.trend,
+
+                protection:
+                    aiContext.protectionStrategy
+                        ?.protectionLevel,
+
+                exitDecision:
+                    aiContext.exitDecision
+                        ?.decision ??
+                    aiContext.exitDecision
+                        ?.action ??
+                    null,
+
+                recommendation:
+                    aiContext.tradeDecision
+                        ?.recommendation ??
+                    null,
+
+                action:
+                    aiContext.tradePlan
+                        ?.action ??
+                    null,
+
+                confidence:
+                    aiContext.tradeDecision
+                        ?.confidence ??
+                    aiContext.confidence
+                        ?.overall ??
+                    null,
+
+                timelineAvailable:
+                    timelineAnalysis.available,
+
+                sampleCount:
+                    timelineAnalysis.sampleCount,
+
+                evolution:
+                    timelineAnalysis.evolution,
+
+            },
+
+            "🧠 COMPLETE LIVE AI DECISION"
+
+        );
+
+
+        // ==========================================
+        // AI REFRESH SUCCESSFUL
+        // ==========================================
+
+        info._lastAIUpdateAt =
+            Date.now();
+
+    }
+
+    catch (err) {
+
+        LOG.warn(
+            {
+                err,
+                walletAddress,
+                mint,
+            },
+
+            "Live AI monitoring failed"
+        );
+
+    }
 
 }
 

@@ -25,9 +25,7 @@
  */
 
 import {
-
     addDebug,
-
 } from "../core/AIContextUtils.js";
 
 // ==========================================================
@@ -55,25 +53,29 @@ const CONSENSUS = Object.freeze({
 const EXECUTION = Object.freeze({
 
     CONTINUE_POSITION:
-
         "CONTINUE_POSITION",
 
     SCALE_OUT_POSITION:
-
         "SCALE_OUT_POSITION",
 
     PARTIAL_EXIT_POSITION:
-
         "PARTIAL_EXIT_POSITION",
 
     FULL_EXIT_POSITION:
-
         "FULL_EXIT_POSITION",
 
 });
 
 // ==========================================================
 // Decision Hierarchy
+// ==========================================================
+//
+// Exit decisions have the highest priority.
+// Protection decisions come next.
+// Position health comes next.
+// Recommendation is informational and does NOT directly
+// become a position action.
+//
 // ==========================================================
 
 const PRIORITY = Object.freeze({
@@ -89,38 +91,273 @@ const PRIORITY = Object.freeze({
 });
 
 // ==========================================================
-// Helpers
+// Recommendation Types
 // ==========================================================
 
-function getRecommendation(
-    context
-) {
+const RECOMMENDATIONS = Object.freeze({
 
-    return context.recommendation ?? {};
+    STRONG_BUY:
+        "STRONG_BUY",
+
+    BUY:
+        "BUY",
+
+    WATCH:
+        "WATCH",
+
+    AVOID:
+        "AVOID",
+
+    REJECT:
+        "REJECT",
+
+});
+
+// ==========================================================
+// Get Normalized Recommendation
+// ==========================================================
+
+// FULL_EXIT / PARTIAL_EXIT decisions continue to come
+// from the higher-priority position-management engines.
+// ==========================================================
+
+function getRecommendation(context) {
+
+    const recommendation =
+        context?.recommendation ??
+        context?.tradeDecision?.recommendation ??
+        null;
+
+
+    // ======================================================
+    // No recommendation available
+    // ======================================================
+
+    if (!recommendation) {
+
+        return {
+
+            recommendation: null,
+
+            confidence: 0,
+
+            confidenceGrade: null,
+
+            reasons: [],
+
+        };
+
+    }
+
+
+    // ======================================================
+    // String compatibility
+    //
+    // Supports:
+    //
+    // context.recommendation = "WATCH"
+    // ======================================================
+
+    if (
+        typeof recommendation === "string"
+    ) {
+
+        return {
+
+            recommendation,
+
+            confidence: 0,
+
+            confidenceGrade: null,
+
+            reasons: [],
+
+        };
+
+    }
+
+
+    // ======================================================
+    // Normalize recommendation value
+    //
+    // Preferred:
+    //
+    // recommendation.recommendation
+    //
+    // Compatibility:
+    //
+    // recommendation.action
+    // ======================================================
+
+    const recommendationValue =
+        recommendation.recommendation ??
+        recommendation.action ??
+        null;
+
+
+    // ======================================================
+    // Normalize confidence
+    // ======================================================
+
+    const normalizedConfidence =
+        Number(
+            recommendation.confidence ??
+            0
+        );
+
+
+    // ======================================================
+    // Normalize confidence grade
+    // ======================================================
+
+    const normalizedConfidenceGrade =
+        recommendation.confidenceGrade ??
+        null;
+
+
+    // ======================================================
+    // Normalize reasons
+    //
+    // Different recommendation engines may use
+    // different names for explanatory information.
+    // ======================================================
+
+    let normalizedReasons = [];
+
+    if (
+        Array.isArray(
+            recommendation.reasons
+        )
+    ) {
+
+        normalizedReasons =
+            recommendation.reasons;
+
+    }
+    else if (
+        Array.isArray(
+            recommendation.explanation
+        )
+    ) {
+
+        normalizedReasons =
+            recommendation.explanation;
+
+    }
+    else if (
+        Array.isArray(
+            recommendation.reasoning
+        )
+    ) {
+
+        normalizedReasons =
+            recommendation.reasoning;
+
+    }
+
+
+    // ======================================================
+    // Return normalized recommendation
+    // ======================================================
+
+    return {
+
+        ...recommendation,
+
+        recommendation:
+            recommendationValue,
+
+        confidence:
+            normalizedConfidence,
+
+        confidenceGrade:
+            normalizedConfidenceGrade,
+
+        reasons:
+            normalizedReasons,
+
+    };
 
 }
+
+// ==========================================================
+// Recommendation Classification
+// ==========================================================
+
+function isBullishRecommendation(
+    recommendation
+) {
+
+    return (
+
+        recommendation ===
+            RECOMMENDATIONS.STRONG_BUY ||
+
+        recommendation ===
+            RECOMMENDATIONS.BUY
+
+    );
+
+}
+
+function isNegativeRecommendation(
+    recommendation
+) {
+
+    return (
+
+        recommendation ===
+            RECOMMENDATIONS.AVOID ||
+
+        recommendation ===
+            RECOMMENDATIONS.REJECT
+
+    );
+
+}
+
+// ==========================================================
+// Protection
+// ==========================================================
 
 function getProtection(
     context
 ) {
 
-    return context.protectionStrategy ?? {};
+    return (
+        context.protectionStrategy ??
+        {}
+    );
 
 }
+
+// ==========================================================
+// Position
+// ==========================================================
 
 function getPosition(
     context
 ) {
 
-    return context.positionHealth ?? {};
+    return (
+        context.positionHealth ??
+        {}
+    );
 
 }
+
+// ==========================================================
+// Exit
+// ==========================================================
 
 function getExit(
     context
 ) {
 
-    return context.exitDecision ?? {};
+    return (
+        context.exitDecision ??
+        {}
+    );
 
 }
 
@@ -132,209 +369,458 @@ function collectDecisions(
     context
 ) {
 
-    return {
+return {
 
-        recommendation:
+    recommendation:
 
-            getRecommendation(
-                context
-            ),
+        getRecommendation(
+            context
+        ),
 
-        protection:
+    protection:
 
-            getProtection(
-                context
-            ),
+        getProtection(
+            context
+        ),
 
-        position:
+    position:
 
-            getPosition(
-                context
-            ),
+        getPosition(
+            context
+        ),
 
-        exit:
+    exit:
 
-            getExit(
-                context
-            ),
+        getExit(
+            context
+        ),
 
-    };
+};
 
 }
 
 // ==========================================================
 // Conflict Detection
 // ==========================================================
+//
+// We do NOT compare WATCH against CRITICAL as if they
+// were the same type of value.
+//
+// Instead we detect meaningful disagreement:
+//
+// • Strong bullish recommendation + exit decision
+// • Negative recommendation + continue position
+// • Exit decision + weak protection
+//
+// ==========================================================
 
 function detectConflicts(
     decisions
 ) {
 
-    const opinions = [
+    const recommendation =
+        decisions
+            .recommendation
+            ?.recommendation;
 
-        decisions.recommendation.action,
+    const exitDecision =
+        decisions
+            .exit
+            ?.decision;
 
-        decisions.protection.protectionIntent,
+    const protectionIntent =
+        decisions
+            .protection
+            ?.protectionIntent;
 
-        decisions.position.overallHealth,
+    const positionHealth =
+        decisions
+            .position
+            ?.overallHealth;
 
-        decisions.exit.decision,
+    // ------------------------------------------------------
+    // Strong bullish recommendation vs exit
+    // ------------------------------------------------------
 
-    ].filter(Boolean);
+    if (
 
-    return new Set(
+        isBullishRecommendation(
+            recommendation
+        ) &&
 
-        opinions
+        exitDecision &&
 
-    ).size > 1;
+        exitDecision !== "CONTINUE"
+
+    ) {
+
+        return true;
+
+    }
+
+    // ------------------------------------------------------
+    // Negative recommendation vs continuation
+    // ------------------------------------------------------
+
+    if (
+
+        isNegativeRecommendation(
+            recommendation
+        ) &&
+
+        (
+            exitDecision ===
+                "CONTINUE" ||
+
+            exitDecision ===
+                "HOLD"
+        )
+
+    ) {
+
+        return true;
+
+    }
+
+    // ------------------------------------------------------
+    // Critical health but no protective response
+    // ------------------------------------------------------
+
+    if (
+
+        positionHealth ===
+            "CRITICAL" &&
+
+        !exitDecision &&
+
+        !protectionIntent
+
+    ) {
+
+        return true;
+
+    }
+
+    return false;
 
 }
 
 // ==========================================================
 // Consensus
 // ==========================================================
+//
+// Consensus is based on the number of meaningful signals,
+// not on whether unrelated strings are identical.
+//
+// ==========================================================
 
 function calculateConsensus(
     decisions
 ) {
 
-    const opinions = [
+    const signals = [];
 
-        decisions.recommendation.action,
+    const recommendation =
+        decisions
+            .recommendation
+            ?.recommendation;
 
-        decisions.protection.protectionIntent,
+    const protection =
+        decisions
+            .protection
+            ?.protectionIntent;
 
-        decisions.position.overallHealth,
+    const health =
+        decisions
+            .position
+            ?.overallHealth;
 
-        decisions.exit.decision,
+    const exit =
+        decisions
+            .exit
+            ?.decision;
 
-    ].filter(Boolean);
+    if (recommendation) {
 
-    const unique =
-
-        new Set(
-
-            opinions
-
-        ).size;
-
-    switch (unique) {
-
-        case 1:
-
-            return CONSENSUS.VERY_HIGH;
-
-        case 2:
-
-            return CONSENSUS.HIGH;
-
-        case 3:
-
-            return CONSENSUS.MODERATE;
-
-        case 4:
-
-            return CONSENSUS.LOW;
-
-        default:
-
-            return CONSENSUS.VERY_LOW;
+        signals.push({
+            type: "recommendation",
+            value: recommendation,
+        });
 
     }
+
+    if (protection) {
+
+        signals.push({
+            type: "protection",
+            value: protection,
+        });
+
+    }
+
+    if (health) {
+
+        signals.push({
+            type: "health",
+            value: health,
+        });
+
+    }
+
+    if (exit) {
+
+        signals.push({
+            type: "exit",
+            value: exit,
+        });
+
+    }
+
+    if (signals.length === 0) {
+
+        return CONSENSUS.VERY_LOW;
+
+    }
+
+    // ------------------------------------------------------
+    // Strong exit agreement
+    // ------------------------------------------------------
+
+    const hasExit =
+        exit === "FULL_EXIT" ||
+        exit === "PARTIAL_EXIT";
+
+    const hasCriticalHealth =
+        health === "CRITICAL";
+
+    const hasExitProtection =
+        protection ===
+            "PREPARE_EXIT" ||
+
+        protection ===
+            "LOCK_PROFIT" ||
+
+        protection ===
+            "FULL_EXIT";
+
+    if (
+
+        hasExit &&
+
+        (
+            hasCriticalHealth ||
+            hasExitProtection
+        )
+
+    ) {
+
+        return CONSENSUS.VERY_HIGH;
+
+    }
+
+    // ------------------------------------------------------
+    // Bullish agreement
+    // ------------------------------------------------------
+
+    const bullish =
+        isBullishRecommendation(
+            recommendation
+        );
+
+    const healthy =
+        health === "HEALTHY" ||
+        health === "STRONG" ||
+        health === "STABLE";
+
+    if (
+        bullish &&
+        healthy
+    ) {
+
+        return CONSENSUS.HIGH;
+
+    }
+
+    // ------------------------------------------------------
+    // Single meaningful signal
+    // ------------------------------------------------------
+
+    if (
+        signals.length === 1
+    ) {
+
+        return CONSENSUS.LOW;
+
+    }
+
+    // ------------------------------------------------------
+    // Multiple signals without strong alignment
+    // ------------------------------------------------------
+
+    if (
+        signals.length === 2
+    ) {
+
+        return CONSENSUS.MODERATE;
+
+    }
+
+    return CONSENSUS.HIGH;
 
 }
 
 // ==========================================================
 // Highest Priority Decision
 // ==========================================================
+//
+// IMPORTANT:
+//
+// Recommendation is NOT converted into an execution action.
+//
+// Therefore:
+//
+// WATCH
+//
+// never becomes:
+//
+// action: "WATCH"
+//
+// ==========================================================
 
 function getHighestPriorityDecision(
     decisions
 ) {
 
+    // ======================================================
+    // 1. EXIT
+    // ======================================================
+
     if (
-
-        decisions.exit.decision
-
+        decisions.exit?.decision
     ) {
 
         return {
 
             source:
-
                 "AIExitEngine",
 
             action:
-
                 decisions.exit.decision,
 
             confidence:
-
-                decisions.exit.confidence ?? 0,
+                Number(
+                    decisions.exit.confidence ??
+                    0
+                ),
 
             priority:
-
                 PRIORITY.EXIT,
 
         };
 
     }
 
+    // ======================================================
+    // 2. PROTECTION
+    // ======================================================
+
     if (
+        decisions.protection
+            ?.protectionIntent
+    ) {
 
-        decisions.protection.protectionIntent
+        const intent =
+            decisions.protection
+                .protectionIntent;
 
+        // --------------------------------------------------
+        // Protection intents that represent actual
+        // position-management actions.
+        // --------------------------------------------------
+
+        const protectionActionMap = {
+
+            FULL_EXIT:
+                "FULL_EXIT",
+
+            PARTIAL_EXIT:
+                "PARTIAL_EXIT",
+
+            SCALE_OUT:
+                "SCALE_OUT",
+
+            CONTINUE:
+                "CONTINUE",
+
+            HOLD:
+                "HOLD",
+
+        };
+
+        const action =
+            protectionActionMap[
+                intent
+            ];
+
+        if (action) {
+
+            return {
+
+                source:
+                    "ProtectionStrategyEngine",
+
+                action,
+
+                confidence:
+                    Number(
+                        decisions
+                            .protection
+                            .confidence ??
+                        0
+                    ),
+
+                priority:
+                    PRIORITY.PROTECTION,
+
+            };
+
+        }
+
+    }
+
+    // ======================================================
+    // 3. POSITION HEALTH
+    // ======================================================
+
+    const health =
+        decisions.position
+            ?.overallHealth;
+
+    if (
+        health === "CRITICAL"
     ) {
 
         return {
 
             source:
-
-                "ProtectionStrategyEngine",
+                "PositionIntelligenceEngine",
 
             action:
-
-                decisions.protection.protectionIntent,
+                "HOLD",
 
             confidence:
-
-                decisions.protection.confidence ?? 0,
+                0,
 
             priority:
-
-                PRIORITY.PROTECTION,
+                PRIORITY.POSITION,
 
         };
 
     }
 
-    if (
-
-        decisions.recommendation.action
-
-    ) {
-
-        return {
-
-            source:
-
-                "RecommendationEngine",
-
-            action:
-
-                decisions.recommendation.action,
-
-            confidence:
-
-                decisions.recommendation.confidence ?? 0,
-
-            priority:
-
-                PRIORITY.RECOMMENDATION,
-
-        };
-
-    }
+    // ======================================================
+    // 4. No execution action
+    // ======================================================
 
     return null;
 
@@ -350,36 +836,45 @@ function determineFinalDecision(
 ) {
 
     const highest =
-
         getHighestPriorityDecision(
             decisions
         );
+
+    const recommendation =
+        decisions
+            .recommendation;
+
+    // ======================================================
+    // No position-management decision
+    // ======================================================
 
     if (!highest) {
 
         return {
 
-            action: "HOLD",
+            action:
+                "HOLD",
 
-            confidence: 0,
+            confidence:
+                recommendation
+                    ?.confidence ??
+                0,
 
-            source: "NONE",
+            source:
+                "RecommendationEngine",
 
         };
 
     }
 
-    const recommendation =
-
-        decisions.recommendation;
-
-    //
+    // ======================================================
     // High-confidence emergency exits always win.
-    //
+    // ======================================================
 
     if (
 
-        highest.source === "AIExitEngine" &&
+        highest.source ===
+            "AIExitEngine" &&
 
         highest.confidence >= 90
 
@@ -389,13 +884,14 @@ function determineFinalDecision(
 
     }
 
-    //
+    // ======================================================
     // Medium-confidence exits require support.
-    //
+    // ======================================================
 
     if (
 
-        highest.source === "AIExitEngine" &&
+        highest.source ===
+            "AIExitEngine" &&
 
         highest.confidence >= 70
 
@@ -403,9 +899,20 @@ function determineFinalDecision(
 
         if (
 
-            decisions.protection.protectionIntent === "PREPARE_EXIT" ||
+            decisions
+                .protection
+                ?.protectionIntent ===
+                "PREPARE_EXIT" ||
 
-            decisions.position.overallHealth === "CRITICAL"
+            decisions
+                .protection
+                ?.protectionIntent ===
+                "LOCK_PROFIT" ||
+
+            decisions
+                .position
+                ?.overallHealth ===
+                "CRITICAL"
 
         ) {
 
@@ -415,32 +922,40 @@ function determineFinalDecision(
 
     }
 
-    //
-    // Low-confidence exits can be overridden by
-    // a very strong bullish recommendation.
-    //
+    // ======================================================
+    // Low-confidence exits can be overridden by an
+    // exceptionally strong bullish recommendation.
+    // ======================================================
 
     if (
 
-        highest.source === "AIExitEngine" &&
+        highest.source ===
+            "AIExitEngine" &&
 
         highest.confidence < 70 &&
 
-        recommendation.action === "STRONG_BUY" &&
+        recommendation
+            ?.recommendation ===
+            RECOMMENDATIONS.STRONG_BUY &&
 
-        recommendation.confidence >= 90
+        recommendation
+            ?.confidence >= 90
 
     ) {
 
         return {
 
-            source: "RecommendationEngine",
+            source:
+                "RecommendationEngine",
 
-            action: "CONTINUE",
+            action:
+                "CONTINUE",
 
             confidence:
-
                 recommendation.confidence,
+
+            priority:
+                PRIORITY.RECOMMENDATION,
 
         };
 
@@ -464,23 +979,38 @@ function determineExecutionIntent(
 
         case "HOLD":
 
-            return EXECUTION.CONTINUE_POSITION;
+            return (
+                EXECUTION
+                    .CONTINUE_POSITION
+            );
 
         case "SCALE_OUT":
 
-            return EXECUTION.SCALE_OUT_POSITION;
+            return (
+                EXECUTION
+                    .SCALE_OUT_POSITION
+            );
 
         case "PARTIAL_EXIT":
 
-            return EXECUTION.PARTIAL_EXIT_POSITION;
+            return (
+                EXECUTION
+                    .PARTIAL_EXIT_POSITION
+            );
 
         case "FULL_EXIT":
 
-            return EXECUTION.FULL_EXIT_POSITION;
+            return (
+                EXECUTION
+                    .FULL_EXIT_POSITION
+            );
 
         default:
 
-            return EXECUTION.CONTINUE_POSITION;
+            return (
+                EXECUTION
+                    .CONTINUE_POSITION
+            );
 
     }
 
@@ -500,15 +1030,37 @@ function buildReasons(
 
     reasons.push(
 
-        `Final decision supplied by ${finalDecision.source}.`
+        `Final position action supplied by ${finalDecision.source}.`
 
     );
+
+    // ======================================================
+    // Recommendation reason
+    // ======================================================
+
+    if (
+        decisions
+            .recommendation
+            ?.recommendation
+    ) {
+
+        reasons.push(
+
+            `Market recommendation: ${decisions.recommendation.recommendation}.`
+
+        );
+
+    }
+
+    // ======================================================
+    // Conflict state
+    // ======================================================
 
     if (conflicts) {
 
         reasons.push(
 
-            "Conflicting AI opinions detected."
+            "Conflicting AI signals detected; higher-priority position-management logic was applied."
 
         );
 
@@ -516,21 +1068,53 @@ function buildReasons(
 
         reasons.push(
 
-            "AI engines are aligned."
+            "AI signals do not show a material conflict."
 
         );
 
     }
 
+    // ======================================================
+    // Exit reasons
+    // ======================================================
+
     if (
 
-        decisions.exit.reasons?.length
+        decisions
+            .exit
+            ?.reasons
+            ?.length
 
     ) {
 
         reasons.push(
 
-            ...decisions.exit.reasons
+            ...decisions
+                .exit
+                .reasons
+
+        );
+
+    }
+
+    // ======================================================
+    // Protection reasons
+    // ======================================================
+
+    if (
+
+        decisions
+            .protection
+            ?.reasons
+            ?.length
+
+    ) {
+
+        reasons.push(
+
+            ...decisions
+                .protection
+                .reasons
 
         );
 
@@ -549,14 +1133,19 @@ function determineApproval(
     consensus
 ) {
 
+    // ======================================================
     // Nothing to execute.
+    // ======================================================
+
     if (
 
         !finalDecision ||
 
-        finalDecision.action === "HOLD" ||
+        finalDecision.action ===
+            "HOLD" ||
 
-        finalDecision.action === "CONTINUE"
+        finalDecision.action ===
+            "CONTINUE"
 
     ) {
 
@@ -564,10 +1153,14 @@ function determineApproval(
 
     }
 
+    // ======================================================
     // High-confidence exit is always approved.
+    // ======================================================
+
     if (
 
-        finalDecision.source === "AIExitEngine" &&
+        finalDecision.source ===
+            "AIExitEngine" &&
 
         finalDecision.confidence >= 90
 
@@ -577,12 +1170,17 @@ function determineApproval(
 
     }
 
+    // ======================================================
     // Strong consensus is approved.
+    // ======================================================
+
     if (
 
-        consensus === CONSENSUS.VERY_HIGH ||
+        consensus ===
+            CONSENSUS.VERY_HIGH ||
 
-        consensus === CONSENSUS.HIGH
+        consensus ===
+            CONSENSUS.HIGH
 
     ) {
 
@@ -590,10 +1188,14 @@ function determineApproval(
 
     }
 
+    // ======================================================
     // Weak exits require supporting evidence.
+    // ======================================================
+
     if (
 
-        finalDecision.source === "AIExitEngine" &&
+        finalDecision.source ===
+            "AIExitEngine" &&
 
         finalDecision.confidence < 70
 
@@ -641,12 +1243,35 @@ function buildCoordinatorReport(
     // ======================================================
 
     const recommendation =
-        decisions.recommendation?.action ??
+        decisions
+            .recommendation
+            ?.recommendation ??
         null;
 
     const recommendationConfidence =
-        decisions.recommendation?.confidence ??
-        0;
+        Number(
+            decisions
+                .recommendation
+                ?.confidence ??
+            0
+        );
+
+    const recommendationConfidenceGrade =
+        decisions
+            .recommendation
+            ?.confidenceGrade ??
+        null;
+
+    const recommendationReasons =
+        Array.isArray(
+            decisions
+                .recommendation
+                ?.reasons
+        )
+            ? decisions
+                .recommendation
+                .reasons
+            : [];
 
     // ======================================================
     // Build Final Coordinator Report
@@ -655,7 +1280,7 @@ function buildCoordinatorReport(
     return {
 
         // --------------------------------------------------
-        // Final coordinated decision
+        // Final coordinated POSITION action
         // --------------------------------------------------
 
         approved:
@@ -673,7 +1298,10 @@ function buildCoordinatorReport(
             ),
 
         confidence:
-            finalDecision.confidence,
+            Number(
+                finalDecision.confidence ??
+                0
+            ),
 
         source:
             finalDecision.source,
@@ -685,6 +1313,10 @@ function buildCoordinatorReport(
         recommendation,
 
         recommendationConfidence,
+
+        recommendationConfidenceGrade,
+
+        recommendationReasons,
 
         // --------------------------------------------------
         // Consensus
@@ -723,9 +1355,10 @@ function buildCoordinatorReport(
             "TradeDecisionCoordinator",
 
         version:
-            "1.0.0",
+            "1.1.0",
 
     };
+
 }
 
 // ==========================================================
@@ -747,46 +1380,67 @@ export function generateTradeDecision(
     }
 
     const report =
-
         buildCoordinatorReport(
             context
         );
 
-   context.tradeDecision = report;
+    // ======================================================
+    // Store Final Coordinator Decision
+    // ======================================================
 
-// Make the decision available to the planner.
-context.execution = context.execution || {};
+    context.tradeDecision =
+        report;
 
-context.execution.tradeDecision = report;
+    // ======================================================
+    // Make decision available to planner
+    // ======================================================
 
-addDebug(
-    context,
+    context.execution =
+        context.execution ||
+        {};
 
-    "Trade decision coordinated.",
+    context.execution.tradeDecision =
+        report;
 
-    {
-        action:
-            report.action,
+    // ======================================================
+    // Debug
+    // ======================================================
 
-        recommendation:
-            report.recommendation,
+    addDebug(
 
-        recommendationConfidence:
-            report.recommendationConfidence,
+        context,
 
-        confidence:
-            report.confidence,
+        "Trade decision coordinated.",
 
-        source:
-            report.source,
+        {
 
-        consensus:
-            report.consensus,
+            action:
+                report.action,
 
-        conflicts:
-            report.conflicts,
-    }
-);
+            executionIntent:
+                report.executionIntent,
+
+            recommendation:
+                report.recommendation,
+
+            recommendationConfidence:
+                report.recommendationConfidence,
+
+            confidence:
+                report.confidence,
+
+            source:
+                report.source,
+
+            consensus:
+                report.consensus,
+
+            conflicts:
+                report.conflicts,
+
+        }
+
+    );
 
     return context;
 

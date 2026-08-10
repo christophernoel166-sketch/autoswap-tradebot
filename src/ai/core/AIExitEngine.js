@@ -114,7 +114,47 @@ function getRecommendation(
     context
 ) {
 
-    return context.recommendation ?? {};
+    const recommendation =
+        context.recommendation ??
+        context.tradeDecision?.recommendation ??
+        {};
+
+    if (
+        typeof recommendation === "string"
+    ) {
+
+        return {
+
+            recommendation,
+
+            action:
+                recommendation,
+
+        };
+
+    }
+
+    return {
+
+        ...recommendation,
+
+        recommendation:
+            recommendation.recommendation ??
+            recommendation.action ??
+            null,
+
+        action:
+            recommendation.action ??
+            recommendation.recommendation ??
+            null,
+
+        confidence:
+            Number(
+                recommendation.confidence ??
+                0
+            ),
+
+    };
 
 }
 
