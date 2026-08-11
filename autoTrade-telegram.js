@@ -117,6 +117,10 @@ import { analyzeAITimeline } from "./src/services/AITimelineAnalyzer.js";
 import {
     runRecommendationEngine,
 } from "./src/ai/services/RecommendationEngine.js";
+import {
+  publishLiveAIState,
+} from "./src/services/liveAIStateEvents.js";
+
 
 let recoverySchedulerStarted = false;
 
@@ -2338,18 +2342,30 @@ buildTradeManagementPlan(
     aiContext
 );
 
-        // ==========================================
-        // COMPLETE CURRENT AI CYCLE
-        // ==========================================
+// ==========================================
+// COMPLETE CURRENT AI CYCLE
+// ==========================================
 
-        aiContext.pipeline.stage =
-            "COMPLETED";
+aiContext.pipeline.stage =
+    "COMPLETED";
 
-        aiContext.pipeline.status =
-            "COMPLETED";
+aiContext.pipeline.status =
+    "COMPLETED";
 
-        aiContext.pipeline.completedAt =
-            new Date();
+aiContext.pipeline.completedAt =
+    new Date();
+
+
+// ==========================================
+// 📡 PUBLISH FINAL LIVE AI STATE
+// ==========================================
+
+
+
+publishLiveAIState(
+    walletAddress,
+    aiContext
+);
 
 
         // ==========================================
@@ -2407,10 +2423,14 @@ buildTradeManagementPlan(
                         ?.action ??
                     null,
 
-                recommendation:
-                    aiContext.tradeDecision
-                        ?.recommendation ??
-                    null,
+               recommendation:
+    aiContext.recommendation
+        ?.recommendation ??
+    aiContext.recommendation
+        ?.action ??
+    aiContext.tradeDecision
+        ?.recommendation ??
+    null,
 
                 action:
                     aiContext.tradePlan
@@ -2418,11 +2438,13 @@ buildTradeManagementPlan(
                     null,
 
                 confidence:
-                    aiContext.tradeDecision
-                        ?.confidence ??
-                    aiContext.confidence
-                        ?.overall ??
-                    null,
+    aiContext.recommendation
+        ?.confidence ??
+    aiContext.tradeDecision
+        ?.confidence ??
+    aiContext.confidence
+        ?.overall ??
+    null,
 
                 timelineAvailable:
                     timelineAnalysis.available,
