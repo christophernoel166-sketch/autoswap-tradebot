@@ -36,19 +36,24 @@ export function connectSocket(walletAddress) {
     reconnection: true,
   });
 
-  socket.on("connect", () => {
+socket.on("connect", () => {
 
     console.log(
-      "✅ Socket connected:",
-      socket.id
+        "✅ Socket connected:",
+        socket.id
+    );
+
+    console.log(
+        "🧠 [Socket] JOINING AI WALLET ROOM:",
+        `wallet:${walletAddress}`
     );
 
     socket.emit(
-      "join-wallet",
-      walletAddress
+        "join-wallet",
+        walletAddress
     );
 
-  });
+});
 
   socket.on("disconnect", () => {
 

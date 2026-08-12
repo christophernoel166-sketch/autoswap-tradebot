@@ -89,10 +89,19 @@ export function attachAIListeners(ai) {
         },
 
         // Full-state synchronization
-        {
-            event: "ai_state",
-            handler: updateAIState,
-        },
+       {
+    event: "ai_state",
+
+    handler: (payload) => {
+
+        console.log(
+            "🧠 [AI Socket] RECEIVED ai_state:",
+            payload
+        );
+
+        updateAIState(payload);
+    },
+},
 
         {
             event: "connect",
@@ -150,12 +159,23 @@ export function attachAIListeners(ai) {
 /**
  * Remove all AI socket listeners.
  */
-export function detachAIListeners() {
+export function attachAIListeners(ai) {
+
     const socket = getSocket();
 
+    console.log(
+        "🧠 [AI Socket] attachAIListeners()",
+        {
+            socketExists: !!socket,
+            socketConnected: socket?.connected,
+            socketId: socket?.id,
+        }
+    );
+
     if (!socket) {
-        listenersAttached = false;
-        activeHandlers = [];
+        console.warn(
+            "[AI Socket] Socket has not been initialized."
+        );
         return false;
     }
 
