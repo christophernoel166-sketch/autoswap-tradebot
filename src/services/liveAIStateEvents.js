@@ -90,6 +90,7 @@ const confidence =
     Number(
         aiContext.recommendation?.confidence ??
         tradeDecision.confidence ??
+        protection.confidence ??
         aiContext.confidence?.overall ??
         0
     );
