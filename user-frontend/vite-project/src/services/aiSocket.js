@@ -10,10 +10,22 @@ let activeHandlers = [];
  * This function reuses the singleton socket created by socket.js.
  */
 export function attachAIListeners(ai) {
+
     const socket = getSocket();
 
+    console.log(
+        "🧠 [AI Socket] attachAIListeners()",
+        {
+            socketExists: !!socket,
+            socketConnected: socket?.connected,
+            socketId: socket?.id,
+        }
+    );
+
     if (!socket) {
-        console.warn("[AI Socket] Socket has not been initialized.");
+        console.warn(
+            "[AI Socket] Socket has not been initialized."
+        );
         return false;
     }
 
@@ -159,12 +171,12 @@ export function attachAIListeners(ai) {
 /**
  * Remove all AI socket listeners.
  */
-export function attachAIListeners(ai) {
+export function detachAIListeners() {
 
     const socket = getSocket();
 
     console.log(
-        "🧠 [AI Socket] attachAIListeners()",
+        "🧠 [AI Socket] detachAIListeners()",
         {
             socketExists: !!socket,
             socketConnected: socket?.connected,
@@ -173,9 +185,8 @@ export function attachAIListeners(ai) {
     );
 
     if (!socket) {
-        console.warn(
-            "[AI Socket] Socket has not been initialized."
-        );
+        listenersAttached = false;
+        activeHandlers = [];
         return false;
     }
 
@@ -186,7 +197,9 @@ export function attachAIListeners(ai) {
     activeHandlers = [];
     listenersAttached = false;
 
-    console.log("[AI Socket] AI listeners detached.");
+    console.log(
+        "[AI Socket] AI listeners detached."
+    );
 
     return true;
 }
