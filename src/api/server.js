@@ -188,25 +188,44 @@ io.on("connection", (socket) => {
   // User joins their private room
   // =====================================
 
-  socket.on("join-wallet", (walletAddress) => {
+socket.on("join-wallet", (walletAddress) => {
 
     if (
-      !walletAddress ||
-      typeof walletAddress !== "string"
+        !walletAddress ||
+        typeof walletAddress !== "string"
     ) {
-      return;
+        console.warn(
+            "⚠️ [Socket] Invalid join-wallet request:",
+            walletAddress
+        );
+
+        return;
     }
 
     const room =
-      `wallet:${walletAddress}`;
+        `wallet:${walletAddress}`;
 
     socket.join(room);
 
+    const roomSockets =
+        io.sockets.adapter.rooms.get(room);
+
     console.log(
-      `✅ ${socket.id} joined ${room}`
+        "✅ [Socket] WALLET ROOM JOINED",
+        {
+            socketId: socket.id,
+            walletAddress,
+            room,
+            socketCount:
+                roomSockets?.size ?? 0,
+            sockets:
+                roomSockets
+                    ? [...roomSockets]
+                    : [],
+        }
     );
 
-  });
+});
 
   // =====================================
   // Leave room

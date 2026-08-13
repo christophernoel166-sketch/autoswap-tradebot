@@ -46,10 +46,40 @@ export function emit(event, payload) {
 
 export function emitToRoom(room, event, payload) {
   if (!io) {
+    console.warn(
+      "⚠️ [SocketService] emitToRoom() called but Socket.IO is not initialized.",
+      {
+        room,
+        event,
+      }
+    );
+
     return false;
   }
 
-  io.to(room).emit(event, payload);
+  const roomSockets =
+    io.sockets.adapter.rooms.get(room);
+
+  const socketCount =
+    roomSockets?.size ?? 0;
+
+  console.log(
+    "📡 [SocketService] EMIT TO ROOM",
+    {
+      room,
+      event,
+      socketCount,
+      sockets:
+        roomSockets
+          ? [...roomSockets]
+          : [],
+    }
+  );
+
+  io.to(room).emit(
+    event,
+    payload
+  );
 
   return true;
 }
