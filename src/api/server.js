@@ -37,6 +37,9 @@ import chartWatchRouter from "./routes/chartWatch.js";
 import { setIO } from "../services/socketService.js";
 import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
 import testTelegramQueueRoute from "../../routes/testTelegramQueue.js";
+import {
+    startAIStateSocketBridge,
+} from "../services/aiStateSocketBridge.js";
 
 export function createApiServer() {
   const app = express();
@@ -102,6 +105,7 @@ app.use(express.json());
 // =====================================================
 
 setIO(io);
+startAIStateSocketBridge(io);
 
   // Attach socket.io to requests
   app.use((req, _res, next) => {
