@@ -37,7 +37,6 @@ import chartWatchRouter from "./routes/chartWatch.js";
 
 import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
 import testTelegramQueueRoute from "../../routes/testTelegramQueue.js";
-import {
 import { setIO } from "../services/socketService.js";
 
 import {
