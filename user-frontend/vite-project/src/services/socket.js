@@ -7,64 +7,231 @@ let socket = null;
 // =====================================================
 
 export function connectSocket(walletAddress) {
+    if (!walletAddress) {
+        console.warn(
+            "⚠️ [Socket] Cannot connect without wallet address"
+        );
 
-  if (!walletAddress) {
-    return null;
-  }
-
-  if (socket) {
-
-    if (!socket.connected) {
-      socket.connect();
+        return null;
     }
 
-    socket.emit(
-      "join-wallet",
-      walletAddress
+    const backend =
+        import.meta.env.VITE_API_URL ||
+        "https://autoswap-tradebot-production.up.railway.app";
+
+    // =================================================
+    // EXISTING SOCKET
+    // =================================================
+
+    if (socket) {
+
+        console.log(
+            "🔌 [Socket] Existing socket detected",
+            {
+                socketId: socket.id,
+                connected: socket.connected,
+                walletAddress,
+            }
+        );
+
+        if (!socket.connected) {
+            socket.connect();
+        }
+
+        // Always join wallet room
+        socket.emit(
+            "join-wallet",
+            walletAddress
+        );
+
+        console.log(
+            "📡 [Socket] join-wallet emitted",
+            {
+                walletAddress,
+                socketId: socket.id,
+            }
+        );
+
+        return socket;
+    }
+
+    // =================================================
+    // CREATE SOCKET
+    // =================================================
+
+    console.log(
+        "🔌 [Socket] Creating Socket.IO connection",
+        {
+            backend,
+            walletAddress,
+        }
+    );
+
+    socket = io(backend, {
+        transports: ["websocket", "polling"],
+        reconnection: true,
+        reconnectionAttempts: Infinity,
+        reconnectionDelay: 1000,
+        timeout: 20000,
+    });
+
+    // =================================================
+    // CONNECT
+    // =================================================
+
+    socket.on("connect", () => {
+
+        console.log(
+            "✅ [Socket] CONNECTED",
+            {
+                socketId: socket.id,
+                walletAddress,
+                connected: socket.connected,
+            }
+        );
+
+        socket.emit(
+            "join-wallet",
+            walletAddress
+        );
+
+        console.log(
+            "📡 [Socket] join-wallet emitted AFTER CONNECT",
+            {
+                socketId: socket.id,
+                walletAddress,
+            }
+        );
+    });
+
+    // =================================================
+    // AI STATE
+    // =================================================
+
+    socket.on(
+        "ai_state",
+        (payload) => {
+
+            console.log(
+                "🧠 [Socket] FRONTEND RECEIVED ai_state",
+                payload
+            );
+        }
+    );
+
+    // =================================================
+    // AI ACTIVITY
+    // =================================================
+
+    socket.on(
+        "ai_activity",
+        (payload) => {
+
+            console.log(
+                "🧠 [Socket] FRONTEND RECEIVED ai_activity",
+                payload
+            );
+        }
+    );
+
+    // =================================================
+    // DISCONNECT
+    // =================================================
+
+    socket.on(
+        "disconnect",
+        (reason) => {
+
+            console.warn(
+                "❌ [Socket] DISCONNECTED",
+                {
+                    socketId: socket?.id,
+                    walletAddress,
+                    reason,
+                }
+            );
+        }
+    );
+
+    // =================================================
+    // CONNECT ERROR
+    // =================================================
+
+    socket.on(
+        "connect_error",
+        (error) => {
+
+            console.error(
+                "❌ [Socket] CONNECT ERROR",
+                {
+                    message: error?.message,
+                    description:
+                        error?.description,
+                    context:
+                        error?.context,
+                }
+            );
+        }
+    );
+
+    // =================================================
+    // RECONNECT ATTEMPT
+    // =================================================
+
+    socket.io.on(
+        "reconnect_attempt",
+        (attempt) => {
+
+            console.log(
+                "🔄 [Socket] RECONNECT ATTEMPT",
+                {
+                    attempt,
+                    walletAddress,
+                }
+            );
+        }
+    );
+
+    // =================================================
+    // RECONNECT
+    // =================================================
+
+    socket.io.on(
+        "reconnect",
+        (attempt) => {
+
+            console.log(
+                "✅ [Socket] RECONNECTED",
+                {
+                    attempt,
+                    socketId: socket.id,
+                    walletAddress,
+                }
+            );
+
+            socket.emit(
+                "join-wallet",
+                walletAddress
+            );
+        }
+    );
+
+    // =================================================
+    // RECONNECT ERROR
+    // =================================================
+
+    socket.io.on(
+        "reconnect_error",
+        (error) => {
+
+            console.error(
+                "❌ [Socket] RECONNECT ERROR",
+                error
+            );
+        }
     );
 
     return socket;
-
-  }
-
-  const backend =
-  import.meta.env.VITE_API_URL ||
-  "https://autoswap-tradebot-production.up.railway.app";
-
-  socket = io(backend, {
-    transports: ["websocket"],
-    reconnection: true,
-  });
-
-socket.on("connect", () => {
-
-    console.log(
-        "✅ Socket connected:",
-        socket.id
-    );
-
-    console.log(
-        "🧠 [Socket] JOINING AI WALLET ROOM:",
-        `wallet:${walletAddress}`
-    );
-
-    socket.emit(
-        "join-wallet",
-        walletAddress
-    );
-
-});
-
-  socket.on("disconnect", () => {
-
-    console.log(
-      "❌ Socket disconnected"
-    );
-
-  });
-
-  return socket;
-
 }
 
 // =====================================================
@@ -72,7 +239,7 @@ socket.on("connect", () => {
 // =====================================================
 
 export function getSocket() {
-  return socket;
+    return socket;
 }
 
 // =====================================================
@@ -81,12 +248,18 @@ export function getSocket() {
 
 export function disconnectSocket() {
 
-  if (!socket) {
-    return;
-  }
+    if (!socket) {
+        return;
+    }
 
-  socket.disconnect();
+    console.log(
+        "🔌 [Socket] Manual disconnect",
+        {
+            socketId: socket.id,
+        }
+    );
 
-  socket = null;
+    socket.disconnect();
 
+    socket = null;
 }
