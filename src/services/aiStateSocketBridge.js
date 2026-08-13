@@ -13,6 +13,62 @@ const AI_STATE_CHANNEL =
     "autoswap:ai-state";
 
 // =====================================================
+// LATEST AI STATE REDIS KEY PREFIX
+// =====================================================
+//
+// Each wallet gets its own latest-state key:
+//
+// autoswap:ai-state:latest:<walletAddress>
+//
+// This allows the API service to recover the latest
+// AI state even if the frontend was disconnected when
+// the AI update happened.
+// =====================================================
+
+const AI_LATEST_STATE_PREFIX =
+    "autoswap:ai-state:latest:";
+
+// =====================================================
+// IN-MEMORY CACHE
+// =====================================================
+//
+// Fast access for wallet joins.
+//
+// Redis remains the persistent source for the latest
+// state across API-service restarts.
+// =====================================================
+
+const latestAIStates = new Map();
+
+// =====================================================
+// REDIS CLIENTS
+// =====================================================
+//
+// subscriber:
+//   Used ONLY for Redis SUBSCRIBE.
+//
+// stateRedis:
+//   Used for normal Redis GET/SET operations.
+//
+// A Redis connection that is in subscriber mode should
+// not also be used for normal commands.
+// =====================================================
+
+let subscriber = null;
+let stateRedis = null;
+
+// =====================================================
+// GET REDIS KEY
+// =====================================================
+
+function latestStateKey(walletAddress) {
+
+    return (
+        `${AI_LATEST_STATE_PREFIX}${walletAddress}`
+    );
+}
+
+// =====================================================
 // START AI STATE SOCKET BRIDGE
 // =====================================================
 //
@@ -20,13 +76,37 @@ const AI_STATE_CHANNEL =
 //
 // Flow:
 //
+// Bot Service
+//      ↓
 // Redis Pub/Sub
 //      ↓
-// AI state message
+// AI Socket Bridge
 //      ↓
-// Socket.IO room
+// save latest state
+//      ↓
+// Socket.IO wallet room
 //      ↓
 // Frontend
+//
+// If frontend is disconnected:
+//
+// Bot Service
+//      ↓
+// Redis
+//      ↓
+// AI Socket Bridge
+//      ↓
+// latest state saved
+//
+// Later:
+//
+// Frontend connects
+//      ↓
+// join-wallet
+//      ↓
+// latest state retrieved
+//      ↓
+// frontend receives ai_state
 // =====================================================
 
 export function startAIStateSocketBridge(
@@ -53,13 +133,27 @@ export function startAIStateSocketBridge(
 
     }
 
-    // Dedicated Redis subscriber.
-    //
-    // IMPORTANT:
-    // Do NOT use the normal redis client
-    // for SUBSCRIBE operations.
+    // =================================================
+    // Prevent duplicate initialization
+    // =================================================
 
-    const subscriber =
+    if (
+        subscriber ||
+        stateRedis
+    ) {
+
+        console.warn(
+            "⚠️ AI Socket Bridge already initialized."
+        );
+
+        return subscriber;
+    }
+
+    // =================================================
+    // Redis subscriber
+    // =================================================
+
+    subscriber =
         new Redis(
             REDIS_URL,
             {
@@ -76,12 +170,37 @@ export function startAIStateSocketBridge(
             }
         );
 
+    // =================================================
+    // Redis state client
+    // =================================================
+
+    stateRedis =
+        new Redis(
+            REDIS_URL,
+            {
+                maxRetriesPerRequest:
+                    null,
+
+                enableReadyCheck:
+                    false,
+
+                lazyConnect:
+                    false,
+
+                tls: {},
+            }
+        );
+
+    // =================================================
+    // SUBSCRIBER EVENTS
+    // =================================================
+
     subscriber.on(
         "connect",
         () => {
 
             console.log(
-                "✅ AI Socket Bridge Redis connected"
+                "✅ AI Socket Bridge Redis subscriber connected"
             );
 
         }
@@ -92,7 +211,7 @@ export function startAIStateSocketBridge(
         () => {
 
             console.log(
-                "✅ AI Socket Bridge Redis ready"
+                "✅ AI Socket Bridge Redis subscriber ready"
             );
 
         }
@@ -103,7 +222,7 @@ export function startAIStateSocketBridge(
         (err) => {
 
             console.error(
-                "❌ AI Socket Bridge Redis error:",
+                "❌ AI Socket Bridge Redis subscriber error:",
                 err?.message || err
             );
 
@@ -115,7 +234,7 @@ export function startAIStateSocketBridge(
         () => {
 
             console.warn(
-                "⚠️ AI Socket Bridge Redis closed"
+                "⚠️ AI Socket Bridge Redis subscriber closed"
             );
 
         }
@@ -126,7 +245,45 @@ export function startAIStateSocketBridge(
         () => {
 
             console.warn(
-                "🔄 AI Socket Bridge Redis reconnecting..."
+                "🔄 AI Socket Bridge Redis subscriber reconnecting..."
+            );
+
+        }
+    );
+
+    // =================================================
+    // STATE REDIS EVENTS
+    // =================================================
+
+    stateRedis.on(
+        "connect",
+        () => {
+
+            console.log(
+                "✅ AI Socket Bridge Redis state client connected"
+            );
+
+        }
+    );
+
+    stateRedis.on(
+        "ready",
+        () => {
+
+            console.log(
+                "✅ AI Socket Bridge Redis state client ready"
+            );
+
+        }
+    );
+
+    stateRedis.on(
+        "error",
+        (err) => {
+
+            console.error(
+                "❌ AI Socket Bridge Redis state client error:",
+                err?.message || err
             );
 
         }
@@ -163,7 +320,10 @@ export function startAIStateSocketBridge(
 
     subscriber.on(
         "message",
-        (channel, message) => {
+        async (
+            channel,
+            message
+        ) => {
 
             if (
                 channel !==
@@ -211,9 +371,40 @@ export function startAIStateSocketBridge(
             const room =
                 `wallet:${walletAddress}`;
 
-            // =============================================
-            // Verify room
-            // =============================================
+            // =================================================
+            // SAVE LATEST STATE
+            // =================================================
+
+            if (state) {
+
+                latestAIStates.set(
+                    walletAddress,
+                    state
+                );
+
+                try {
+
+                    await stateRedis.set(
+                        latestStateKey(
+                            walletAddress
+                        ),
+                        JSON.stringify(state)
+                    );
+
+                } catch (err) {
+
+                    console.error(
+                        "❌ Failed to persist latest AI state:",
+                        err?.message || err
+                    );
+
+                }
+
+            }
+
+            // =================================================
+            // VERIFY ROOM
+            // =================================================
 
             const roomSockets =
                 io.sockets.adapter.rooms.get(
@@ -248,9 +439,15 @@ export function startAIStateSocketBridge(
                 }
             );
 
-            // =============================================
-            // Forward individual AI events
-            // =============================================
+            // =================================================
+            // FORWARD INDIVIDUAL EVENTS
+            // =================================================
+            //
+            // Do NOT forward ai_state here because we send
+            // the complete state separately below.
+            //
+            // This prevents duplicate ai_state events.
+            // =================================================
 
             if (
                 events &&
@@ -268,6 +465,14 @@ export function startAIStateSocketBridge(
                     )
                 ) {
 
+                    if (
+                        event ===
+                        "ai_state"
+                    ) {
+
+                        continue;
+                    }
+
                     io.to(room).emit(
                         event,
                         payload
@@ -277,9 +482,9 @@ export function startAIStateSocketBridge(
 
             }
 
-            // =============================================
-            // ALWAYS forward complete state
-            // =============================================
+            // =================================================
+            // FORWARD COMPLETE STATE
+            // =================================================
 
             if (state) {
 
@@ -294,13 +499,17 @@ export function startAIStateSocketBridge(
                 "📡 [AI Socket Bridge] AI STATE FORWARDED",
                 {
                     walletAddress,
+
                     room,
+
                     socketCount,
+
                     recommendation:
                         state
                             ?.analysis
                             ?.recommendation ??
                         null,
+
                     confidence:
                         state
                             ?.analysis
@@ -315,6 +524,143 @@ export function startAIStateSocketBridge(
     return subscriber;
 }
 
+// =====================================================
+// GET LATEST AI STATE
+// =====================================================
+//
+// Used by the API server when a frontend wallet joins.
+//
+// Priority:
+//
+// 1. In-memory cache
+// 2. Redis
+//
+// Returns null if no state exists yet.
+// =====================================================
+
+export async function getLatestAIState(
+    walletAddress
+) {
+
+    if (
+        !walletAddress
+    ) {
+
+        return null;
+    }
+
+    // =================================================
+    // MEMORY FIRST
+    // =================================================
+
+    const cached =
+        latestAIStates.get(
+            walletAddress
+        );
+
+    if (cached) {
+
+        return cached;
+    }
+
+    // =================================================
+    // REDIS FALLBACK
+    // =================================================
+
+    if (!stateRedis) {
+
+        console.warn(
+            "⚠️ AI Socket Bridge state Redis is not initialized."
+        );
+
+        return null;
+    }
+
+    try {
+
+        const stored =
+            await stateRedis.get(
+                latestStateKey(
+                    walletAddress
+                )
+            );
+
+        if (!stored) {
+
+            return null;
+        }
+
+        const parsed =
+            JSON.parse(stored);
+
+        latestAIStates.set(
+            walletAddress,
+            parsed
+        );
+
+        return parsed;
+
+    } catch (err) {
+
+        console.error(
+            "❌ Failed to load latest AI state:",
+            err?.message || err
+        );
+
+        return null;
+    }
+}
+
+// =====================================================
+// CLEAR LATEST AI STATE
+// =====================================================
+//
+// Optional helper for when a position is completely
+// removed and we no longer want the state cached.
+// =====================================================
+
+export async function clearLatestAIState(
+    walletAddress
+) {
+
+    if (
+        !walletAddress
+    ) {
+
+        return false;
+    }
+
+    latestAIStates.delete(
+        walletAddress
+    );
+
+    if (!stateRedis) {
+        return false;
+    }
+
+    try {
+
+        await stateRedis.del(
+            latestStateKey(
+                walletAddress
+            )
+        );
+
+        return true;
+
+    } catch (err) {
+
+        console.error(
+            "❌ Failed to clear latest AI state:",
+            err?.message || err
+        );
+
+        return false;
+    }
+}
+
 export default {
     startAIStateSocketBridge,
+    getLatestAIState,
+    clearLatestAIState,
 };

@@ -34,11 +34,15 @@ import { startDiscoveredTokenRefresher } from "../jobs/refreshDiscoveredTokens.j
 import { startHotNewPairsDiscovery } from "../jobs/discoverHotNewPairs.js";
 import { startBatchedDexscreenerDiscovery } from "../jobs/batchedDexscreenerDiscovery.js";
 import chartWatchRouter from "./routes/chartWatch.js";
-import { setIO } from "../services/socketService.js";
+
 import { startChartWatchWorker } from "../jobs/chartWatchWorker.js";
 import testTelegramQueueRoute from "../../routes/testTelegramQueue.js";
 import {
-    startAIStateSocketBridge,
+import { setIO } from "../services/socketService.js";
+
+import {
+  startAIStateSocketBridge,
+  getLatestAIState,
 } from "../services/aiStateSocketBridge.js";
 
 export function createApiServer() {
@@ -192,7 +196,7 @@ io.on("connection", (socket) => {
   // User joins their private room
   // =====================================
 
-socket.on("join-wallet", (walletAddress) => {
+socket.on("join-wallet", async (walletAddress) => {
 
     if (
         !walletAddress ||
@@ -210,6 +214,64 @@ socket.on("join-wallet", (walletAddress) => {
         `wallet:${walletAddress}`;
 
     socket.join(room);
+
+// =====================================
+// Send latest AI state immediately
+// =====================================
+
+try {
+
+  const latestAIState =
+    await getLatestAIState(
+      walletAddress
+    );
+
+  if (latestAIState) {
+
+    socket.emit(
+      "ai_state",
+      latestAIState
+    );
+
+    console.log(
+      "🧠 [Socket] SENT LATEST AI STATE ON JOIN",
+      {
+        socketId: socket.id,
+        walletAddress,
+        room,
+        recommendation:
+          latestAIState
+            ?.analysis
+            ?.recommendation ??
+          null,
+        confidence:
+          latestAIState
+            ?.analysis
+            ?.confidence ??
+          0,
+      }
+    );
+
+  } else {
+
+    console.log(
+      "🧠 [Socket] NO STORED AI STATE FOR WALLET",
+      {
+        socketId: socket.id,
+        walletAddress,
+      }
+    );
+
+  }
+
+} catch (err) {
+
+  console.error(
+    "❌ [Socket] Failed to send latest AI state:",
+    err?.message || err
+  );
+
+}
 
     const roomSockets =
         io.sockets.adapter.rooms.get(room);
