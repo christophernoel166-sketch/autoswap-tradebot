@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 
 import useAI from "../../hooks/useAI";
@@ -6,7 +6,6 @@ import useAI from "../../hooks/useAI";
 import {
     connectSocket,
     startSocket,
-    disconnectSocket,
 } from "../../services/socket";
 
 import {
@@ -23,15 +22,26 @@ export default function AIBootstrap() {
         publicKey,
     } = useWallet();
 
-    // =================================================
-    // SOCKET + AI INITIALIZATION
-    // =================================================
+    // =====================================================
+    // ALWAYS KEEP THE LATEST AI OBJECT
+    // =====================================================
+
+    const aiRef = useRef(ai);
 
     useEffect(() => {
 
-        // =================================================
-        // WALLET NOT CONNECTED
-        // =================================================
+        aiRef.current = ai;
+
+    }, [ai]);
+
+    // =====================================================
+    // SOCKET LIFECYCLE
+    //
+    // IMPORTANT:
+    // This effect intentionally does NOT depend on `ai`.
+    // =====================================================
+
+    useEffect(() => {
 
         if (
             !connected ||
@@ -47,10 +57,6 @@ export default function AIBootstrap() {
             return;
         }
 
-        // =================================================
-        // WALLET ADDRESS
-        // =================================================
-
         const walletAddress =
             publicKey.toString();
 
@@ -64,11 +70,7 @@ export default function AIBootstrap() {
         // =================================================
         // STEP 1
         //
-        // Create the socket WITHOUT connecting.
-        //
-        // This is critical because we need to attach
-        // AI listeners before the socket can receive
-        // the initial ai_state event.
+        // Create socket WITHOUT connecting.
         // =================================================
 
         const socket =
@@ -82,7 +84,7 @@ export default function AIBootstrap() {
 
         if (!socket) {
 
-            console.warn(
+            console.error(
                 "❌ [AI Bootstrap] Failed to initialize socket."
             );
 
@@ -92,17 +94,17 @@ export default function AIBootstrap() {
         // =================================================
         // STEP 2
         //
-        // Attach AI listeners BEFORE connecting.
+        // Attach listeners BEFORE socket connection.
         // =================================================
 
         const attached =
             attachAIListeners(
-                ai
+                aiRef
             );
 
         if (!attached) {
 
-            console.warn(
+            console.error(
                 "❌ [AI Bootstrap] Failed to attach AI listeners."
             );
 
@@ -116,10 +118,7 @@ export default function AIBootstrap() {
         // =================================================
         // STEP 3
         //
-        // Now connect.
-        //
-        // Socket connect → join-wallet → server sends
-        // latest ai_state → frontend listener receives it.
+        // NOW connect.
         // =================================================
 
         const started =
@@ -127,7 +126,7 @@ export default function AIBootstrap() {
 
         if (!started) {
 
-            console.warn(
+            console.error(
                 "❌ [AI Bootstrap] Failed to start socket."
             );
 
@@ -144,11 +143,9 @@ export default function AIBootstrap() {
         // =================================================
         // CLEANUP
         //
-        // IMPORTANT:
-        // Do NOT disconnect the singleton socket here.
+        // Only remove AI listeners.
         //
-        // React may rerun this effect when `ai` changes.
-        // We only replace the AI listeners.
+        // DO NOT disconnect the singleton socket here.
         // =================================================
 
         return () => {
@@ -163,7 +160,6 @@ export default function AIBootstrap() {
     }, [
         connected,
         publicKey,
-        ai,
     ]);
 
     return null;
