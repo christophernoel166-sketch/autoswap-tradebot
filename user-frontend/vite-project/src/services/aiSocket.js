@@ -4,36 +4,59 @@ import { getSocket } from "./socket";
 
 let listenersAttached = false;
 let activeHandlers = [];
+let activeManagerHandlers = [];
 
-/**
- * Attach AI-related socket listeners to the existing Socket.IO connection.
- * This function reuses the singleton socket created by socket.js.
- */
+// =====================================================
+// ATTACH AI LISTENERS
+// =====================================================
+
 export function attachAIListeners(ai) {
 
-    const socket = getSocket();
+    const socket =
+        getSocket();
 
     console.log(
         "🧠 [AI Socket] attachAIListeners()",
         {
-            socketExists: !!socket,
-            socketConnected: socket?.connected,
-            socketId: socket?.id,
+            socketExists:
+                !!socket,
+
+            socketConnected:
+                socket?.connected,
+
+            socketId:
+                socket?.id,
+
+            listenersAttached,
         }
     );
 
     if (!socket) {
+
         console.warn(
             "[AI Socket] Socket has not been initialized."
         );
+
         return false;
     }
 
+    // =================================================
+    // IMPORTANT
+    //
+    // If listeners already exist, remove them first.
+    //
+    // This prevents handlers from keeping an old
+    // useAI() instance.
+    // =================================================
+
     if (listenersAttached) {
-        return true;
+
+        detachAIListeners();
     }
 
-    listenersAttached = true;
+    // =================================================
+    // AI FUNCTIONS
+    // =================================================
 
     const {
         updateSystem,
@@ -48,157 +71,457 @@ export function attachAIListeners(ai) {
         addActivity,
     } = ai;
 
+    // =================================================
+    // INITIAL DIAGNOSTICS
+    // =================================================
+
     updateDiagnostics({
-        socketConnected: socket.connected,
-        reconnecting: false,
-        lastHeartbeat: socket.connected ? Date.now() : null,
+        socketConnected:
+            socket.connected,
+
+        reconnecting:
+            false,
+
+        lastHeartbeat:
+            socket.connected
+                ? Date.now()
+                : null,
     });
 
+    // =================================================
+    // SOCKET EVENTS
+    // =================================================
+
     const handlers = [
+
+        // ---------------------------------------------
+        // SYSTEM
+        // ---------------------------------------------
+
         {
             event: "ai_system",
-            handler: updateSystem,
+
+            handler:
+                updateSystem,
         },
+
+        // ---------------------------------------------
+        // PORTFOLIO
+        // ---------------------------------------------
 
         {
             event: "ai_portfolio",
-            handler: updatePortfolio,
+
+            handler:
+                updatePortfolio,
         },
+
+        // ---------------------------------------------
+        // MARKET
+        // ---------------------------------------------
 
         {
             event: "ai_market",
-            handler: updateMarket,
+
+            handler:
+                updateMarket,
         },
+
+        // ---------------------------------------------
+        // PIPELINE
+        // ---------------------------------------------
 
         {
             event: "ai_pipeline",
-            handler: updatePipeline,
+
+            handler:
+                updatePipeline,
         },
+
+        // ---------------------------------------------
+        // POSITIONS
+        // ---------------------------------------------
 
         {
             event: "ai_positions",
-            handler: updatePositionMetrics,
+
+            handler:
+                updatePositionMetrics,
         },
+
+        // ---------------------------------------------
+        // ANALYSIS
+        // ---------------------------------------------
 
         {
             event: "ai_analysis",
-            handler: updateAnalysis,
+
+            handler:
+                updateAnalysis,
         },
+
+        // ---------------------------------------------
+        // DIAGNOSTICS
+        // ---------------------------------------------
 
         {
             event: "ai_diagnostics",
-            handler: updateDiagnostics,
+
+            handler:
+                updateDiagnostics,
         },
+
+        // ---------------------------------------------
+        // LEARNING
+        // ---------------------------------------------
 
         {
             event: "ai_learning",
-            handler: updateLearning,
+
+            handler:
+                updateLearning,
         },
+
+        // ---------------------------------------------
+        // ACTIVITY
+        // ---------------------------------------------
 
         {
             event: "ai_activity",
-            handler: addActivity,
+
+            handler:
+                addActivity,
         },
 
-        // Full-state synchronization
-       {
-    event: "ai_state",
+        // ---------------------------------------------
+        // FULL AI STATE
+        // ---------------------------------------------
 
-    handler: (payload) => {
+        {
+            event: "ai_state",
 
-        console.log(
-            "🧠 [AI Socket] RECEIVED ai_state:",
-            payload
-        );
+            handler: (payload) => {
 
-        updateAIState(payload);
-    },
-},
+                console.log(
+                    "🧠 [AI Socket] RECEIVED ai_state",
+                    {
+                        payload,
+                        socketId:
+                            socket.id,
+                        wallet:
+                            payload
+                                ?.walletAddress ??
+                            null,
+                        recommendation:
+                            payload
+                                ?.analysis
+                                ?.recommendation ??
+                            payload
+                                ?.aiRecommendation ??
+                            null,
+                        confidence:
+                            payload
+                                ?.analysis
+                                ?.confidence ??
+                            payload
+                                ?.aiConfidence ??
+                            0,
+                    }
+                );
+
+                updateAIState(
+                    payload
+                );
+            },
+        },
+
+        // ---------------------------------------------
+        // CONNECT
+        // ---------------------------------------------
 
         {
             event: "connect",
+
             handler: () => {
+
+                console.log(
+                    "🧠 [AI Socket] CONNECT EVENT"
+                );
+
                 updateDiagnostics({
-                    socketConnected: true,
-                    reconnecting: false,
-                    lastHeartbeat: Date.now(),
+                    socketConnected:
+                        true,
+
+                    reconnecting:
+                        false,
+
+                    lastHeartbeat:
+                        Date.now(),
                 });
             },
         },
+
+        // ---------------------------------------------
+        // DISCONNECT
+        // ---------------------------------------------
 
         {
             event: "disconnect",
-            handler: () => {
-                updateDiagnostics({
-                    socketConnected: false,
-                    reconnecting: false,
-                });
-            },
-        },
 
-        {
-            event: "reconnect_attempt",
-            handler: () => {
-                updateDiagnostics({
-                    reconnecting: true,
-                });
-            },
-        },
+            handler: (reason) => {
 
-        {
-            event: "reconnect",
-            handler: () => {
+                console.log(
+                    "🧠 [AI Socket] DISCONNECT EVENT",
+                    {
+                        reason,
+                    }
+                );
+
                 updateDiagnostics({
-                    socketConnected: true,
-                    reconnecting: false,
-                    lastHeartbeat: Date.now(),
+                    socketConnected:
+                        false,
+
+                    reconnecting:
+                        false,
                 });
             },
         },
     ];
 
-    handlers.forEach(({ event, handler }) => {
-        socket.on(event, handler);
-    });
+    // =================================================
+    // REGISTER SOCKET HANDLERS
+    // =================================================
 
-    activeHandlers = handlers;
+    handlers.forEach(
+        ({
+            event,
+            handler,
+        }) => {
 
-    console.log("[AI Socket] AI listeners attached.");
+            socket.on(
+                event,
+                handler
+            );
+        }
+    );
+
+    activeHandlers =
+        handlers;
+
+    // =================================================
+    // SOCKET.IO MANAGER EVENTS
+    // =================================================
+
+    const managerHandlers = [
+
+        // ---------------------------------------------
+        // RECONNECT ATTEMPT
+        // ---------------------------------------------
+
+        {
+            event:
+                "reconnect_attempt",
+
+            handler: () => {
+
+                console.log(
+                    "🧠 [AI Socket] RECONNECT ATTEMPT"
+                );
+
+                updateDiagnostics({
+                    reconnecting:
+                        true,
+                });
+            },
+        },
+
+        // ---------------------------------------------
+        // RECONNECT
+        // ---------------------------------------------
+
+        {
+            event:
+                "reconnect",
+
+            handler: () => {
+
+                console.log(
+                    "🧠 [AI Socket] RECONNECTED"
+                );
+
+                updateDiagnostics({
+                    socketConnected:
+                        true,
+
+                    reconnecting:
+                        false,
+
+                    lastHeartbeat:
+                        Date.now(),
+                });
+            },
+        },
+
+        // ---------------------------------------------
+        // RECONNECT ERROR
+        // ---------------------------------------------
+
+        {
+            event:
+                "reconnect_error",
+
+            handler: (error) => {
+
+                console.error(
+                    "❌ [AI Socket] RECONNECT ERROR",
+                    {
+                        message:
+                            error?.message,
+                    }
+                );
+            },
+        },
+
+        // ---------------------------------------------
+        // RECONNECT FAILED
+        // ---------------------------------------------
+
+        {
+            event:
+                "reconnect_failed",
+
+            handler: () => {
+
+                console.error(
+                    "❌ [AI Socket] RECONNECT FAILED"
+                );
+            },
+        },
+    ];
+
+    managerHandlers.forEach(
+        ({
+            event,
+            handler,
+        }) => {
+
+            socket.io.on(
+                event,
+                handler
+            );
+        }
+    );
+
+    activeManagerHandlers =
+        managerHandlers;
+
+    listenersAttached =
+        true;
+
+    console.log(
+        "✅ [AI Socket] AI listeners attached.",
+        {
+            socketId:
+                socket.id,
+
+            socketConnected:
+                socket.connected,
+
+            socketEvents:
+                activeHandlers.length,
+
+            managerEvents:
+                activeManagerHandlers.length,
+        }
+    );
 
     return true;
 }
 
-/**
- * Remove all AI socket listeners.
- */
+// =====================================================
+// DETACH AI LISTENERS
+// =====================================================
+
 export function detachAIListeners() {
 
-    const socket = getSocket();
+    const socket =
+        getSocket();
 
     console.log(
         "🧠 [AI Socket] detachAIListeners()",
         {
-            socketExists: !!socket,
-            socketConnected: socket?.connected,
-            socketId: socket?.id,
+            socketExists:
+                !!socket,
+
+            socketConnected:
+                socket?.connected,
+
+            socketId:
+                socket?.id,
+
+            listenersAttached,
         }
     );
 
     if (!socket) {
-        listenersAttached = false;
-        activeHandlers = [];
+
+        listenersAttached =
+            false;
+
+        activeHandlers =
+            [];
+
+        activeManagerHandlers =
+            [];
+
         return false;
     }
 
-    activeHandlers.forEach(({ event, handler }) => {
-        socket.off(event, handler);
-    });
+    // =================================================
+    // REMOVE SOCKET EVENTS
+    // =================================================
 
-    activeHandlers = [];
-    listenersAttached = false;
+    activeHandlers.forEach(
+        ({
+            event,
+            handler,
+        }) => {
+
+            socket.off(
+                event,
+                handler
+            );
+        }
+    );
+
+    // =================================================
+    // REMOVE MANAGER EVENTS
+    // =================================================
+
+    activeManagerHandlers.forEach(
+        ({
+            event,
+            handler,
+        }) => {
+
+            socket.io.off(
+                event,
+                handler
+            );
+        }
+    );
+
+    activeHandlers =
+        [];
+
+    activeManagerHandlers =
+        [];
+
+    listenersAttached =
+        false;
 
     console.log(
-        "[AI Socket] AI listeners detached."
+        "✅ [AI Socket] AI listeners detached."
     );
 
     return true;

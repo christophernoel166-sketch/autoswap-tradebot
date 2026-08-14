@@ -5,6 +5,7 @@ import useAI from "../../hooks/useAI";
 
 import {
     connectSocket,
+    startSocket,
     disconnectSocket,
 } from "../../services/socket";
 
@@ -22,58 +23,141 @@ export default function AIBootstrap() {
         publicKey,
     } = useWallet();
 
+    // =================================================
+    // SOCKET + AI INITIALIZATION
+    // =================================================
+
     useEffect(() => {
 
-        if (!connected || !publicKey) {
+        // =================================================
+        // WALLET NOT CONNECTED
+        // =================================================
+
+        if (
+            !connected ||
+            !publicKey
+        ) {
+
+            console.log(
+                "🧠 [AI Bootstrap] Wallet not connected."
+            );
 
             detachAIListeners();
 
             return;
         }
 
-        // ==========================================
-        // Ensure Socket.IO exists FIRST
-        // ==========================================
+        // =================================================
+        // WALLET ADDRESS
+        // =================================================
 
         const walletAddress =
             publicKey.toString();
 
+        console.log(
+            "🧠 [AI Bootstrap] Initializing AI socket",
+            {
+                walletAddress,
+            }
+        );
+
+        // =================================================
+        // STEP 1
+        //
+        // Create the socket WITHOUT connecting.
+        //
+        // This is critical because we need to attach
+        // AI listeners before the socket can receive
+        // the initial ai_state event.
+        // =================================================
+
         const socket =
-            connectSocket(walletAddress);
+            connectSocket(
+                walletAddress,
+                {
+                    connectNow:
+                        false,
+                }
+            );
 
         if (!socket) {
 
             console.warn(
-                "[AI Bootstrap] Failed to initialize socket."
+                "❌ [AI Bootstrap] Failed to initialize socket."
             );
 
             return;
         }
 
-        // ==========================================
-        // Attach AI listeners AFTER socket exists
-        // ==========================================
+        // =================================================
+        // STEP 2
+        //
+        // Attach AI listeners BEFORE connecting.
+        // =================================================
 
         const attached =
-            attachAIListeners(ai);
+            attachAIListeners(
+                ai
+            );
 
         if (!attached) {
 
             console.warn(
-                "[AI Bootstrap] Failed to attach AI listeners."
+                "❌ [AI Bootstrap] Failed to attach AI listeners."
             );
 
             return;
         }
 
         console.log(
-            "[AI Bootstrap] AI socket initialized and listeners attached."
+            "✅ [AI Bootstrap] AI listeners attached BEFORE socket connection."
         );
+
+        // =================================================
+        // STEP 3
+        //
+        // Now connect.
+        //
+        // Socket connect → join-wallet → server sends
+        // latest ai_state → frontend listener receives it.
+        // =================================================
+
+        const started =
+            startSocket();
+
+        if (!started) {
+
+            console.warn(
+                "❌ [AI Bootstrap] Failed to start socket."
+            );
+
+            return;
+        }
+
+        console.log(
+            "🚀 [AI Bootstrap] AI socket fully initialized",
+            {
+                walletAddress,
+            }
+        );
+
+        // =================================================
+        // CLEANUP
+        //
+        // IMPORTANT:
+        // Do NOT disconnect the singleton socket here.
+        //
+        // React may rerun this effect when `ai` changes.
+        // We only replace the AI listeners.
+        // =================================================
 
         return () => {
 
-            detachAIListeners();
+            console.log(
+                "🧹 [AI Bootstrap] Cleaning up AI listeners."
+            );
 
+            detachAIListeners();
         };
 
     }, [
