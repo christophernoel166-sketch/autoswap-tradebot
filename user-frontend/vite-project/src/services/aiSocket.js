@@ -10,7 +10,7 @@ let activeManagerHandlers = [];
 // ATTACH AI LISTENERS
 // =====================================================
 
-export function attachAIListeners(ai) {
+export function attachAIListeners(aiRef) {
 
     const socket =
         getSocket();
@@ -58,18 +58,35 @@ export function attachAIListeners(ai) {
     // AI FUNCTIONS
     // =================================================
 
-    const {
-        updateSystem,
-        updatePortfolio,
-        updateMarket,
-        updatePipeline,
-        updatePositionMetrics,
-        updateAnalysis,
-        updateDiagnostics,
-        updateLearning,
-        updateAIState,
-        addActivity,
-    } = ai;
+const updateSystem = (...args) =>
+    aiRef.current?.updateSystem?.(...args);
+
+const updatePortfolio = (...args) =>
+    aiRef.current?.updatePortfolio?.(...args);
+
+const updateMarket = (...args) =>
+    aiRef.current?.updateMarket?.(...args);
+
+const updatePipeline = (...args) =>
+    aiRef.current?.updatePipeline?.(...args);
+
+const updatePositionMetrics = (...args) =>
+    aiRef.current?.updatePositionMetrics?.(...args);
+
+const updateAnalysis = (...args) =>
+    aiRef.current?.updateAnalysis?.(...args);
+
+const updateDiagnostics = (...args) =>
+    aiRef.current?.updateDiagnostics?.(...args);
+
+const updateLearning = (...args) =>
+    aiRef.current?.updateLearning?.(...args);
+
+const updateAIState = (...args) =>
+    aiRef.current?.updateAIState?.(...args);
+
+const addActivity = (...args) =>
+    aiRef.current?.addActivity?.(...args);
 
     // =================================================
     // INITIAL DIAGNOSTICS
