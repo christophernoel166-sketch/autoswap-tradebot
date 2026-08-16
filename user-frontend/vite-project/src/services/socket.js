@@ -4,6 +4,16 @@ let socket = null;
 let currentWalletAddress = null;
 
 // =====================================================
+// DIAGNOSTIC COUNTERS
+// =====================================================
+
+let diagnosticConnectCalls = 0;
+let diagnosticIOCreations = 0;
+let diagnosticDisconnectCalls = 0;
+let diagnosticStartCalls = 0;
+let diagnosticJoinCalls = 0;
+
+// =====================================================
 // BACKEND URL
 // =====================================================
 
@@ -19,11 +29,62 @@ function getBackendUrl() {
 // =====================================================
 
 function joinWalletRoom() {
+
+    diagnosticJoinCalls++;
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] joinWalletRoom() CALLED",
+        {
+            callNumber:
+                diagnosticJoinCalls,
+
+            socketExists:
+                !!socket,
+
+            socketId:
+                socket?.id,
+
+            socketConnected:
+                socket?.connected,
+
+            currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+        }
+    );
+
     if (!socket || !socket.connected) {
+
+        console.warn(
+            "🚨 [SOCKET DIAGNOSTIC] joinWalletRoom() ABORTED",
+            {
+                reason:
+                    !socket
+                        ? "NO_SOCKET"
+                        : "SOCKET_NOT_CONNECTED",
+
+                socketExists:
+                    !!socket,
+
+                socketId:
+                    socket?.id,
+
+                socketConnected:
+                    socket?.connected,
+
+                currentWalletAddress,
+
+                timestamp:
+                    Date.now(),
+            }
+        );
+
         return;
     }
 
     if (!currentWalletAddress) {
+
         console.warn(
             "⚠️ [Socket] Cannot join wallet room: no wallet address."
         );
@@ -31,17 +92,43 @@ function joinWalletRoom() {
         return;
     }
 
+    // =================================================
+    // EMIT JOIN-WALLET
+    // =================================================
+
     socket.emit(
         "join-wallet",
         currentWalletAddress
     );
 
     console.log(
+        "🚨 [SOCKET DIAGNOSTIC] join-wallet EMITTED",
+        {
+            socketId:
+                socket.id,
+
+            walletAddress:
+                currentWalletAddress,
+
+            connected:
+                socket.connected,
+
+            timestamp:
+                Date.now(),
+        }
+    );
+
+    console.log(
         "📡 [Socket] join-wallet SENT",
         {
-            socketId: socket.id,
-            walletAddress: currentWalletAddress,
-            room: `wallet:${currentWalletAddress}`,
+            socketId:
+                socket.id,
+
+            walletAddress:
+                currentWalletAddress,
+
+            room:
+                `wallet:${currentWalletAddress}`,
         }
     );
 }
@@ -57,6 +144,37 @@ export function connectSocket(
     walletAddress,
     options = {}
 ) {
+
+    diagnosticConnectCalls++;
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] connectSocket() CALLED",
+        {
+            callNumber:
+                diagnosticConnectCalls,
+
+            walletAddress,
+
+            options,
+
+            existingSocket:
+                !!socket,
+
+            socketId:
+                socket?.id,
+
+            socketConnected:
+                socket?.connected,
+
+            currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
+        }
+    );
 
     const {
         connectNow = true,
@@ -74,6 +192,15 @@ export function connectSocket(
     currentWalletAddress =
         walletAddress;
 
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] CURRENT WALLET UPDATED",
+        {
+            currentWalletAddress,
+            timestamp:
+                Date.now(),
+        }
+    );
+
     // =================================================
     // EXISTING SOCKET
     // =================================================
@@ -83,9 +210,31 @@ export function connectSocket(
         console.log(
             "🧠 [Socket] Existing socket detected",
             {
-                socketId: socket.id,
-                connected: socket.connected,
+                socketId:
+                    socket.id,
+
+                connected:
+                    socket.connected,
+
                 walletAddress,
+            }
+        );
+
+        console.log(
+            "🚨 [SOCKET DIAGNOSTIC] EXISTING SOCKET PATH",
+            {
+                socketId:
+                    socket.id,
+
+                connected:
+                    socket.connected,
+
+                walletAddress,
+
+                connectNow,
+
+                timestamp:
+                    Date.now(),
             }
         );
 
@@ -93,6 +242,23 @@ export function connectSocket(
             connectNow &&
             !socket.connected
         ) {
+
+            console.log(
+                "🚨 [SOCKET DIAGNOSTIC] CALLING socket.connect() FROM EXISTING SOCKET PATH",
+                {
+                    socketId:
+                        socket.id,
+
+                    walletAddress,
+
+                    timestamp:
+                        Date.now(),
+
+                    stack:
+                        new Error().stack,
+                }
+            );
+
             socket.connect();
         }
 
@@ -100,6 +266,20 @@ export function connectSocket(
             connectNow &&
             socket.connected
         ) {
+
+            console.log(
+                "🚨 [SOCKET DIAGNOSTIC] EXISTING SOCKET ALREADY CONNECTED — JOINING ROOM",
+                {
+                    socketId:
+                        socket.id,
+
+                    walletAddress,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
             joinWalletRoom();
         }
 
@@ -119,6 +299,32 @@ export function connectSocket(
             backend,
             walletAddress,
             connectNow,
+        }
+    );
+
+    // =================================================
+    // ACTUAL SOCKET.IO CLIENT CREATION
+    // =================================================
+
+    diagnosticIOCreations++;
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] ACTUAL io() CREATION",
+        {
+            creationNumber:
+                diagnosticIOCreations,
+
+            backend,
+
+            walletAddress,
+
+            connectNow,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
         }
     );
 
@@ -149,6 +355,25 @@ export function connectSocket(
         }
     );
 
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] SOCKET.IO CLIENT CREATED",
+        {
+            socketId:
+                socket.id,
+
+            connected:
+                socket.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            backend,
+
+            timestamp:
+                Date.now(),
+        }
+    );
+
     // =================================================
     // CONNECT
     // =================================================
@@ -158,13 +383,39 @@ export function connectSocket(
         () => {
 
             console.log(
-                "✅ [Socket] CONNECTED",
+                "🚨 [SOCKET DIAGNOSTIC] CLIENT CONNECT EVENT",
                 {
-                    socketId: socket.id,
+                    socketId:
+                        socket.id,
+
                     walletAddress:
                         currentWalletAddress,
+
                     connected:
                         socket.connected,
+
+                    transport:
+                        socket.io.engine
+                            ?.transport
+                            ?.name,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
+            console.log(
+                "✅ [Socket] CONNECTED",
+                {
+                    socketId:
+                        socket.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    connected:
+                        socket.connected,
+
                     transport:
                         socket.io.engine
                             ?.transport
@@ -185,6 +436,32 @@ export function connectSocket(
     socket.on(
         "connect_error",
         (error) => {
+
+            console.error(
+                "🚨 [SOCKET DIAGNOSTIC] CLIENT CONNECT ERROR",
+                {
+                    socketId:
+                        socket?.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    message:
+                        error?.message,
+
+                    description:
+                        error?.description,
+
+                    context:
+                        error?.context,
+
+                    type:
+                        error?.type,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
 
             console.error(
                 "❌ [Socket] CONNECT ERROR",
@@ -214,6 +491,25 @@ export function connectSocket(
         (reason) => {
 
             console.warn(
+                "🚨 [SOCKET DIAGNOSTIC] SOCKET DISCONNECT EVENT",
+                {
+                    socketId:
+                        socket?.id,
+
+                    reason,
+
+                    connected:
+                        socket?.connected,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
+            console.warn(
                 "❌ [Socket] DISCONNECTED",
                 {
                     socketId:
@@ -239,6 +535,22 @@ export function connectSocket(
         (attempt) => {
 
             console.log(
+                "🚨 [SOCKET DIAGNOSTIC] RECONNECT ATTEMPT",
+                {
+                    attempt,
+
+                    socketId:
+                        socket?.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
+            console.log(
                 "🔄 [Socket] RECONNECT ATTEMPT",
                 {
                     attempt,
@@ -250,6 +562,25 @@ export function connectSocket(
     socket.io.on(
         "reconnect",
         (attempt) => {
+
+            console.log(
+                "🚨 [SOCKET DIAGNOSTIC] RECONNECT EVENT",
+                {
+                    attempt,
+
+                    socketId:
+                        socket?.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    connected:
+                        socket?.connected,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
 
             console.log(
                 "✅ [Socket] RECONNECTED",
@@ -274,6 +605,23 @@ export function connectSocket(
         (error) => {
 
             console.error(
+                "🚨 [SOCKET DIAGNOSTIC] RECONNECT ERROR",
+                {
+                    socketId:
+                        socket?.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    message:
+                        error?.message,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
+            console.error(
                 "❌ [Socket] RECONNECT ERROR",
                 {
                     message:
@@ -288,6 +636,20 @@ export function connectSocket(
         () => {
 
             console.error(
+                "🚨 [SOCKET DIAGNOSTIC] RECONNECT FAILED",
+                {
+                    socketId:
+                        socket?.id,
+
+                    walletAddress:
+                        currentWalletAddress,
+
+                    timestamp:
+                        Date.now(),
+                }
+            );
+
+            console.error(
                 "❌ [Socket] RECONNECT FAILED"
             );
         }
@@ -298,7 +660,44 @@ export function connectSocket(
     // =================================================
 
     if (connectNow) {
+
+        console.log(
+            "🚨 [SOCKET DIAGNOSTIC] CALLING socket.connect() FROM NEW SOCKET PATH",
+            {
+                socketId:
+                    socket.id,
+
+                walletAddress:
+                    currentWalletAddress,
+
+                timestamp:
+                    Date.now(),
+
+                stack:
+                    new Error().stack,
+            }
+        );
+
         socket.connect();
+
+    } else {
+
+        console.log(
+            "🚨 [SOCKET DIAGNOSTIC] NOT CONNECTING YET",
+            {
+                reason:
+                    "connectNow=false",
+
+                socketId:
+                    socket.id,
+
+                walletAddress:
+                    currentWalletAddress,
+
+                timestamp:
+                    Date.now(),
+            }
+        );
     }
 
     return socket;
@@ -312,6 +711,34 @@ export function connectSocket(
 
 export function startSocket() {
 
+    diagnosticStartCalls++;
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] startSocket() CALLED",
+        {
+            callNumber:
+                diagnosticStartCalls,
+
+            socketExists:
+                !!socket,
+
+            socketId:
+                socket?.id,
+
+            connected:
+                socket?.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
+        }
+    );
+
     if (!socket) {
 
         console.warn(
@@ -323,6 +750,20 @@ export function startSocket() {
 
     if (socket.connected) {
 
+        console.log(
+            "🚨 [SOCKET DIAGNOSTIC] startSocket() FOUND CONNECTED SOCKET",
+            {
+                socketId:
+                    socket.id,
+
+                walletAddress:
+                    currentWalletAddress,
+
+                timestamp:
+                    Date.now(),
+            }
+        );
+
         joinWalletRoom();
 
         return true;
@@ -330,6 +771,26 @@ export function startSocket() {
 
     console.log(
         "🚀 [Socket] Starting Socket.IO connection..."
+    );
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] CALLING socket.connect() FROM startSocket()",
+        {
+            socketId:
+                socket.id,
+
+            walletAddress:
+                currentWalletAddress,
+
+            connected:
+                socket.connected,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
+        }
     );
 
     socket.connect();
@@ -342,6 +803,27 @@ export function startSocket() {
 // =====================================================
 
 export function getSocket() {
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] getSocket() CALLED",
+        {
+            socketExists:
+                !!socket,
+
+            socketId:
+                socket?.id,
+
+            connected:
+                socket?.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+        }
+    );
+
     return socket;
 }
 
@@ -350,6 +832,16 @@ export function getSocket() {
 // =====================================================
 
 export function getCurrentWalletAddress() {
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] getCurrentWalletAddress() CALLED",
+        {
+            currentWalletAddress,
+            timestamp:
+                Date.now(),
+        }
+    );
+
     return currentWalletAddress;
 }
 
@@ -359,7 +851,44 @@ export function getCurrentWalletAddress() {
 
 export function disconnectSocket() {
 
+    diagnosticDisconnectCalls++;
+
+    console.warn(
+        "🚨 [SOCKET DIAGNOSTIC] disconnectSocket() CALLED",
+        {
+            callNumber:
+                diagnosticDisconnectCalls,
+
+            socketExists:
+                !!socket,
+
+            socketId:
+                socket?.id,
+
+            connected:
+                socket?.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
+        }
+    );
+
     if (!socket) {
+
+        console.log(
+            "🚨 [SOCKET DIAGNOSTIC] disconnectSocket() ABORTED — NO SOCKET",
+            {
+                timestamp:
+                    Date.now(),
+            }
+        );
+
         return;
     }
 
@@ -377,9 +906,59 @@ export function disconnectSocket() {
         }
     );
 
+    console.warn(
+        "🚨 [SOCKET DIAGNOSTIC] CALLING socket.disconnect()",
+        {
+            socketId:
+                socket.id,
+
+            connected:
+                socket.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+
+            stack:
+                new Error().stack,
+        }
+    );
+
     socket.disconnect();
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] socket.disconnect() COMPLETED",
+        {
+            socketId:
+                socket.id,
+
+            connected:
+                socket.connected,
+
+            walletAddress:
+                currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+        }
+    );
 
     socket = null;
 
     currentWalletAddress = null;
+
+    console.log(
+        "🚨 [SOCKET DIAGNOSTIC] SOCKET SINGLETON CLEARED",
+        {
+            socketIsNull:
+                socket === null,
+
+            currentWalletAddress,
+
+            timestamp:
+                Date.now(),
+        }
+    );
 }
