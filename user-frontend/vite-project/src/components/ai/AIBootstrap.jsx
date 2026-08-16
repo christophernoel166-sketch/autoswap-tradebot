@@ -6,7 +6,6 @@ import useAI from "../../hooks/useAI";
 import {
     connectSocket,
     startSocket,
-    disconnectSocket,
 } from "../../services/socket";
 
 import {
@@ -25,6 +24,11 @@ export default function AIBootstrap() {
 
     // =================================================
     // SOCKET + AI INITIALIZATION
+    //
+    // IMPORTANT:
+    // DO NOT put `ai` in this dependency array.
+    //
+    // AI state changes must NOT restart the socket.
     // =================================================
 
     useEffect(() => {
@@ -64,11 +68,7 @@ export default function AIBootstrap() {
         // =================================================
         // STEP 1
         //
-        // Create the socket WITHOUT connecting.
-        //
-        // This is critical because we need to attach
-        // AI listeners before the socket can receive
-        // the initial ai_state event.
+        // Create socket WITHOUT connecting.
         // =================================================
 
         const socket =
@@ -116,10 +116,7 @@ export default function AIBootstrap() {
         // =================================================
         // STEP 3
         //
-        // Now connect.
-        //
-        // Socket connect → join-wallet → server sends
-        // latest ai_state → frontend listener receives it.
+        // Connect socket.
         // =================================================
 
         const started =
@@ -145,10 +142,9 @@ export default function AIBootstrap() {
         // CLEANUP
         //
         // IMPORTANT:
-        // Do NOT disconnect the singleton socket here.
+        // Only detach AI listeners.
         //
-        // React may rerun this effect when `ai` changes.
-        // We only replace the AI listeners.
+        // Do NOT disconnect the singleton socket here.
         // =================================================
 
         return () => {
@@ -158,12 +154,12 @@ export default function AIBootstrap() {
             );
 
             detachAIListeners();
+
         };
 
     }, [
         connected,
         publicKey,
-        ai,
     ]);
 
     return null;
