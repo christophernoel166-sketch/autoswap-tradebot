@@ -12,29 +12,29 @@ import {
 // Converts the completed live-position AI context into
 // the existing frontend AI state structure.
 //
-// This function:
-//   ✔ Publishes live AI status
-//   ✔ Publishes position health
-//   ✔ Publishes AI confidence
-//   ✔ Publishes recommendation
-//   ✔ Publishes trend
-//   ✔ Publishes protection information
-//   ✔ Publishes current trade-management action
+// DIAGNOSTIC VERSION
 //
-// This function NEVER:
-//   ✘ Executes trades
-//   ✘ Modifies blockchain
-//   ✘ Makes AI decisions
-//   ✘ Reads/writes Redis directly
+// IMPORTANT:
+// This version DOES NOT change the confidence calculation.
+// It only logs every possible confidence source so we
+// can determine exactly where the value is coming from.
 //
-// aiStateService handles the Socket.IO emission.
 // =====================================================
 
 export function publishLiveAIState(
   walletAddress,
   aiContext
 ) {
+
   if (!walletAddress || !aiContext) {
+    console.warn(
+      "⚠️ [LIVE AI STATE] publishLiveAIState() called without required data",
+      {
+        walletAddress,
+        hasAIContext: !!aiContext,
+      }
+    );
+
     return null;
   }
 
@@ -61,7 +61,233 @@ export function publishLiveAIState(
     aiContext.pipeline || {};
 
   // ===================================================
-  // Normalize values
+  // BASIC DIAGNOSTIC
+  // ===================================================
+
+  console.log(
+    "\n\n============================================================"
+  );
+
+  console.log(
+    "🔬 [CONFIDENCE DIAGNOSTIC] publishLiveAIState() CALLED"
+  );
+
+  console.log(
+    "============================================================"
+  );
+
+  console.dir(
+    {
+      walletAddress,
+
+      mint:
+        aiContext.mint ??
+        aiContext.token?.mint ??
+        null,
+
+      recommendationObject:
+        aiContext.recommendation ?? null,
+
+      tradeDecisionObject:
+        tradeDecision,
+
+      protectionObject:
+        protection,
+
+      contextConfidence:
+        aiContext.confidence ?? null,
+
+      positionHealth:
+        positionHealth,
+
+      pipeline:
+        pipeline,
+
+      tradePlan:
+        tradePlan,
+
+      exitDecision:
+        exitDecision,
+    },
+    {
+      depth: null,
+      colors: true,
+    }
+  );
+
+  // ===================================================
+  // CONFIDENCE SOURCES
+  //
+  // THESE ARE THE FOUR VALUES WE NEED TO TRACE.
+  // ===================================================
+
+  const recommendationConfidence =
+    aiContext.recommendation?.confidence;
+
+  const tradeDecisionConfidence =
+    tradeDecision.confidence;
+
+  const protectionConfidence =
+    protection.confidence;
+
+  const overallConfidence =
+    aiContext.confidence?.overall;
+
+  // ===================================================
+  // CONFIDENCE DIAGNOSTIC
+  // ===================================================
+
+  console.log(
+    "\n============================================================"
+  );
+
+  console.log(
+    "🔬 [CONFIDENCE DIAGNOSTIC] ALL CONFIDENCE SOURCES"
+  );
+
+  console.log(
+    "============================================================"
+  );
+
+  console.dir(
+    {
+      walletAddress,
+
+      mint:
+        aiContext.mint ??
+        aiContext.token?.mint ??
+        null,
+
+      "1️⃣ recommendation.confidence":
+        recommendationConfidence,
+
+      "2️⃣ tradeDecision.confidence":
+        tradeDecisionConfidence,
+
+      "3️⃣ protection.confidence":
+        protectionConfidence,
+
+      "4️⃣ aiContext.confidence.overall":
+        overallConfidence,
+
+    },
+    {
+      depth: null,
+      colors: true,
+    }
+  );
+
+  // ===================================================
+  // DETERMINE WHICH SOURCE WILL WIN
+  // ===================================================
+
+  let selectedConfidenceSource =
+    "DEFAULT_0";
+
+  if (
+    recommendationConfidence !==
+      undefined &&
+    recommendationConfidence !== null
+  ) {
+
+    selectedConfidenceSource =
+      "recommendation.confidence";
+
+  } else if (
+    tradeDecisionConfidence !==
+      undefined &&
+    tradeDecisionConfidence !== null
+  ) {
+
+    selectedConfidenceSource =
+      "tradeDecision.confidence";
+
+  } else if (
+    protectionConfidence !==
+      undefined &&
+    protectionConfidence !== null
+  ) {
+
+    selectedConfidenceSource =
+      "protection.confidence";
+
+  } else if (
+    overallConfidence !==
+      undefined &&
+    overallConfidence !== null
+  ) {
+
+    selectedConfidenceSource =
+      "aiContext.confidence.overall";
+
+  }
+
+  // ===================================================
+  // EXISTING CONFIDENCE CALCULATION
+  //
+  // DO NOT CHANGE THIS YET.
+  // ===================================================
+
+  const confidence =
+    Number(
+      aiContext.recommendation?.confidence ??
+      tradeDecision.confidence ??
+      protection.confidence ??
+      aiContext.confidence?.overall ??
+      0
+    );
+
+  // ===================================================
+  // FINAL CONFIDENCE DIAGNOSTIC
+  // ===================================================
+
+  console.log(
+    "\n============================================================"
+  );
+
+  console.log(
+    "🎯 [CONFIDENCE DIAGNOSTIC] FINAL RESULT"
+  );
+
+  console.log(
+    "============================================================"
+  );
+
+  console.dir(
+    {
+      walletAddress,
+
+      mint:
+        aiContext.mint ??
+        aiContext.token?.mint ??
+        null,
+
+      selectedConfidenceSource,
+
+      finalConfidence:
+        confidence,
+
+      finalConfidenceType:
+        typeof confidence,
+
+      recommendationConfidence,
+      tradeDecisionConfidence,
+      protectionConfidence,
+      overallConfidence,
+
+    },
+    {
+      depth: null,
+      colors: true,
+    }
+  );
+
+  console.log(
+    "============================================================\n"
+  );
+
+  // ===================================================
+  // Normalize other values
   // ===================================================
 
   const health =
@@ -80,20 +306,11 @@ export function publishLiveAIState(
     protection.protectionIntent ??
     "Monitoring position";
 
- const recommendation =
+  const recommendation =
     aiContext.recommendation?.recommendation ??
     aiContext.recommendation?.action ??
     tradeDecision.recommendation ??
     "HOLD";
-
-const confidence =
-    Number(
-        aiContext.recommendation?.confidence ??
-        tradeDecision.confidence ??
-        protection.confidence ??
-        aiContext.confidence?.overall ??
-        0
-    );
 
   const action =
     tradePlan.action ??
@@ -107,11 +324,17 @@ const confidence =
   let status = "MONITORING";
 
   if (pipeline.status === "FAILED") {
+
     status = "ERROR";
+
   } else if (pipeline.status === "COMPLETED") {
+
     status = "MONITORING";
+
   } else if (pipeline.status === "RUNNING") {
+
     status = "ANALYZING";
+
   }
 
   // ===================================================
@@ -122,30 +345,24 @@ const confidence =
     protectionIntent;
 
   if (action === "FULL_EXIT") {
+
     currentTask = "FULL_EXIT";
+
   } else if (
     action === "PARTIAL_EXIT" ||
     action === "SCALE_OUT"
   ) {
+
     currentTask = action;
+
   } else if (pipeline.stage) {
+
     currentTask = pipeline.stage;
+
   }
 
   // ===================================================
   // Protection representation
-  //
-  // Frontend portfolio.protected is numeric.
-  //
-  // We therefore DO NOT place:
-  //
-  //   "MODERATE"
-  //
-  // into that field.
-  //
-  // Instead:
-  //   1 = protected position
-  //   0 = not protected
   // ===================================================
 
   const protectedValue =
@@ -166,26 +383,21 @@ const confidence =
   if (
     !Number.isFinite(progress)
   ) {
+
     progress = 0;
+
   }
 
-  // Completed live AI cycle
   if (
     pipeline.status === "COMPLETED"
   ) {
+
     progress = 100;
+
   }
 
   // ===================================================
-  // Publish to existing AI state service
-  //
-  // updateMultiple() automatically:
-  //
-  //   update in memory
-  //        ↓
-  //   emit individual events
-  //        ↓
-  //   emit complete "ai_state"
+  // PUBLISH TO AI STATE SERVICE
   // ===================================================
 
   const state =
@@ -207,7 +419,6 @@ const confidence =
 
         },
 
-
         // =============================================
         // PORTFOLIO
         // =============================================
@@ -223,7 +434,6 @@ const confidence =
 
         },
 
-
         // =============================================
         // MARKET
         // =============================================
@@ -233,7 +443,6 @@ const confidence =
           trend,
 
         },
-
 
         // =============================================
         // PIPELINE
@@ -261,7 +470,6 @@ const confidence =
             null,
 
         },
-
 
         // =============================================
         // POSITIONS
@@ -291,7 +499,6 @@ const confidence =
 
         },
 
-
         // =============================================
         // ANALYSIS
         // =============================================
@@ -302,28 +509,28 @@ const confidence =
 
           confidence,
 
-         evidence: {
+          evidence: {
 
-    health,
+            health,
 
-    trend,
+            trend,
 
-    protection:
-        protectionLevel,
+            protection:
+              protectionLevel,
 
-    recommendationSource:
-        aiContext.recommendation
-            ? "RecommendationEngine"
-            : "TradeDecisionCoordinator",
+            recommendationSource:
+              aiContext.recommendation
+                ? "RecommendationEngine"
+                : "TradeDecisionCoordinator",
 
-    exitDecision:
-        exitDecision.decision ??
-        exitDecision.action ??
-        null,
+            exitDecision:
+              exitDecision.decision ??
+              exitDecision.action ??
+              null,
 
-    action,
+            action,
 
-},
+          },
 
           reasoning: {
 
@@ -349,7 +556,6 @@ const confidence =
 
         },
 
-
         // =============================================
         // DIAGNOSTICS
         // =============================================
@@ -365,7 +571,7 @@ const confidence =
     );
 
   // ===================================================
-  // Activity feed
+  // ACTIVITY FEED
   // ===================================================
 
   addActivity(
@@ -394,7 +600,7 @@ const confidence =
   );
 
   // ===================================================
-  // Debug
+  // FINAL STATE DIAGNOSTIC
   // ===================================================
 
   console.log(
@@ -427,6 +633,21 @@ const confidence =
         aiContext.mint ??
         aiContext.token?.mint ??
         null,
+
+      // ===============================================
+      // IMPORTANT DIAGNOSTIC VALUES
+      // ===============================================
+
+      confidenceSource:
+        selectedConfidenceSource,
+
+      recommendationConfidence,
+
+      tradeDecisionConfidence,
+
+      protectionConfidence,
+
+      overallConfidence,
 
     },
     {
