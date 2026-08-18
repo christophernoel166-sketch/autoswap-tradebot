@@ -202,6 +202,73 @@ async function publishAIEvents(
 
         });
 
+
+console.log(
+    "\n============================================================"
+);
+
+console.log(
+    "🔬 [AI STATE REDIS PUBLISH DIAGNOSTIC]"
+);
+
+console.log(
+    "============================================================"
+);
+
+console.dir(
+    {
+        walletAddress,
+
+        eventNames:
+            events
+                ? Object.keys(events)
+                : [],
+
+        analysis: {
+            recommendation:
+                state?.analysis?.recommendation,
+
+            confidence:
+                state?.analysis?.confidence,
+
+            confidenceType:
+                typeof state?.analysis?.confidence,
+        },
+
+        portfolio: {
+            confidence:
+                state?.portfolio?.confidence,
+
+            confidenceType:
+                typeof state?.portfolio?.confidence,
+        },
+
+        stateConfidenceComparison: {
+            analysis:
+                state?.analysis?.confidence,
+
+            portfolio:
+                state?.portfolio?.confidence,
+
+            equal:
+                state?.analysis?.confidence ===
+                state?.portfolio?.confidence,
+        },
+
+        timestamp:
+            Date.now(),
+    },
+    {
+        depth: null,
+        colors: true,
+    }
+);
+
+console.log(
+    "============================================================\n"
+);
+
+
         await redis.publish(
             AI_STATE_CHANNEL,
             message
@@ -439,6 +506,56 @@ export function updateMultiple(
 
         };
     }
+
+
+console.log(
+    "\n============================================================"
+);
+
+console.log(
+    "🔬 [AI STATE UPDATE DIAGNOSTIC]"
+);
+
+console.log(
+    "============================================================"
+);
+
+console.dir(
+    {
+        walletAddress,
+
+        incomingAnalysis:
+            updates?.analysis ?? null,
+
+        incomingPortfolio:
+            updates?.portfolio ?? null,
+
+        resultingAnalysis: {
+            recommendation:
+                state?.analysis?.recommendation,
+
+            confidence:
+                state?.analysis?.confidence,
+        },
+
+        resultingPortfolio: {
+            confidence:
+                state?.portfolio?.confidence,
+        },
+
+        event:
+            "ai_state",
+    },
+    {
+        depth: null,
+        colors: true,
+    }
+);
+
+console.log(
+    "============================================================\n"
+);
+
 
     emitState(
         walletAddress,
