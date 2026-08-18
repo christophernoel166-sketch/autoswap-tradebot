@@ -508,7 +508,53 @@ export function updateMultiple(
     }
 
 
+console.log(
+    "\n============================================================"
+);
 
+console.log(
+    "🔬 [AI STATE UPDATE DIAGNOSTIC]"
+);
+
+console.log(
+    "============================================================"
+);
+
+console.dir(
+    {
+        walletAddress,
+
+        incomingAnalysis:
+            updates?.analysis ?? null,
+
+        incomingPortfolio:
+            updates?.portfolio ?? null,
+
+        resultingAnalysis: {
+            recommendation:
+                state?.analysis?.recommendation,
+
+            confidence:
+                state?.analysis?.confidence,
+        },
+
+        resultingPortfolio: {
+            confidence:
+                state?.portfolio?.confidence,
+        },
+
+        event:
+            "ai_state",
+    },
+    {
+        depth: null,
+        colors: true,
+    }
+);
+
+console.log(
+    "============================================================\n"
+);
 
 
     emitState(
