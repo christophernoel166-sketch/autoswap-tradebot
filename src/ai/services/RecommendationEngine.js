@@ -3,18 +3,20 @@
  * RecommendationEngine
  * ==========================================================
  *
- * Converts the completed investment thesis into a
- * standardized recommendation.
+ * Single authoritative AI recommendation engine.
  *
  * Responsibilities
  * ----------------
- * ✔ Interpret investment thesis
- * ✔ Determine action
+ * ✔ Interpret the completed investment thesis
+ * ✔ Determine the final trading action
+ * ✔ Respect hard safety/risk blockers
+ * ✔ Use momentum, forecast, wallet and historical evidence
  * ✔ Calculate conviction
  * ✔ Calculate urgency
- * ✔ Calculate risk level
+ * ✔ Calculate actual risk level
  * ✔ Build execution hints
  * ✔ Generate recommendation explanation
+ * ✔ Build recommendation scorecard
  *
  * NEVER
  * -----
@@ -27,11 +29,8 @@
  */
 
 import {
-
     setRecommendation,
-
     addDebug,
-
 } from "../core/AIContextUtils.js";
 
 // ==========================================================
@@ -101,33 +100,15 @@ const RISK = Object.freeze({
 });
 
 // ==========================================================
-// Helpers
+// Generic Helpers
 // ==========================================================
-
-function getConfidence(context) {
-
-    return Number(
-
-        context?.investmentThesis?.confidence ??
-
-        context?.confidence?.overall ??
-
-        0
-
-    );
-
-}
-
-function getThesis(context) {
-
-    return context?.investmentThesis ?? {};
-
-}
 
 function safeObject(value) {
 
-    return value &&
+    return (
+        value &&
         typeof value === "object"
+    )
         ? value
         : {};
 
@@ -141,46 +122,127 @@ function safeArray(value) {
 
 }
 
-function toNumber(value, fallback = 0) {
+function toNumber(
+    value,
+    fallback = 0
+) {
 
-    const n = Number(value);
+    const number = Number(value);
 
-    return Number.isFinite(n)
-        ? n
+    return Number.isFinite(number)
+        ? number
         : fallback;
 
 }
 
-function clamp(value, min = 0, max = 100) {
+function clamp(
+    value,
+    min = 0,
+    max = 100
+) {
 
     return Math.min(
-        Math.max(value, min),
+        Math.max(
+            toNumber(value),
+            min
+        ),
         max
     );
 
 }
 
+function unique(values = []) {
+
+    return [
+        ...new Set(
+
+            safeArray(values)
+
+                .map(
+                    value =>
+                        String(value).trim()
+                )
+
+                .filter(Boolean)
+
+        ),
+    ];
+
+}
+
 function average(values = []) {
 
-    const nums = values
-        .map(v => Number(v))
-        .filter(Number.isFinite);
+    const numbers = values
 
-    if (!nums.length) {
+        .map(value =>
+            Number(value)
+        )
+
+        .filter(
+            Number.isFinite
+        );
+
+    if (!numbers.length) {
 
         return 0;
 
     }
 
-    return nums.reduce(
-
-        (a, b) => a + b,
-
+    return numbers.reduce(
+        (sum, value) =>
+            sum + value,
         0
-
-    ) / nums.length;
+    ) / numbers.length;
 
 }
+
+// ==========================================================
+// Score Resolver
+// ==========================================================
+
+function getScore(
+    context,
+    paths = [],
+    fallback = 0
+) {
+
+    for (const path of paths) {
+
+        let value = context;
+
+        for (
+            const key
+            of path.split(".")
+        ) {
+
+            value =
+                value?.[key];
+
+        }
+
+        if (
+            value !== undefined &&
+            value !== null &&
+            Number.isFinite(
+                Number(value)
+            )
+        ) {
+
+            return clamp(
+                Number(value)
+            );
+
+        }
+
+    }
+
+    return fallback;
+
+}
+
+// ==========================================================
+// Core Context Model
+// ==========================================================
 
 function buildAIModel(context) {
 
@@ -199,21 +261,6 @@ function buildAIModel(context) {
             context?.analyses
         );
 
-    const review =
-        safeObject(
-            context?.review
-        );
-
-    const decision =
-        safeObject(
-            context?.decision
-        );
-
-    const reasoning =
-        safeObject(
-            context?.reasoning
-        );
-
     const recommendation =
         safeObject(
             context?.recommendation
@@ -224,14 +271,14 @@ function buildAIModel(context) {
             context?.entryValidation
         );
 
-    const protection =
+    const positionHealth =
         safeObject(
-            context?.protection
+            context?.positionHealth
         );
 
-    const position =
+    const exitReadiness =
         safeObject(
-            context?.position
+            context?.exitReadiness
         );
 
     const history =
@@ -239,31 +286,34 @@ function buildAIModel(context) {
             context?.history
         );
 
+    /*
+     * IMPORTANT:
+     *
+     * InvestmentThesisBuilder already calculates the
+     * canonical weighted confidence.
+     *
+     * RecommendationEngine MUST NOT create another
+     * confidence score from the same evidence.
+     */
+
     const confidence =
         clamp(
-
             toNumber(
 
                 thesis.confidence ??
 
-                recommendation.confidence ??
-
-                reasoning.confidence ??
-
                 context?.confidence?.overall ??
+
+                recommendation.confidence ??
 
                 0
 
             )
-
         );
 
     return {
 
         context,
-
-        confidence,
-    
 
         thesis,
 
@@ -271,35 +321,292 @@ function buildAIModel(context) {
 
         analyses,
 
-        review,
-
-        decision,
-
-        reasoning,
-
         recommendation,
 
         validation,
 
-        protection,
+        positionHealth,
 
-        position,
+        exitReadiness,
 
         history,
 
-        engines:
+        confidence,
 
-            Object.entries(evidence).map(
+    };
 
-                ([name, value]) => ({
+}
 
-                    name,
+// ==========================================================
+// Evidence Scores
+// ==========================================================
 
-                    ...safeObject(value),
+function buildEvidenceScores(
+    context
+) {
 
-                })
+    const analyses =
+        safeObject(
+            context?.analyses
+        );
 
+    const evidence =
+        safeObject(
+            context?.evidence
+        );
+
+    const historical =
+        safeObject(
+            analyses.historical ??
+            evidence.historical ??
+            context?.historicalPattern ??
+            context?.historicalMemory
+        );
+
+    return {
+
+        momentum:
+
+            getScore(
+                context,
+                [
+                    "analyses.momentum.score",
+                    "analyses.momentum.momentumScore",
+                    "evidence.momentum.score",
+                    "evidence.momentum.momentumScore",
+                ]
             ),
+
+        forecast:
+
+            getScore(
+                context,
+                [
+                    "analyses.forecast.forecastScore",
+                    "analyses.forecast.score",
+                    "evidence.forecast.forecastScore",
+                    "evidence.forecast.score",
+                ]
+            ),
+
+        liquidity:
+
+            getScore(
+                context,
+                [
+                    "analyses.liquidity.liquidityScore",
+                    "analyses.liquidity.score",
+                    "evidence.liquidity.liquidityScore",
+                    "evidence.liquidity.score",
+                ]
+            ),
+
+        volume:
+
+            getScore(
+                context,
+                [
+                    "analyses.volume.volumeScore",
+                    "analyses.volume.score",
+                    "evidence.volume.volumeScore",
+                    "evidence.volume.score",
+                ]
+            ),
+
+        wallet:
+
+            getScore(
+                context,
+                [
+                    "analyses.wallets.score",
+                    "analyses.wallets.walletScore",
+                    "analyses.walletQuality.score",
+                    "analyses.walletQuality.walletScore",
+                    "evidence.wallets.score",
+                    "evidence.wallets.walletScore",
+                ]
+            ),
+
+        risk:
+
+            getScore(
+                context,
+                [
+                    "analyses.risk.riskScore",
+                    "analyses.risk.score",
+                    "evidence.risk.riskScore",
+                    "evidence.risk.score",
+                ]
+            ),
+
+        rugRisk:
+
+            getScore(
+                context,
+                [
+                    "analyses.rugRisk.score",
+                    "analyses.rugRisk.rugRiskScore",
+                    "analyses.rugRisk.riskScore",
+                    "evidence.rugRisk.score",
+                    "evidence.rugRisk.rugRiskScore",
+                ]
+            ),
+
+        historicalScore:
+
+            getScore(
+                context,
+                [
+                    "analyses.historical.score",
+                    "analyses.historical.historicalScore",
+                    "evidence.historical.score",
+                    "evidence.historical.historicalScore",
+                ]
+            ),
+
+        historicalWinRate:
+
+            clamp(
+                toNumber(
+                    historical.winRate ??
+                    historical.patternWinRate ??
+                    historical.stats?.winRate ??
+                    0
+                )
+            ),
+
+        historicalFound:
+
+            Boolean(
+                historical.found ??
+                historical.patternFound ??
+                historical.matchFound ??
+                false
+            ),
+
+    };
+
+}
+
+// ==========================================================
+// Detect Existing Position
+// ==========================================================
+
+function hasOpenPosition(
+    context
+) {
+
+    const position =
+        safeObject(
+            context?.position
+        );
+
+    const positionHealth =
+        context?.positionHealth;
+
+    const exitReadiness =
+        context?.exitReadiness;
+
+    return Boolean(
+
+        position.exists === true ||
+
+        position.isOpen === true ||
+
+        positionHealth ||
+
+        exitReadiness
+
+    );
+
+}
+
+// ==========================================================
+// Hard Safety Check
+// ==========================================================
+
+function getSafetyDecision(
+    scores,
+    hasPosition
+) {
+
+    /*
+     * These are hard blockers.
+     *
+     * A high confidence score can NEVER override
+     * dangerous token safety conditions.
+     */
+
+    if (
+        scores.rugRisk >= 80 ||
+        scores.risk >= 90
+    ) {
+
+        return {
+
+            blocked: true,
+
+            action:
+                hasPosition
+                    ? ACTIONS.FULL_EXIT
+                    : ACTIONS.AVOID,
+
+            reason:
+                "Critical token risk detected.",
+
+        };
+
+    }
+
+    if (
+        scores.liquidity > 0 &&
+        scores.liquidity < 20
+    ) {
+
+        return {
+
+            blocked: true,
+
+            action:
+                hasPosition
+                    ? ACTIONS.FULL_EXIT
+                    : ACTIONS.AVOID,
+
+            reason:
+                "Liquidity is below the minimum safety threshold.",
+
+        };
+
+    }
+
+    if (
+        scores.wallet > 0 &&
+        scores.wallet < 20
+    ) {
+
+        return {
+
+            blocked: true,
+
+            action:
+                hasPosition
+                    ? ACTIONS.FULL_EXIT
+                    : ACTIONS.AVOID,
+
+            reason:
+                "Wallet quality is below the minimum safety threshold.",
+
+        };
+
+    }
+
+    return {
+
+        blocked: false,
+
+        action: null,
+
+        reason: null,
 
     };
 
@@ -311,134 +618,190 @@ function buildAIModel(context) {
 
 function calculateAction(
     context,
-    confidence
+    confidence,
+    scores
 ) {
 
-    const recommendation =
-        context?.recommendation || {};
-
-    const thesis =
-        context?.investmentThesis || {};
-
-    const exitReadiness =
-        context?.exitReadiness ||
-        thesis.exitReadiness ||
-        recommendation.exitReadiness;
-
-    const positionHealth =
-        context?.positionHealth ||
-        thesis.positionHealth ||
-        recommendation.positionHealth;
-
-    const forecastScore =
-        toNumber(
-            context?.analyses?.forecast?.forecastScore ??
-            context?.analyses?.forecast?.score
+    const hasPosition =
+        hasOpenPosition(
+            context
         );
 
-    const riskScore =
-        toNumber(
-            context?.analyses?.risk?.riskScore ??
-            context?.analyses?.risk?.score
-        );
+    // ======================================================
+    // Existing Position
+    // ======================================================
 
-    // ============================================
-    // Forced exits always win
-    // ============================================
+    if (hasPosition) {
 
-    if (exitReadiness === "EXIT_NOW") {
+        const exitReadiness =
+            context?.exitReadiness;
+
+        const positionHealth =
+            context?.positionHealth;
+
+        if (
+            exitReadiness ===
+            "EXIT_NOW"
+        ) {
+
+            return ACTIONS.FULL_EXIT;
+
+        }
+
+        if (
+            exitReadiness ===
+            "PREPARE_EXIT"
+        ) {
+
+            return ACTIONS.PARTIAL_EXIT;
+
+        }
+
+        if (
+            positionHealth ===
+            "CRITICAL"
+        ) {
+
+            return ACTIONS.FULL_EXIT;
+
+        }
+
+        if (
+            positionHealth ===
+            "WEAK"
+        ) {
+
+            return ACTIONS.REDUCE;
+
+        }
+
+        if (
+            scores.risk >= 90 ||
+            scores.rugRisk >= 80
+        ) {
+
+            return ACTIONS.FULL_EXIT;
+
+        }
+
+        /*
+         * Existing position with healthy conditions.
+         */
+
+        if (
+            confidence >= 80
+        ) {
+
+            return ACTIONS.HOLD;
+
+        }
+
+        if (
+            confidence >= 60
+        ) {
+
+            return ACTIONS.HOLD;
+
+        }
+
+        if (
+            confidence >= 40
+        ) {
+
+            return ACTIONS.REDUCE;
+
+        }
 
         return ACTIONS.FULL_EXIT;
 
     }
 
-    if (exitReadiness === "PREPARE_EXIT") {
+    // ======================================================
+    // New Entry
+    // ======================================================
 
-        return ACTIONS.PARTIAL_EXIT;
-
-    }
-
-    if (positionHealth === "CRITICAL") {
-
-        return ACTIONS.FULL_EXIT;
-
-    }
-
-    if (positionHealth === "WEAK") {
-
-        return ACTIONS.REDUCE;
-
-    }
-
-    // ============================================
-    // Risk override
-    // ============================================
-
-    if (riskScore >= 90) {
-
-        return ACTIONS.AVOID;
-
-    }
+    /*
+     * Strong Buy
+     *
+     * Requires agreement between:
+     *
+     * - canonical confidence
+     * - historical edge
+     * - wallet quality
+     * - momentum
+     * - forecast
+     */
 
     if (
-        riskScore >= 75 &&
-        confidence < 85
-    ) {
 
-        return ACTIONS.WATCH;
+        confidence >= 90 &&
 
-    }
+        scores.historicalFound &&
 
-    // ============================================
-    // Forecast override
-    // ============================================
+        scores.historicalWinRate >= 70 &&
 
-    if (
-        forecastScore >= 90 &&
-        confidence >= 85
+        scores.wallet >= 80 &&
+
+        scores.momentum >= 80 &&
+
+        scores.forecast >= 85
+
     ) {
 
         return ACTIONS.STRONG_BUY;
 
     }
 
-    // ============================================
-    // Confidence decision
-    // ============================================
+    /*
+     * Buy
+     */
 
-    if (confidence >= 90) {
+    if (
 
-        return ACTIONS.STRONG_BUY;
+        confidence >= 80 &&
 
-    }
+        scores.wallet >= 60 &&
 
-    if (confidence >= 80) {
+        scores.momentum >= 60 &&
+
+        scores.forecast >= 70
+
+    ) {
 
         return ACTIONS.BUY;
 
     }
 
-    if (confidence >= 65) {
+    /*
+     * Accumulate
+     *
+     * Moderate/high confidence but not enough
+     * confirmation for a full BUY.
+     */
+
+    if (
+
+        confidence >= 65 &&
+
+        scores.momentum >= 50 &&
+
+        scores.forecast >= 50
+
+    ) {
 
         return ACTIONS.ACCUMULATE;
 
     }
 
-    if (confidence >= 50) {
+    /*
+     * Watch
+     */
 
-        return ACTIONS.HOLD;
-
-    }
-
-    if (confidence >= 35) {
+    if (
+        confidence >= 35
+    ) {
 
         return ACTIONS.WATCH;
-
-    }
-
-    if (confidence >= 20) {
-
-        return ACTIONS.REDUCE;
 
     }
 
@@ -454,29 +817,38 @@ function calculateConviction(
     confidence
 ) {
 
-    confidence = clamp(
-        toNumber(confidence)
-    );
+    confidence =
+        clamp(
+            confidence
+        );
 
-    if (confidence >= 95) {
+    if (
+        confidence >= 95
+    ) {
 
         return CONVICTION.VERY_HIGH;
 
     }
 
-    if (confidence >= 80) {
+    if (
+        confidence >= 80
+    ) {
 
         return CONVICTION.HIGH;
 
     }
 
-    if (confidence >= 65) {
+    if (
+        confidence >= 65
+    ) {
 
         return CONVICTION.MODERATE;
 
     }
 
-    if (confidence >= 45) {
+    if (
+        confidence >= 45
+    ) {
 
         return CONVICTION.LOW;
 
@@ -487,36 +859,54 @@ function calculateConviction(
 }
 
 // ==========================================================
-// Risk Level
+// Actual Risk Level
 // ==========================================================
 
 function calculateRisk(
-    confidence
+    riskScore
 ) {
 
-    confidence = clamp(
-        toNumber(confidence)
-    );
+    /*
+     * IMPORTANT:
+     *
+     * Risk is now calculated from ACTUAL RISK SCORE,
+     * not from confidence.
+     *
+     * High risk score = dangerous.
+     */
 
-    if (confidence >= 95) {
+    riskScore =
+        clamp(
+            riskScore
+        );
+
+    if (
+        riskScore <= 10
+    ) {
 
         return RISK.VERY_LOW;
 
     }
 
-    if (confidence >= 80) {
+    if (
+        riskScore <= 25
+    ) {
 
         return RISK.LOW;
 
     }
 
-    if (confidence >= 60) {
+    if (
+        riskScore <= 50
+    ) {
 
         return RISK.MEDIUM;
 
     }
 
-    if (confidence >= 40) {
+    if (
+        riskScore <= 75
+    ) {
 
         return RISK.HIGH;
 
@@ -531,16 +921,10 @@ function calculateRisk(
 // ==========================================================
 
 function calculateUrgency(
-
     action
-
 ) {
 
     switch (action) {
-
-        case ACTIONS.STRONG_BUY:
-
-            return URGENCY.HIGH;
 
         case ACTIONS.FULL_EXIT:
 
@@ -548,7 +932,19 @@ function calculateUrgency(
 
         case ACTIONS.PARTIAL_EXIT:
 
+        case ACTIONS.REDUCE:
+
             return URGENCY.HIGH;
+
+        case ACTIONS.STRONG_BUY:
+
+        case ACTIONS.BUY:
+
+            return URGENCY.HIGH;
+
+        case ACTIONS.WATCH:
+
+            return URGENCY.NORMAL;
 
         default:
 
@@ -564,25 +960,19 @@ function calculateUrgency(
 
 function buildExecutionHints(
     action,
-    context = {}
+    context,
+    confidence
 ) {
 
-    const recommendation =
-        context?.recommendation || {};
-
-    const confidence =
-        toNumber(
-            recommendation.confidence ??
-            context?.confidence?.overall
-        );
-
     const urgency =
-        recommendation.urgency ??
-        "NORMAL";
+        calculateUrgency(
+            action
+        );
 
     return {
 
         shouldBuy:
+
             [
                 ACTIONS.BUY,
                 ACTIONS.STRONG_BUY,
@@ -590,42 +980,60 @@ function buildExecutionHints(
             ].includes(action),
 
         shouldSell:
+
             [
                 ACTIONS.PARTIAL_EXIT,
                 ACTIONS.FULL_EXIT,
             ].includes(action),
 
         shouldReduce:
+
             action === ACTIONS.REDUCE,
 
         shouldExit:
+
             action === ACTIONS.FULL_EXIT,
 
         shouldMonitor:
-            action !== ACTIONS.FULL_EXIT,
+
+            ![
+                ACTIONS.FULL_EXIT,
+                ACTIONS.AVOID,
+            ].includes(action),
 
         confidence,
 
         urgency,
 
         allowScalingIn:
-            confidence >= 85,
+
+            confidence >= 85 &&
+            [
+                ACTIONS.BUY,
+                ACTIONS.STRONG_BUY,
+                ACTIONS.ACCUMULATE,
+            ].includes(action),
 
         allowPartialTakeProfit:
+
             confidence >= 70,
 
         requiresConfirmation:
-            confidence < 70,
+
+            [
+                ACTIONS.WATCH,
+                ACTIONS.ACCUMULATE,
+            ].includes(action),
 
         cooldownMinutes:
 
-            urgency === "CRITICAL"
+            urgency === URGENCY.CRITICAL
                 ? 0
-                : urgency === "HIGH"
-                ? 2
-                : urgency === "NORMAL"
-                ? 5
-                : 10,
+                : urgency === URGENCY.HIGH
+                    ? 2
+                    : urgency === URGENCY.NORMAL
+                        ? 5
+                        : 10,
 
     };
 
@@ -635,18 +1043,124 @@ function buildExecutionHints(
 // Explanation
 // ==========================================================
 
-function buildExplanation(
-    thesis = {}
-) {
+function buildExplanation({
 
-    const unique = values =>
-        [...new Set(
-            safeArray(values)
-                .map(item =>
-                    String(item).trim()
-                )
-                .filter(Boolean)
-        )];
+    thesis = {},
+
+    action,
+
+    confidence,
+
+    conviction,
+
+    riskLevel,
+
+    safetyReason,
+
+    scores = {},
+
+}) {
+
+    const positives =
+        unique(
+            thesis.strengths
+        );
+
+    const negatives =
+        unique(
+            thesis.weaknesses
+        );
+
+    const risks =
+        unique(
+            thesis.risks
+        );
+
+    const assumptions =
+        unique(
+            thesis.assumptions
+        );
+
+    const convictionDrivers =
+        unique(
+            thesis.convictionDrivers
+        );
+
+    const monitoringPriorities =
+        unique(
+            thesis.monitoringPriorities
+        );
+
+    const conditions = [];
+
+    if (
+        scores.momentum >= 70
+    ) {
+
+        conditions.push(
+            "Strong momentum."
+        );
+
+    }
+
+    if (
+        scores.forecast >= 70
+    ) {
+
+        conditions.push(
+            "Bullish forecast."
+        );
+
+    }
+
+    if (
+        scores.wallet >= 70
+    ) {
+
+        conditions.push(
+            "Strong wallet quality."
+        );
+
+    }
+
+    if (
+        scores.historicalFound &&
+        scores.historicalWinRate >= 70
+    ) {
+
+        conditions.push(
+            "Historical pattern has a strong win rate."
+        );
+
+    }
+
+    if (
+        scores.liquidity >= 50
+    ) {
+
+        conditions.push(
+            "Liquidity is supportive."
+        );
+
+    }
+
+    if (
+        scores.volume >= 60
+    ) {
+
+        conditions.push(
+            "Volume confirms participation."
+        );
+
+    }
+
+    if (safetyReason) {
+
+        risks.unshift(
+            safetyReason
+        );
+
+    }
 
     return {
 
@@ -655,55 +1169,39 @@ function buildExplanation(
                 thesis.summary || ""
             ).trim(),
 
-        positives:
-            unique(
-                thesis.strengths
-            ),
+        recommendation:
+            action,
 
-        negatives:
-            unique(
-                thesis.weaknesses
-            ),
+        confidence,
+
+        conviction,
+
+        riskLevel,
+
+        positives,
+
+        negatives,
 
         risks:
-            unique(
-                thesis.risks
-            ),
+            unique(risks),
 
-        assumptions:
-            unique(
-                thesis.assumptions
-            ),
+        assumptions,
 
-        convictionDrivers:
-            unique(
-                thesis.convictionDrivers
-            ),
+        convictionDrivers,
 
         conditions:
-            unique(
-                thesis.monitoringPriorities
-            ),
+            unique(conditions),
 
-        monitoringPriorities:
-            unique(
-                thesis.monitoringPriorities
-            ),
+        monitoringPriorities,
 
         positivesCount:
-            unique(
-                thesis.strengths
-            ).length,
+            positives.length,
 
         negativesCount:
-            unique(
-                thesis.weaknesses
-            ).length,
+            negatives.length,
 
         riskCount:
-            unique(
-                thesis.risks
-            ).length,
+            unique(risks).length,
 
     };
 
@@ -714,99 +1212,217 @@ function buildExplanation(
 // ==========================================================
 
 function buildScorecard(
-    context
+    context,
+    confidence,
+    scores,
+    consensus
 ) {
-
-    const analyses =
-        safeObject(
-            context?.analyses
-        );
-
-    const score = value =>
-        value == null
-            ? null
-            : clamp(
-                toNumber(value)
-            );
 
     return {
 
         confidence:
-            score(
-                context?.confidence?.overall
+            clamp(
+                confidence
             ),
 
         liquidity:
-            score(
-                analyses.liquidity?.score
-            ),
+            scores.liquidity,
 
         volume:
-            score(
-                analyses.volume?.score
-            ),
+            scores.volume,
 
         momentum:
-            score(
-                analyses.momentum?.score
-            ),
+            scores.momentum,
 
         wallets:
-            score(
-                analyses.wallets?.score
-            ),
+            scores.wallet,
 
         holders:
-            score(
-                analyses.holders?.score
+            getScore(
+                context,
+                [
+                    "analyses.holders.score",
+                    "evidence.holders.score",
+                ]
             ),
 
         chart:
-            score(
-                analyses.chart?.score
+            getScore(
+                context,
+                [
+                    "analyses.chart.score",
+                    "evidence.chart.score",
+                ]
             ),
 
-       forecast:
-    score(
-        analyses.forecast?.forecastScore ??
-        analyses.forecast?.score
-    ),
+        forecast:
+            scores.forecast,
 
-       risk:
-    score(
-        analyses.risk?.riskScore ??
-        analyses.risk?.score
-    ),
+        risk:
+            scores.risk,
+
+        rugRisk:
+            scores.rugRisk,
 
         historical:
-            score(
-                analyses.historical?.score
-            ),
+            scores.historicalScore,
 
         walletQuality:
-            score(
-                analyses.walletQuality?.score
-            ),
+            getScore(
+                context,
+                [
+                    "analyses.walletQuality.score",
+                    "evidence.walletQuality.score",
+                ]
+            ) || scores.wallet,
 
         holderDistribution:
-            score(
-                analyses.holderDistribution?.score
+            getScore(
+                context,
+                [
+                    "analyses.holderDistribution.score",
+                    "evidence.holderDistribution.score",
+                ]
             ),
 
         riskStructure:
-            score(
-                analyses.riskStructure?.score
+            getScore(
+                context,
+                [
+                    "analyses.riskStructure.score",
+                    "evidence.riskStructure.score",
+                ]
             ),
 
-        consensus:
-            score(
-                context?.recommendation?.consensus?.score
-            ),
+        consensus,
 
     };
 
 }
 
+// ==========================================================
+// Consensus
+// ==========================================================
+
+function buildConsensus(
+    context,
+    confidence
+) {
+
+    const evidence =
+        safeObject(
+            context?.evidence
+        );
+
+    const engines =
+        Object.entries(
+            evidence
+        )
+
+            .map(
+                ([name, value]) => ({
+
+                    name,
+
+                    ...safeObject(
+                        value
+                    ),
+
+                })
+            )
+
+            .filter(
+                engine =>
+                    Number.isFinite(
+                        Number(
+                            engine.confidenceContribution
+                        )
+                    )
+            );
+
+    if (!engines.length) {
+
+        return {
+
+            score:
+                confidence,
+
+            agreement:
+                100,
+
+            disagreement:
+                0,
+
+            engineCount:
+                0,
+
+            unanimous:
+                true,
+
+        };
+
+    }
+
+    const scores =
+        engines.map(
+            engine =>
+                clamp(
+                    toNumber(
+                        engine.confidenceContribution
+                    )
+                )
+        );
+
+    const consensusScore =
+        Math.round(
+            average(scores)
+        );
+
+    const agreementRatio =
+        Math.round(
+
+            (
+
+                engines.filter(
+                    engine =>
+
+                        Math.abs(
+
+                            toNumber(
+                                engine.confidenceContribution
+                            ) -
+                            confidence
+
+                        ) <= 10
+
+                ).length /
+
+                engines.length
+
+            ) * 100
+
+        );
+
+    return {
+
+        score:
+            consensusScore,
+
+        agreement:
+            agreementRatio,
+
+        disagreement:
+            100 - agreementRatio,
+
+        engineCount:
+            engines.length,
+
+        unanimous:
+            agreementRatio >= 90,
+
+    };
+
+}
 
 // ==========================================================
 // Recommendation Builder
@@ -824,298 +1440,260 @@ function buildRecommendation(
     const confidence =
         ai.confidence;
 
-    const thesis =
-        ai.thesis;
+    const scores =
+        buildEvidenceScores(
+            context
+        );
+
+    const safety =
+        getSafetyDecision(
+            scores,
+            hasOpenPosition(
+                context
+            )
+        );
 
     const action =
-        calculateAction(
-
-            context,
-
-            confidence
-
-        );
-
-    const engineScores =
-        ai.engines
-            .map(
-
-                engine =>
-
-                    toNumber(
-
-                        engine.confidenceContribution
-
-                    )
-
-            )
-            .filter(
-
-                score =>
-
-                    score > 0
-
+        safety.blocked
+            ? safety.action
+            : calculateAction(
+                context,
+                confidence,
+                scores
             );
 
-    const engineConfidence =
-
-        engineScores.length
-
-            ? Math.round(
-
-                  average(
-
-                      engineScores
-
-                  )
-
-              )
-
-            : confidence;
-
-    const overallConfidence =
-
-        clamp(
-
-            Math.round(
-
-                confidence * 0.65 +
-
-                engineConfidence * 0.35
-
-            )
-
+    const conviction =
+        calculateConviction(
+            confidence
         );
 
-const consensusScore =
-    ai.engines.length
-        ? Math.round(
-              average(
-                  ai.engines.map(engine =>
-                      toNumber(
-                          engine.confidenceContribution
-                      )
-                  )
-              )
-          )
-        : overallConfidence;
+    const riskLevel =
+        calculateRisk(
+            scores.risk
+        );
 
-const agreementRatio =
-    ai.engines.length
-        ? Math.round(
-              (
-                  ai.engines.filter(
-                      engine =>
-                          toNumber(
-                              engine.confidenceContribution
-                          ) >= overallConfidence - 10
-                  ).length /
-                  ai.engines.length
-              ) * 100
-          )
-        : 100;
+    const urgency =
+        calculateUrgency(
+            action
+        );
 
-const disagreementRatio =
-    100 - agreementRatio;
+    const consensus =
+        buildConsensus(
+            context,
+            confidence
+        );
 
+    const explanation =
+        buildExplanation({
 
-const strengths = new Set();
+            thesis:
+                ai.thesis,
 
-const weaknesses = new Set();
+            action,
 
-const risks = new Set();
+            confidence,
 
-const convictionDrivers = new Set();
+            conviction,
 
-const monitoringPriorities = new Set();
+            riskLevel,
 
-const assumptions = new Set();
+            safetyReason:
+                safety.reason,
 
-for (const engine of ai.engines) {
+            scores,
 
-    if (!engine) continue;
+        });
 
-    safeArray(engine.strengths)
-        .forEach(item => strengths.add(item));
+    const scorecard =
+        buildScorecard(
+            context,
+            confidence,
+            scores,
+            consensus
+        );
 
-    safeArray(engine.weaknesses)
-        .forEach(item => weaknesses.add(item));
+    const execution =
+        buildExecutionHints(
+            action,
+            context,
+            confidence
+        );
 
-    safeArray(engine.risks)
-        .forEach(item => risks.add(item));
-
-    safeArray(engine.convictionDrivers)
-        .forEach(item => convictionDrivers.add(item));
-
-    safeArray(engine.monitoringPriorities)
-        .forEach(item => monitoringPriorities.add(item));
-
-    safeArray(engine.assumptions)
-        .forEach(item => assumptions.add(item));
-
-}
-
+    /*
+     * Preserve the useful output contract already
+     * used by the rest of the AI architecture.
+     */
 
     return {
 
         action,
 
-        confidence: overallConfidence,
+        /*
+         * Compatibility alias.
+         *
+         * Some existing consumers may read
+         * recommendation instead of action.
+         */
 
-        conviction:
+        recommendation:
+            action,
 
-            calculateConviction(
-                overallConfidence
-            ),
-
-        urgency:
-
-            calculateUrgency(
-                action
-            ),
-
-        riskLevel:
-
-            calculateRisk(
-                overallConfidence
-            ),
-
-        explanation:
-
-    buildExplanation({
-
-    ...thesis,
-
-    strengths:
-        [...strengths],
-
-    weaknesses:
-        [...weaknesses],
-
-    risks:
-        [...risks],
-
-    assumptions:
-        [...assumptions],
-
-    convictionDrivers:
-        [...convictionDrivers],
-
-    monitoringPriorities:
-        [...monitoringPriorities],
-
-}),
-
-        scorecard:
-
-            buildScorecard(
-                context
-            ),
-
-       execution:
-
-    buildExecutionHints(
-        action,
-        context
-    ),
-
-        generatedAt:
-    new Date(),
-
-engine:
-    "RecommendationEngine",
-
-version:
-    "2.0.0",
-
-timestamp:
-    Date.now(),
-
-analysisCount:
-    ai.engines.length,
-
-historicalConfidence:
-    confidence,
-
-aiConfidence:
-    engineConfidence,
-
-overallConfidence,
-
-confidenceBreakdown: {
-
-    historical:
         confidence,
 
-    ai:
-        engineConfidence,
+        conviction,
 
-    final:
-        overallConfidence,
+        urgency,
 
-},
+        riskLevel,
 
-      consensus: {
+        explanation,
 
-    score:
-        consensusScore,
+        scorecard,
 
-    agreement:
-        agreementRatio,
+        execution,
 
-    disagreement:
-        disagreementRatio,
+        generatedAt:
+            new Date(),
 
-    engineCount:
-        ai.engines.length,
+        engine:
+            "RecommendationEngine",
 
-    unanimous:
-        agreementRatio >= 90,
+        version:
+            "3.0.0",
 
-},
+        timestamp:
+            Date.now(),
 
-strengths:
-    [...strengths],
+        /*
+         * The thesis confidence is the canonical
+         * confidence source.
+         *
+         * We deliberately DO NOT calculate another
+         * confidence by averaging the same evidence.
+         */
 
-weaknesses:
-    [...weaknesses],
+        thesisConfidence:
+            confidence,
 
-risks:
-    [...risks],
+        overallConfidence:
+            confidence,
 
-assumptions:
-    [...assumptions],
+        confidenceBreakdown: {
 
-convictionDrivers:
-    [...convictionDrivers],
+            thesis:
+                confidence,
 
-monitoringPriorities:
-    [...monitoringPriorities],
-metrics: {
+            final:
+                confidence,
 
-    positiveSignals:
-        strengths.size,
+        },
 
-    warningSignals:
-        weaknesses.size,
+        consensus,
 
-    riskSignals:
-        risks.size,
+        strengths:
+            unique(
+                ai.thesis.strengths
+            ),
 
-    convictionSignals:
-        convictionDrivers.size,
+        weaknesses:
+            unique(
+                ai.thesis.weaknesses
+            ),
 
-    monitoringSignals:
-        monitoringPriorities.size,
+        risks:
+            unique(
+                ai.thesis.risks
+            ),
 
-},
+        assumptions:
+            unique(
+                ai.thesis.assumptions
+            ),
+
+        convictionDrivers:
+            unique(
+                ai.thesis.convictionDrivers
+            ),
+
+        monitoringPriorities:
+            unique(
+                ai.thesis.monitoringPriorities
+            ),
+
+        metrics: {
+
+            positiveSignals:
+                unique(
+                    ai.thesis.strengths
+                ).length,
+
+            warningSignals:
+                unique(
+                    ai.thesis.weaknesses
+                ).length,
+
+            riskSignals:
+                unique(
+                    ai.thesis.risks
+                ).length,
+
+            convictionSignals:
+                unique(
+                    ai.thesis.convictionDrivers
+                ).length,
+
+            monitoringSignals:
+                unique(
+                    ai.thesis.monitoringPriorities
+                ).length,
+
+        },
+
+        decisionBasis: {
+
+            confidence,
+
+            momentum:
+                scores.momentum,
+
+            forecast:
+                scores.forecast,
+
+            liquidity:
+                scores.liquidity,
+
+            volume:
+                scores.volume,
+
+            wallet:
+                scores.wallet,
+
+            historicalScore:
+                scores.historicalScore,
+
+            historicalFound:
+                scores.historicalFound,
+
+            historicalWinRate:
+                scores.historicalWinRate,
+
+            risk:
+                scores.risk,
+
+            rugRisk:
+                scores.rugRisk,
+
+            safetyBlocked:
+                safety.blocked,
+
+        },
 
     };
 
 }
 
 // ==========================================================
-// Generate Recommendation
+// Public API
 // ==========================================================
 
 export function runRecommendationEngine(
@@ -1125,57 +1703,47 @@ export function runRecommendationEngine(
     if (!context) {
 
         throw new Error(
-
             "RecommendationEngine: context is required."
-
         );
 
     }
 
     const recommendation =
-
         buildRecommendation(
             context
         );
 
     setRecommendation(
-
         context,
-
         recommendation
-
     );
 
     addDebug(
-
         context,
-
         "Recommendation generated.",
-
         {
 
             action:
-
                 recommendation.action,
 
             confidence:
-
                 recommendation.confidence,
 
             conviction:
-
                 recommendation.conviction,
 
             urgency:
-
                 recommendation.urgency,
 
             riskLevel:
-
                 recommendation.riskLevel,
 
-        }
+            safetyBlocked:
+                recommendation
+                    .decisionBasis
+                    .safetyBlocked,
 
+        }
     );
 
     return context;
