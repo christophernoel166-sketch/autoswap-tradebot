@@ -1,9 +1,15 @@
 import { redis } from "../utils/redis.js";
 import { positionKey } from "../redis/positionKeys.js";
+import {
+    updateAnalysis,
+} from "./aiStateService.js";
 
 export async function saveAIStateToRedis(context) {
 
-    if (!context?.walletAddress || !context?.mint) {
+    if (
+        !context?.walletAddress ||
+        !context?.mint
+    ) {
         return;
     }
 
@@ -22,112 +28,195 @@ export async function saveAIStateToRedis(context) {
     const pipeline =
         context.pipeline || {};
 
-// -----------------------------
-// AI Evolution Memory
-// -----------------------------
+    // ==========================================
+    // AI Evolution Memory
+    // ==========================================
 
-let aiMemory =
-    context.aiMemory || {};
+    let aiMemory =
+        context.aiMemory || {};
 
-// ==========================================
-// Restore existing memory from Redis
-// ==========================================
+    // ==========================================
+    // Restore existing memory from Redis
+    // ==========================================
 
-try {
+    try {
 
-    const existing = await redis.hget(
-        positionKey(
-            context.walletAddress,
-            context.mint
-        ),
-        "aiMemory"
-    );
+        const existing =
+            await redis.hget(
+                positionKey(
+                    context.walletAddress,
+                    context.mint
+                ),
+                "aiMemory"
+            );
 
-    if (existing) {
+        if (existing) {
 
-        aiMemory = {
+            aiMemory = {
 
-            ...JSON.parse(existing),
+                ...JSON.parse(existing),
 
-            ...aiMemory,
+                ...aiMemory,
 
-        };
+            };
+
+        }
+
+    } catch (err) {
+
+        console.warn(
+            "Failed to restore AI memory:",
+            err.message
+        );
 
     }
 
-}
-catch (err) {
+    // ==========================================
+    // Synchronize Wallet-Level AI State
+    // ==========================================
+    //
+    // Global AI confidence should come from the
+    // coordinated AI decision/recommendation.
+    //
+    // Protection confidence remains position-level.
+    // ==========================================
 
-    console.warn(
-        "Failed to restore AI memory:",
-        err.message
+    const aiConfidence =
+        Number(
+            tradeDecision?.confidence ??
+            context?.recommendation?.confidence ??
+            context?.confidence?.overall ??
+            context?.confidence ??
+            0
+        );
+
+    const aiRecommendation =
+        tradeDecision?.recommendation ??
+        context?.recommendation?.recommendation ??
+        context?.recommendation?.action ??
+        null;
+
+    updateAnalysis(
+        context.walletAddress,
+        {
+
+            recommendation:
+                aiRecommendation,
+
+            confidence:
+                aiConfidence,
+
+            signalScore:
+                context?.analyses?.signalScore ??
+                context?.signalScore ??
+                null,
+
+            confidenceTrend:
+                aiMemory?.confidenceTrend ??
+                "STABLE",
+
+        }
     );
 
-}
+    console.log(
+        "🧠 AI SOCKET STATE SYNCHRONIZED",
+        {
+            walletAddress:
+                context.walletAddress,
 
-// ==========================================
-// Build AI Snapshot
-// ==========================================
+            mint:
+                context.mint,
 
-const snapshot = {
+            confidence:
+                aiConfidence,
 
-    timestamp: new Date().toISOString(),
+            recommendation:
+                aiRecommendation,
 
-    health:
-        positionHealth.overallHealth || null,
-
-    trend:
-        positionHealth.trend || null,
-
-    confidence:
-        protection.confidence ?? null,
-
-    protection:
-        protection.protectionLevel || null,
-
-    recommendation:
-        tradeDecision.recommendation || null,
-
-    action:
-        tradePlan.action || null,
-
-    pnl:
-        context.changePercent ?? null,
-
-    highestPrice:
-        context.highestPrice ?? null,
-
-};
-
-// ==========================================
-// Update AI Timeline
-// ==========================================
-
-const timeline = Array.isArray(
-    aiMemory.timeline
-)
-    ? [...aiMemory.timeline]
-    : [];
-
-timeline.push(snapshot);
-
-// Keep only latest 20 observations
-
-if (timeline.length > 20) {
-
-    timeline.splice(
-        0,
-        timeline.length - 20
+            protectionConfidence:
+                Number(
+                    protection?.confidence ?? 0
+                ),
+        }
     );
 
-}
+    // ==========================================
+    // Build AI Snapshot
+    // ==========================================
 
-aiMemory.timeline = timeline;
+    const snapshot = {
 
-aiMemory.lastSnapshot = snapshot;
+        timestamp:
+            new Date().toISOString(),
 
-aiMemory.lastUpdated = new Date();
+        health:
+            positionHealth.overallHealth ||
+            null,
 
+        trend:
+            positionHealth.trend ||
+            null,
+
+        confidence:
+            protection.confidence ??
+            null,
+
+        protection:
+            protection.protectionLevel ||
+            null,
+
+        recommendation:
+            tradeDecision.recommendation ||
+            null,
+
+        action:
+            tradePlan.action ||
+            null,
+
+        pnl:
+            context.changePercent ??
+            null,
+
+        highestPrice:
+            context.highestPrice ??
+            null,
+
+    };
+
+    // ==========================================
+    // Update AI Timeline
+    // ==========================================
+
+    const timeline =
+        Array.isArray(aiMemory.timeline)
+            ? [...aiMemory.timeline]
+            : [];
+
+    timeline.push(snapshot);
+
+    // Keep only latest 20 observations
+
+    if (timeline.length > 20) {
+
+        timeline.splice(
+            0,
+            timeline.length - 20
+        );
+
+    }
+
+    aiMemory.timeline =
+        timeline;
+
+    aiMemory.lastSnapshot =
+        snapshot;
+
+    aiMemory.lastUpdated =
+        new Date();
+
+    // ==========================================
+    // Save AI State To Position Redis
+    // ==========================================
 
     await redis.hset(
         positionKey(
@@ -151,24 +240,29 @@ aiMemory.lastUpdated = new Date();
             // -----------------------------
 
             aiHealth:
-                positionHealth.overallHealth || "",
+                positionHealth.overallHealth ||
+                "",
 
             aiTrend:
-                positionHealth.trend || "",
+                positionHealth.trend ||
+                "",
 
             // -----------------------------
             // Protection
             // -----------------------------
 
             aiProtection:
-                protection.protectionLevel || "",
+                protection.protectionLevel ||
+                "",
 
             aiTask:
-                protection.protectionIntent || "",
+                protection.protectionIntent ||
+                "",
 
             aiConfidence:
                 String(
-                    protection.confidence ?? 0
+                    protection.confidence ??
+                    0
                 ),
 
             // -----------------------------
@@ -176,49 +270,65 @@ aiMemory.lastUpdated = new Date();
             // -----------------------------
 
             aiRecommendation:
-                tradeDecision.recommendation || "",
+                tradeDecision.recommendation ||
+                "",
 
             aiAction:
-                tradePlan.action || "",
+                tradePlan.action ||
+                "",
 
             // -----------------------------
             // Full AI Objects
             // -----------------------------
 
             aiPipeline:
-                JSON.stringify(pipeline),
+                JSON.stringify(
+                    pipeline
+                ),
 
             aiPositionHealth:
-                JSON.stringify(positionHealth),
+                JSON.stringify(
+                    positionHealth
+                ),
 
             aiProtectionStrategy:
-                JSON.stringify(protection),
+                JSON.stringify(
+                    protection
+                ),
 
             aiTradeDecision:
-                JSON.stringify(tradeDecision),
+                JSON.stringify(
+                    tradeDecision
+                ),
 
             aiTradePlan:
-                JSON.stringify(tradePlan),
-// -----------------------------
-// AI Memory
-// -----------------------------
+                JSON.stringify(
+                    tradePlan
+                ),
 
-aiMemory:
-    JSON.stringify(aiMemory),
+            // -----------------------------
+            // AI Memory
+            // -----------------------------
+
+            aiMemory:
+                JSON.stringify(
+                    aiMemory
+                ),
 
         }
     );
 
     // ==========================================
-    // DEBUG - Verify Redis write
+    // DEBUG - Verify Redis Write
     // ==========================================
 
-    const saved = await redis.hgetall(
-        positionKey(
-            context.walletAddress,
-            context.mint
-        )
-    );
+    const saved =
+        await redis.hgetall(
+            positionKey(
+                context.walletAddress,
+                context.mint
+            )
+        );
 
     console.log(
         "\n================ AI REDIS STATE ================\n"
@@ -226,15 +336,33 @@ aiMemory:
 
     console.dir(
         {
-            aiStatus: saved.aiStatus,
-            aiStage: saved.aiStage,
-            aiHealth: saved.aiHealth,
-            aiTrend: saved.aiTrend,
-            aiProtection: saved.aiProtection,
-            aiTask: saved.aiTask,
-            aiConfidence: saved.aiConfidence,
-            aiRecommendation: saved.aiRecommendation,
-            aiAction: saved.aiAction,
+            aiStatus:
+                saved.aiStatus,
+
+            aiStage:
+                saved.aiStage,
+
+            aiHealth:
+                saved.aiHealth,
+
+            aiTrend:
+                saved.aiTrend,
+
+            aiProtection:
+                saved.aiProtection,
+
+            aiTask:
+                saved.aiTask,
+
+            aiConfidence:
+                saved.aiConfidence,
+
+            aiRecommendation:
+                saved.aiRecommendation,
+
+            aiAction:
+                saved.aiAction,
+
         },
         {
             depth: null,
