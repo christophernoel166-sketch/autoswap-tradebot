@@ -5,6 +5,10 @@ import {
   addActivity,
 } from "./aiStateService.js";
 
+import {
+  resolveAIConfidence,
+} from "./resolveAIConfidence.js";
+
 // =====================================================
 // PUBLISH LIVE POSITION AI STATE
 // =====================================================
@@ -16,13 +20,11 @@ import {
 // The FINAL trade decision has priority over the
 // preliminary RecommendationEngine result.
 //
-// Confidence hierarchy:
+// Confidence is resolved through ONE shared resolver:
+//     resolveAIConfidence()
 //
-// 1. tradeDecision.confidence
-// 2. recommendation.confidence
-// 3. protection.confidence
-// 4. aiContext.confidence.overall
-// 5. 0
+// This prevents different AI state persistence paths
+// from calculating different confidence values.
 //
 // =====================================================
 
@@ -31,13 +33,17 @@ export function publishLiveAIState(
   aiContext
 ) {
 
-  if (!walletAddress || !aiContext) {
+  if (
+    !walletAddress ||
+    !aiContext
+  ) {
 
     console.warn(
       "⚠️ [LIVE AI STATE] publishLiveAIState() called without required data",
       {
         walletAddress,
-        hasAIContext: !!aiContext,
+        hasAIContext:
+          !!aiContext,
       }
     );
 
@@ -67,6 +73,32 @@ export function publishLiveAIState(
     aiContext.pipeline || {};
 
   // ===================================================
+  // CONFIDENCE RESOLUTION
+  // ===================================================
+  //
+  // ONE authoritative resolver.
+  //
+  // Example:
+  //
+  // tradeDecision.confidence = 0
+  // exitDecision.confidence = 67
+  //
+  // Result:
+  //
+  // confidence = 67
+  //
+  // ===================================================
+
+  const {
+    confidence,
+    source:
+      selectedConfidenceSource,
+  } =
+    resolveAIConfidence(
+      aiContext
+    );
+
+  // ===================================================
   // BASIC DIAGNOSTIC
   // ===================================================
 
@@ -75,7 +107,7 @@ export function publishLiveAIState(
   );
 
   console.log(
-    "🔬 [CONFIDENCE DIAGNOSTIC] publishLiveAIState() CALLED"
+    "🧠 [LIVE AI STATE] publishLiveAIState() CALLED"
   );
 
   console.log(
@@ -92,24 +124,25 @@ export function publishLiveAIState(
         null,
 
       recommendationObject:
-        aiContext.recommendation ?? null,
+        aiContext.recommendation ??
+        null,
 
       tradeDecisionObject:
         tradeDecision,
+
+      exitDecisionObject:
+        exitDecision,
 
       protectionObject:
         protection,
 
       contextConfidence:
-        aiContext.confidence ?? null,
-
-      positionHealth,
+        aiContext.confidence ??
+        null,
 
       pipeline,
 
       tradePlan,
-
-      exitDecision,
     },
     {
       depth: null,
@@ -118,109 +151,7 @@ export function publishLiveAIState(
   );
 
   // ===================================================
-  // CONFIDENCE SOURCES
-  // ===================================================
-
-  const recommendationConfidence =
-    aiContext.recommendation?.confidence;
-
-  const tradeDecisionConfidence =
-    tradeDecision.confidence;
-
-  const protectionConfidence =
-    protection.confidence;
-
-  const overallConfidence =
-    aiContext.confidence?.overall;
-
-  // ===================================================
-  // DETERMINE FINAL CONFIDENCE SOURCE
-  // ===================================================
-  //
-  // FINAL TRADE DECISION IS AUTHORITATIVE.
-  //
-  // We intentionally check tradeDecision FIRST.
-  //
-  // This prevents:
-  //
-  // recommendation.confidence = 0
-  //
-  // from overriding:
-  //
-  // tradeDecision.confidence = 67
-  //
-  // ===================================================
-
-  let selectedConfidenceSource =
-    "DEFAULT_0";
-
-  let selectedConfidenceValue = 0;
-
-  if (
-    Number.isFinite(
-      Number(tradeDecisionConfidence)
-    )
-  ) {
-
-    selectedConfidenceSource =
-      "tradeDecision.confidence";
-
-    selectedConfidenceValue =
-      Number(tradeDecisionConfidence);
-
-  } else if (
-    Number.isFinite(
-      Number(recommendationConfidence)
-    )
-  ) {
-
-    selectedConfidenceSource =
-      "recommendation.confidence";
-
-    selectedConfidenceValue =
-      Number(recommendationConfidence);
-
-  } else if (
-    Number.isFinite(
-      Number(protectionConfidence)
-    )
-  ) {
-
-    selectedConfidenceSource =
-      "protection.confidence";
-
-    selectedConfidenceValue =
-      Number(protectionConfidence);
-
-  } else if (
-    Number.isFinite(
-      Number(overallConfidence)
-    )
-  ) {
-
-    selectedConfidenceSource =
-      "aiContext.confidence.overall";
-
-    selectedConfidenceValue =
-      Number(overallConfidence);
-
-  }
-
-  // ===================================================
-  // FINAL CONFIDENCE
-  // ===================================================
-
-  const confidence =
-    Math.max(
-      0,
-      Math.min(
-        100,
-        selectedConfidenceValue
-      )
-    );
-
-  // ===================================================
-  // FINAL CONFIDENCE DIAGNOSTIC
+  // CONFIDENCE SOURCE DIAGNOSTIC
   // ===================================================
 
   console.log(
@@ -228,7 +159,7 @@ export function publishLiveAIState(
   );
 
   console.log(
-    "🎯 [CONFIDENCE DIAGNOSTIC] FINAL RESULT"
+    "🎯 [CONFIDENCE RESOLVER] FINAL RESULT"
   );
 
   console.log(
@@ -252,14 +183,32 @@ export function publishLiveAIState(
       finalConfidenceType:
         typeof confidence,
 
-      recommendationConfidence,
+      recommendationConfidence:
+        aiContext
+          .recommendation
+          ?.confidence ??
+        null,
 
-      tradeDecisionConfidence,
+      tradeDecisionConfidence:
+        tradeDecision
+          .confidence ??
+        null,
 
-      protectionConfidence,
+      exitDecisionConfidence:
+        exitDecision
+          .confidence ??
+        null,
 
-      overallConfidence,
+      protectionConfidence:
+        protection
+          .confidence ??
+        null,
 
+      overallConfidence:
+        aiContext
+          .confidence
+          ?.overall ??
+        null,
     },
     {
       depth: null,
@@ -276,19 +225,23 @@ export function publishLiveAIState(
   // ===================================================
 
   const health =
-    positionHealth.overallHealth ??
+    positionHealth
+      .overallHealth ??
     "UNKNOWN";
 
   const trend =
-    positionHealth.trend ??
+    positionHealth
+      .trend ??
     "UNKNOWN";
 
   const protectionLevel =
-    protection.protectionLevel ??
+    protection
+      .protectionLevel ??
     "NONE";
 
   const protectionIntent =
-    protection.protectionIntent ??
+    protection
+      .protectionIntent ??
     "Monitoring position";
 
   // ===================================================
@@ -298,13 +251,24 @@ export function publishLiveAIState(
   // Prefer the final trade decision because it represents
   // the coordinated AI decision.
   //
+  // For an open position, exitDecision remains available
+  // as the fallback recommendation.
+  //
   // ===================================================
 
   const recommendation =
-    tradeDecision.recommendation ??
-    aiContext.recommendation?.recommendation ??
-    aiContext.recommendation?.action ??
-    exitDecision.recommendation ??
+    tradeDecision
+      .recommendation ??
+    aiContext
+      .recommendation
+      ?.recommendation ??
+    aiContext
+      .recommendation
+      ?.action ??
+    exitDecision
+      .recommendation ??
+    exitDecision
+      .action ??
     "HOLD";
 
   // ===================================================
@@ -325,26 +289,28 @@ export function publishLiveAIState(
     "MONITORING";
 
   if (
-    pipeline.status === "FAILED"
+    pipeline.status ===
+    "FAILED"
   ) {
 
     status =
       "ERROR";
 
   } else if (
-    pipeline.status === "COMPLETED"
+    pipeline.status ===
+    "COMPLETED"
   ) {
 
     status =
       "MONITORING";
 
   } else if (
-    pipeline.status === "RUNNING"
+    pipeline.status ===
+    "RUNNING"
   ) {
 
     status =
       "ANALYZING";
-
   }
 
   // ===================================================
@@ -355,15 +321,18 @@ export function publishLiveAIState(
     protectionIntent;
 
   if (
-    action === "FULL_EXIT"
+    action ===
+    "FULL_EXIT"
   ) {
 
     currentTask =
       "FULL_EXIT";
 
   } else if (
-    action === "PARTIAL_EXIT" ||
-    action === "SCALE_OUT"
+    action ===
+      "PARTIAL_EXIT" ||
+    action ===
+      "SCALE_OUT"
   ) {
 
     currentTask =
@@ -375,7 +344,6 @@ export function publishLiveAIState(
 
     currentTask =
       pipeline.stage;
-
   }
 
   // ===================================================
@@ -384,7 +352,8 @@ export function publishLiveAIState(
 
   const protectedValue =
     protectionLevel &&
-    protectionLevel !== "NONE"
+    protectionLevel !==
+      "NONE"
       ? 1
       : 0;
 
@@ -394,25 +363,27 @@ export function publishLiveAIState(
 
   let progress =
     Number(
-      pipeline.progress ?? 0
+      pipeline.progress ??
+      0
     );
 
   if (
-    !Number.isFinite(progress)
+    !Number.isFinite(
+      progress
+    )
   ) {
 
     progress =
       0;
-
   }
 
   if (
-    pipeline.status === "COMPLETED"
+    pipeline.status ===
+    "COMPLETED"
   ) {
 
     progress =
       100;
-
   }
 
   // ===================================================
@@ -429,13 +400,9 @@ export function publishLiveAIState(
         // =============================================
 
         system: {
-
           status,
-
           health,
-
           currentTask,
-
         },
 
         // =============================================
@@ -443,14 +410,11 @@ export function publishLiveAIState(
         // =============================================
 
         portfolio: {
-
           confidence,
-
           health,
 
           protected:
             protectedValue,
-
         },
 
         // =============================================
@@ -458,9 +422,7 @@ export function publishLiveAIState(
         // =============================================
 
         market: {
-
           trend,
-
         },
 
         // =============================================
@@ -487,7 +449,6 @@ export function publishLiveAIState(
           startedAt:
             pipeline.startedAt ??
             null,
-
         },
 
         // =============================================
@@ -503,20 +464,22 @@ export function publishLiveAIState(
             protectedValue,
 
           healthy:
-            health === "HEALTHY"
+            health ===
+            "HEALTHY"
               ? 1
               : 0,
 
           warning:
-            health === "WARNING"
+            health ===
+            "WARNING"
               ? 1
               : 0,
 
           danger:
-            health === "CRITICAL"
+            health ===
+            "CRITICAL"
               ? 1
               : 0,
-
         },
 
         // =============================================
@@ -542,12 +505,23 @@ export function publishLiveAIState(
               selectedConfidenceSource,
 
             exitDecision:
-              exitDecision.decision ??
-              exitDecision.action ??
+              exitDecision
+                .decision ??
+              exitDecision
+                .action ??
+              null,
+
+            exitDecisionConfidence:
+              exitDecision
+                .confidence ??
+              null,
+
+            tradeDecisionConfidence:
+              tradeDecision
+                .confidence ??
               null,
 
             action,
-
           },
 
           reasoning: {
@@ -562,16 +536,14 @@ export function publishLiveAIState(
             recommendation,
 
             action,
-
           },
 
           confidenceTrend:
             confidence >= 80
               ? "RISING"
               : confidence >= 50
-              ? "STABLE"
-              : "FALLING",
-
+                ? "STABLE"
+                : "FALLING",
         },
 
         // =============================================
@@ -582,9 +554,7 @@ export function publishLiveAIState(
 
           redisStatus:
             "HEALTHY",
-
         },
-
       }
     );
 
@@ -613,7 +583,6 @@ export function publishLiveAIState(
 
       protection:
         protectionLevel,
-
     }
   );
 
@@ -627,7 +596,6 @@ export function publishLiveAIState(
 
   console.dir(
     {
-
       walletAddress,
 
       status,
@@ -653,20 +621,38 @@ export function publishLiveAIState(
         null,
 
       // ===============================================
-      // IMPORTANT DIAGNOSTIC VALUES
+      // CONFIDENCE
       // ===============================================
 
       confidenceSource:
         selectedConfidenceSource,
 
-      recommendationConfidence,
+      recommendationConfidence:
+        aiContext
+          .recommendation
+          ?.confidence ??
+        null,
 
-      tradeDecisionConfidence,
+      tradeDecisionConfidence:
+        tradeDecision
+          .confidence ??
+        null,
 
-      protectionConfidence,
+      exitDecisionConfidence:
+        exitDecision
+          .confidence ??
+        null,
 
-      overallConfidence,
+      protectionConfidence:
+        protection
+          .confidence ??
+        null,
 
+      overallConfidence:
+        aiContext
+          .confidence
+          ?.overall ??
+        null,
     },
     {
       depth: null,

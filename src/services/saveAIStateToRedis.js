@@ -1,17 +1,79 @@
 import { redis } from "../utils/redis.js";
 import { positionKey } from "../redis/positionKeys.js";
+
 import {
     updateAnalysis,
 } from "./aiStateService.js";
 
-export async function saveAIStateToRedis(context) {
+import {
+    resolveAIConfidence,
+} from "./resolveAIConfidence.js";
+
+
+// ==========================================================
+// SAVE AI STATE TO REDIS
+// ==========================================================
+//
+// Responsibilities
+// ----------------
+// ✔ Restore AI memory from Redis
+// ✔ Resolve authoritative AI confidence
+// ✔ Synchronize wallet-level AI state
+// ✔ Build AI timeline snapshots
+// ✔ Persist AI state to position Redis
+// ✔ Preserve AI evolution memory
+// ✔ Provide diagnostics for confidence resolution
+//
+// Confidence authority
+// --------------------
+// Uses the SAME resolver as liveAIStateEvents.js:
+//
+//     resolveAIConfidence()
+//
+// Priority:
+//
+// 1. tradeDecision.confidence
+// 2. exitDecision.confidence
+// 3. recommendation.confidence
+// 4. protection.confidence
+// 5. aiContext.confidence.overall
+// 6. 0
+//
+// IMPORTANT
+// ---------
+// A confidence value of 0 is treated as unavailable.
+//
+// This prevents:
+//
+//     tradeDecision.confidence = 0
+//
+// from incorrectly overriding:
+//
+//     exitDecision.confidence = 67
+//
+// ==========================================================
+
+
+export async function saveAIStateToRedis(
+    context
+) {
+
+    // ======================================================
+    // VALIDATION
+    // ======================================================
 
     if (
         !context?.walletAddress ||
         !context?.mint
     ) {
+
         return;
     }
+
+
+    // ======================================================
+    // EXTRACT AI OBJECTS
+    // ======================================================
 
     const positionHealth =
         context.positionHealth || {};
@@ -25,19 +87,24 @@ export async function saveAIStateToRedis(context) {
     const tradePlan =
         context.tradePlan || {};
 
+    const exitDecision =
+        context.exitDecision || {};
+
     const pipeline =
         context.pipeline || {};
 
-    // ==========================================
-    // AI Evolution Memory
-    // ==========================================
+
+    // ======================================================
+    // AI EVOLUTION MEMORY
+    // ======================================================
 
     let aiMemory =
         context.aiMemory || {};
 
-    // ==========================================
-    // Restore existing memory from Redis
-    // ==========================================
+
+    // ======================================================
+    // RESTORE EXISTING MEMORY FROM REDIS
+    // ======================================================
 
     try {
 
@@ -50,51 +117,142 @@ export async function saveAIStateToRedis(context) {
                 "aiMemory"
             );
 
+
         if (existing) {
 
-            aiMemory = {
+            try {
 
-                ...JSON.parse(existing),
+                aiMemory = {
 
-                ...aiMemory,
+                    ...JSON.parse(
+                        existing
+                    ),
 
-            };
+                    ...aiMemory,
+
+                };
+
+            } catch (parseError) {
+
+                console.warn(
+                    "⚠️ Failed to parse existing AI memory:",
+                    parseError?.message ||
+                    parseError
+                );
+
+            }
 
         }
 
     } catch (err) {
 
         console.warn(
-            "Failed to restore AI memory:",
-            err.message
+            "⚠️ Failed to restore AI memory:",
+            err?.message ||
+            err
         );
 
     }
 
-    // ==========================================
-    // Synchronize Wallet-Level AI State
-    // ==========================================
-    //
-    // Global AI confidence should come from the
-    // coordinated AI decision/recommendation.
-    //
-    // Protection confidence remains position-level.
-    // ==========================================
 
-    const aiConfidence =
-        Number(
-            tradeDecision?.confidence ??
-            context?.recommendation?.confidence ??
-            context?.confidence?.overall ??
-            context?.confidence ??
-            0
+    // ======================================================
+    // AUTHORITATIVE AI CONFIDENCE
+    // ======================================================
+    //
+    // IMPORTANT:
+    //
+    // Do NOT calculate confidence locally here.
+    //
+    // Both:
+    //
+    //     liveAIStateEvents.js
+    //
+    // and:
+    //
+    //     saveAIStateToRedis.js
+    //
+    // MUST use the same resolver.
+    //
+    // ======================================================
+
+    const {
+
+        confidence:
+            aiConfidence,
+
+        source:
+            selectedConfidenceSource,
+
+    } =
+        resolveAIConfidence(
+            context
         );
 
-    const aiRecommendation =
-        tradeDecision?.recommendation ??
-        context?.recommendation?.recommendation ??
-        context?.recommendation?.action ??
+
+    // ======================================================
+    // CONFIDENCE SOURCE VALUES
+    // ======================================================
+
+    const recommendationConfidence =
+        context
+            ?.recommendation
+            ?.confidence ??
         null;
+
+
+    const tradeDecisionConfidence =
+        tradeDecision
+            ?.confidence ??
+        null;
+
+
+    const exitDecisionConfidence =
+        exitDecision
+            ?.confidence ??
+        null;
+
+
+    const protectionConfidence =
+        protection
+            ?.confidence ??
+        null;
+
+
+    const overallConfidence =
+        context
+            ?.confidence
+            ?.overall ??
+        null;
+
+
+    // ======================================================
+    // AI RECOMMENDATION
+    // ======================================================
+
+    const aiRecommendation =
+        tradeDecision
+            ?.recommendation ??
+        context
+            ?.recommendation
+            ?.recommendation ??
+        context
+            ?.recommendation
+            ?.action ??
+        exitDecision
+            ?.recommendation ??
+        exitDecision
+            ?.action ??
+        null;
+
+
+    // ======================================================
+    // SYNCHRONIZE WALLET-LEVEL AI STATE
+    // ======================================================
+    //
+    // This confidence is now guaranteed to match the
+    // confidence selected by liveAIStateEvents.js.
+    //
+    // ======================================================
 
     updateAnalysis(
         context.walletAddress,
@@ -107,20 +265,93 @@ export async function saveAIStateToRedis(context) {
                 aiConfidence,
 
             signalScore:
-                context?.analyses?.signalScore ??
-                context?.signalScore ??
+                context
+                    ?.analyses
+                    ?.signalScore ??
+                context
+                    ?.signalScore ??
                 null,
 
             confidenceTrend:
-                aiMemory?.confidenceTrend ??
-                "STABLE",
+                aiMemory
+                    ?.confidenceTrend ??
+                (
+                    aiConfidence >= 80
+                        ? "RISING"
+                        : aiConfidence >= 50
+                            ? "STABLE"
+                            : "FALLING"
+                ),
 
         }
     );
 
+
+    // ======================================================
+    // CONFIDENCE DIAGNOSTIC
+    // ======================================================
+
+    console.log(
+        "\n============================================================"
+    );
+
+    console.log(
+        "🎯 [AI REDIS] AUTHORITATIVE CONFIDENCE"
+    );
+
+    console.log(
+        "============================================================"
+    );
+
+
+    console.dir(
+        {
+
+            walletAddress:
+                context.walletAddress,
+
+            mint:
+                context.mint,
+
+            selectedConfidenceSource,
+
+            finalConfidence:
+                aiConfidence,
+
+            recommendationConfidence,
+
+            tradeDecisionConfidence,
+
+            exitDecisionConfidence,
+
+            protectionConfidence,
+
+            overallConfidence,
+
+            recommendation:
+                aiRecommendation,
+
+        },
+        {
+            depth: null,
+            colors: true,
+        }
+    );
+
+
+    console.log(
+        "============================================================\n"
+    );
+
+
+    // ======================================================
+    // AI SOCKET STATE SYNCHRONIZATION LOG
+    // ======================================================
+
     console.log(
         "🧠 AI SOCKET STATE SYNCHRONIZED",
         {
+
             walletAddress:
                 context.walletAddress,
 
@@ -130,19 +361,41 @@ export async function saveAIStateToRedis(context) {
             confidence:
                 aiConfidence,
 
+            confidenceSource:
+                selectedConfidenceSource,
+
             recommendation:
                 aiRecommendation,
 
             protectionConfidence:
                 Number(
-                    protection?.confidence ?? 0
+                    protection
+                        ?.confidence ??
+                    0
                 ),
+
+            exitDecisionConfidence:
+                Number(
+                    exitDecision
+                        ?.confidence ??
+                    0
+                ),
+
         }
     );
 
-    // ==========================================
-    // Build AI Snapshot
-    // ==========================================
+
+    // ======================================================
+    // BUILD AI SNAPSHOT
+    // ======================================================
+    //
+    // The timeline now stores the AUTHORITATIVE AI
+    // confidence rather than protection confidence.
+    //
+    // This is important because timeline analysis should
+    // represent the actual AI decision confidence.
+    //
+    // ======================================================
 
     const snapshot = {
 
@@ -150,27 +403,47 @@ export async function saveAIStateToRedis(context) {
             new Date().toISOString(),
 
         health:
-            positionHealth.overallHealth ||
+            positionHealth
+                .overallHealth ||
             null,
 
         trend:
-            positionHealth.trend ||
+            positionHealth
+                .trend ||
             null,
 
         confidence:
-            protection.confidence ??
+            aiConfidence,
+
+        confidenceSource:
+            selectedConfidenceSource,
+
+        protectionConfidence:
+            protection
+                .confidence ??
+            null,
+
+        exitDecisionConfidence:
+            exitDecision
+                .confidence ??
             null,
 
         protection:
-            protection.protectionLevel ||
+            protection
+                .protectionLevel ||
             null,
 
         recommendation:
-            tradeDecision.recommendation ||
+            aiRecommendation ||
             null,
 
         action:
-            tradePlan.action ||
+            tradePlan
+                .action ||
+            tradeDecision
+                .action ||
+            exitDecision
+                .action ||
             null,
 
         pnl:
@@ -183,20 +456,33 @@ export async function saveAIStateToRedis(context) {
 
     };
 
-    // ==========================================
-    // Update AI Timeline
-    // ==========================================
+
+    // ======================================================
+    // UPDATE AI TIMELINE
+    // ======================================================
 
     const timeline =
-        Array.isArray(aiMemory.timeline)
-            ? [...aiMemory.timeline]
+        Array.isArray(
+            aiMemory.timeline
+        )
+            ? [
+                ...aiMemory.timeline,
+            ]
             : [];
 
-    timeline.push(snapshot);
 
-    // Keep only latest 20 observations
+    timeline.push(
+        snapshot
+    );
 
-    if (timeline.length > 20) {
+
+    // ======================================================
+    // KEEP ONLY LATEST 20 OBSERVATIONS
+    // ======================================================
+
+    if (
+        timeline.length > 20
+    ) {
 
         timeline.splice(
             0,
@@ -205,18 +491,22 @@ export async function saveAIStateToRedis(context) {
 
     }
 
+
     aiMemory.timeline =
         timeline;
+
 
     aiMemory.lastSnapshot =
         snapshot;
 
+
     aiMemory.lastUpdated =
         new Date();
 
-    // ==========================================
-    // Save AI State To Position Redis
-    // ==========================================
+
+    // ======================================================
+    // SAVE AI STATE TO POSITION REDIS
+    // ======================================================
 
     await redis.hset(
         positionKey(
@@ -225,61 +515,134 @@ export async function saveAIStateToRedis(context) {
         ),
         {
 
-            // -----------------------------
-            // Pipeline
-            // -----------------------------
+            // ==================================================
+            // PIPELINE
+            // ==================================================
 
             aiStatus:
-                pipeline.status || "",
+                pipeline
+                    .status ||
+                "",
 
             aiStage:
-                pipeline.stage || "",
+                pipeline
+                    .stage ||
+                "",
 
-            // -----------------------------
-            // Position
-            // -----------------------------
+
+            // ==================================================
+            // POSITION
+            // ==================================================
 
             aiHealth:
-                positionHealth.overallHealth ||
+                positionHealth
+                    .overallHealth ||
                 "",
 
             aiTrend:
-                positionHealth.trend ||
+                positionHealth
+                    .trend ||
                 "",
 
-            // -----------------------------
-            // Protection
-            // -----------------------------
+
+            // ==================================================
+            // PROTECTION
+            // ==================================================
 
             aiProtection:
-                protection.protectionLevel ||
+                protection
+                    .protectionLevel ||
                 "",
 
             aiTask:
-                protection.protectionIntent ||
+                protection
+                    .protectionIntent ||
                 "",
+
+            // IMPORTANT:
+            //
+            // aiConfidence now means the AUTHORITATIVE
+            // AI confidence.
+            //
+            // It is NO LONGER protection.confidence.
 
             aiConfidence:
                 String(
-                    protection.confidence ??
+                    aiConfidence
+                ),
+
+            aiConfidenceSource:
+                selectedConfidenceSource,
+
+
+            // ==================================================
+            // CONFIDENCE COMPONENTS
+            // ==================================================
+
+            aiRecommendationConfidence:
+                String(
+                    recommendationConfidence ??
                     0
                 ),
 
-            // -----------------------------
-            // Decision
-            // -----------------------------
+            aiTradeDecisionConfidence:
+                String(
+                    tradeDecisionConfidence ??
+                    0
+                ),
+
+            aiExitDecisionConfidence:
+                String(
+                    exitDecisionConfidence ??
+                    0
+                ),
+
+            aiProtectionConfidence:
+                String(
+                    protectionConfidence ??
+                    0
+                ),
+
+            aiOverallConfidence:
+                String(
+                    overallConfidence ??
+                    0
+                ),
+
+
+            // ==================================================
+            // DECISION
+            // ==================================================
 
             aiRecommendation:
-                tradeDecision.recommendation ||
+                aiRecommendation ||
                 "",
 
             aiAction:
-                tradePlan.action ||
+                tradePlan
+                    .action ||
+                tradeDecision
+                    .action ||
+                exitDecision
+                    .action ||
                 "",
 
-            // -----------------------------
-            // Full AI Objects
-            // -----------------------------
+
+            // ==================================================
+            // EXIT DECISION
+            // ==================================================
+
+            aiExitDecision:
+                exitDecision
+                    .decision ??
+                exitDecision
+                    .action ??
+                "",
+
+
+            // ==================================================
+            // FULL AI OBJECTS
+            // ==================================================
 
             aiPipeline:
                 JSON.stringify(
@@ -306,9 +669,15 @@ export async function saveAIStateToRedis(context) {
                     tradePlan
                 ),
 
-            // -----------------------------
-            // AI Memory
-            // -----------------------------
+            aiExitDecisionObject:
+                JSON.stringify(
+                    exitDecision
+                ),
+
+
+            // ==================================================
+            // AI MEMORY
+            // ==================================================
 
             aiMemory:
                 JSON.stringify(
@@ -318,9 +687,10 @@ export async function saveAIStateToRedis(context) {
         }
     );
 
-    // ==========================================
-    // DEBUG - Verify Redis Write
-    // ==========================================
+
+    // ======================================================
+    // DEBUG - VERIFY REDIS WRITE
+    // ======================================================
 
     const saved =
         await redis.hgetall(
@@ -330,12 +700,19 @@ export async function saveAIStateToRedis(context) {
             )
         );
 
+
+    // ======================================================
+    // FINAL REDIS STATE DIAGNOSTIC
+    // ======================================================
+
     console.log(
         "\n================ AI REDIS STATE ================\n"
     );
 
+
     console.dir(
         {
+
             aiStatus:
                 saved.aiStatus,
 
@@ -354,14 +731,47 @@ export async function saveAIStateToRedis(context) {
             aiTask:
                 saved.aiTask,
 
+            // ==========================================
+            // AUTHORITATIVE CONFIDENCE
+            // ==========================================
+
             aiConfidence:
                 saved.aiConfidence,
+
+            aiConfidenceSource:
+                saved.aiConfidenceSource,
+
+            // ==========================================
+            // CONFIDENCE COMPONENTS
+            // ==========================================
+
+            aiRecommendationConfidence:
+                saved.aiRecommendationConfidence,
+
+            aiTradeDecisionConfidence:
+                saved.aiTradeDecisionConfidence,
+
+            aiExitDecisionConfidence:
+                saved.aiExitDecisionConfidence,
+
+            aiProtectionConfidence:
+                saved.aiProtectionConfidence,
+
+            aiOverallConfidence:
+                saved.aiOverallConfidence,
+
+            // ==========================================
+            // DECISION
+            // ==========================================
 
             aiRecommendation:
                 saved.aiRecommendation,
 
             aiAction:
                 saved.aiAction,
+
+            aiExitDecision:
+                saved.aiExitDecision,
 
         },
         {
@@ -370,8 +780,14 @@ export async function saveAIStateToRedis(context) {
         }
     );
 
+
     console.log(
         "\n===============================================\n"
     );
 
 }
+
+
+export default {
+    saveAIStateToRedis,
+};
