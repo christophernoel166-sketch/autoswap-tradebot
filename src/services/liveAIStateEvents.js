@@ -12,12 +12,17 @@ import {
 // Converts the completed live-position AI context into
 // the existing frontend AI state structure.
 //
-// DIAGNOSTIC VERSION
-//
 // IMPORTANT:
-// This version DOES NOT change the confidence calculation.
-// It only logs every possible confidence source so we
-// can determine exactly where the value is coming from.
+// The FINAL trade decision has priority over the
+// preliminary RecommendationEngine result.
+//
+// Confidence hierarchy:
+//
+// 1. tradeDecision.confidence
+// 2. recommendation.confidence
+// 3. protection.confidence
+// 4. aiContext.confidence.overall
+// 5. 0
 //
 // =====================================================
 
@@ -27,6 +32,7 @@ export function publishLiveAIState(
 ) {
 
   if (!walletAddress || !aiContext) {
+
     console.warn(
       "⚠️ [LIVE AI STATE] publishLiveAIState() called without required data",
       {
@@ -97,17 +103,13 @@ export function publishLiveAIState(
       contextConfidence:
         aiContext.confidence ?? null,
 
-      positionHealth:
-        positionHealth,
+      positionHealth,
 
-      pipeline:
-        pipeline,
+      pipeline,
 
-      tradePlan:
-        tradePlan,
+      tradePlan,
 
-      exitDecision:
-        exitDecision,
+      exitDecision,
     },
     {
       depth: null,
@@ -117,8 +119,6 @@ export function publishLiveAIState(
 
   // ===================================================
   // CONFIDENCE SOURCES
-  //
-  // THESE ARE THE FOUR VALUES WE NEED TO TRACE.
   // ===================================================
 
   const recommendationConfidence =
@@ -134,107 +134,89 @@ export function publishLiveAIState(
     aiContext.confidence?.overall;
 
   // ===================================================
-  // CONFIDENCE DIAGNOSTIC
+  // DETERMINE FINAL CONFIDENCE SOURCE
   // ===================================================
-
-  console.log(
-    "\n============================================================"
-  );
-
-  console.log(
-    "🔬 [CONFIDENCE DIAGNOSTIC] ALL CONFIDENCE SOURCES"
-  );
-
-  console.log(
-    "============================================================"
-  );
-
-  console.dir(
-    {
-      walletAddress,
-
-      mint:
-        aiContext.mint ??
-        aiContext.token?.mint ??
-        null,
-
-      "1️⃣ recommendation.confidence":
-        recommendationConfidence,
-
-      "2️⃣ tradeDecision.confidence":
-        tradeDecisionConfidence,
-
-      "3️⃣ protection.confidence":
-        protectionConfidence,
-
-      "4️⃣ aiContext.confidence.overall":
-        overallConfidence,
-
-    },
-    {
-      depth: null,
-      colors: true,
-    }
-  );
-
-  // ===================================================
-  // DETERMINE WHICH SOURCE WILL WIN
+  //
+  // FINAL TRADE DECISION IS AUTHORITATIVE.
+  //
+  // We intentionally check tradeDecision FIRST.
+  //
+  // This prevents:
+  //
+  // recommendation.confidence = 0
+  //
+  // from overriding:
+  //
+  // tradeDecision.confidence = 67
+  //
   // ===================================================
 
   let selectedConfidenceSource =
     "DEFAULT_0";
 
+  let selectedConfidenceValue = 0;
+
   if (
-    recommendationConfidence !==
-      undefined &&
-    recommendationConfidence !== null
-  ) {
-
-    selectedConfidenceSource =
-      "recommendation.confidence";
-
-  } else if (
-    tradeDecisionConfidence !==
-      undefined &&
-    tradeDecisionConfidence !== null
+    Number.isFinite(
+      Number(tradeDecisionConfidence)
+    )
   ) {
 
     selectedConfidenceSource =
       "tradeDecision.confidence";
 
+    selectedConfidenceValue =
+      Number(tradeDecisionConfidence);
+
   } else if (
-    protectionConfidence !==
-      undefined &&
-    protectionConfidence !== null
+    Number.isFinite(
+      Number(recommendationConfidence)
+    )
+  ) {
+
+    selectedConfidenceSource =
+      "recommendation.confidence";
+
+    selectedConfidenceValue =
+      Number(recommendationConfidence);
+
+  } else if (
+    Number.isFinite(
+      Number(protectionConfidence)
+    )
   ) {
 
     selectedConfidenceSource =
       "protection.confidence";
 
+    selectedConfidenceValue =
+      Number(protectionConfidence);
+
   } else if (
-    overallConfidence !==
-      undefined &&
-    overallConfidence !== null
+    Number.isFinite(
+      Number(overallConfidence)
+    )
   ) {
 
     selectedConfidenceSource =
       "aiContext.confidence.overall";
 
+    selectedConfidenceValue =
+      Number(overallConfidence);
+
   }
 
   // ===================================================
-  // EXISTING CONFIDENCE CALCULATION
-  //
-  // DO NOT CHANGE THIS YET.
+  // FINAL CONFIDENCE
   // ===================================================
 
   const confidence =
-    Number(
-      aiContext.recommendation?.confidence ??
-      tradeDecision.confidence ??
-      protection.confidence ??
-      aiContext.confidence?.overall ??
-      0
+    Math.max(
+      0,
+      Math.min(
+        100,
+        selectedConfidenceValue
+      )
     );
 
   // ===================================================
@@ -271,8 +253,11 @@ export function publishLiveAIState(
         typeof confidence,
 
       recommendationConfidence,
+
       tradeDecisionConfidence,
+
       protectionConfidence,
+
       overallConfidence,
 
     },
@@ -306,14 +291,29 @@ export function publishLiveAIState(
     protection.protectionIntent ??
     "Monitoring position";
 
+  // ===================================================
+  // FINAL RECOMMENDATION
+  // ===================================================
+  //
+  // Prefer the final trade decision because it represents
+  // the coordinated AI decision.
+  //
+  // ===================================================
+
   const recommendation =
+    tradeDecision.recommendation ??
     aiContext.recommendation?.recommendation ??
     aiContext.recommendation?.action ??
-    tradeDecision.recommendation ??
+    exitDecision.recommendation ??
     "HOLD";
+
+  // ===================================================
+  // FINAL ACTION
+  // ===================================================
 
   const action =
     tradePlan.action ??
+    tradeDecision.action ??
     exitDecision.action ??
     "HOLD";
 
@@ -321,19 +321,29 @@ export function publishLiveAIState(
   // Determine live AI status
   // ===================================================
 
-  let status = "MONITORING";
+  let status =
+    "MONITORING";
 
-  if (pipeline.status === "FAILED") {
+  if (
+    pipeline.status === "FAILED"
+  ) {
 
-    status = "ERROR";
+    status =
+      "ERROR";
 
-  } else if (pipeline.status === "COMPLETED") {
+  } else if (
+    pipeline.status === "COMPLETED"
+  ) {
 
-    status = "MONITORING";
+    status =
+      "MONITORING";
 
-  } else if (pipeline.status === "RUNNING") {
+  } else if (
+    pipeline.status === "RUNNING"
+  ) {
 
-    status = "ANALYZING";
+    status =
+      "ANALYZING";
 
   }
 
@@ -344,20 +354,27 @@ export function publishLiveAIState(
   let currentTask =
     protectionIntent;
 
-  if (action === "FULL_EXIT") {
+  if (
+    action === "FULL_EXIT"
+  ) {
 
-    currentTask = "FULL_EXIT";
+    currentTask =
+      "FULL_EXIT";
 
   } else if (
     action === "PARTIAL_EXIT" ||
     action === "SCALE_OUT"
   ) {
 
-    currentTask = action;
+    currentTask =
+      action;
 
-  } else if (pipeline.stage) {
+  } else if (
+    pipeline.stage
+  ) {
 
-    currentTask = pipeline.stage;
+    currentTask =
+      pipeline.stage;
 
   }
 
@@ -384,7 +401,8 @@ export function publishLiveAIState(
     !Number.isFinite(progress)
   ) {
 
-    progress = 0;
+    progress =
+      0;
 
   }
 
@@ -392,7 +410,8 @@ export function publishLiveAIState(
     pipeline.status === "COMPLETED"
   ) {
 
-    progress = 100;
+    progress =
+      100;
 
   }
 
@@ -477,7 +496,8 @@ export function publishLiveAIState(
 
         positions: {
 
-          reviewing: 1,
+          reviewing:
+            1,
 
           protected:
             protectedValue,
@@ -519,9 +539,7 @@ export function publishLiveAIState(
               protectionLevel,
 
             recommendationSource:
-              aiContext.recommendation
-                ? "RecommendationEngine"
-                : "TradeDecisionCoordinator",
+              selectedConfidenceSource,
 
             exitDecision:
               exitDecision.decision ??
