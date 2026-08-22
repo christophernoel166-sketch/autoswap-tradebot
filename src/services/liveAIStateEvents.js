@@ -1,6 +1,9 @@
 // src/services/liveAIStateEvents.js
 
-
+import {
+  updateMultiple,
+  addActivity,
+} from "./aiStateService.js";
 
 // =====================================================
 // PUBLISH LIVE POSITION AI STATE
