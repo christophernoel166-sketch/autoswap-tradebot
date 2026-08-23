@@ -21,7 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-import AIDecisionCard from "./components/AIDecisionCard";
+
 import AIThinkingCard from "./components/AIThinkingCard";
 import { getSocket } from "./services/socket";
 import {
@@ -1575,7 +1575,7 @@ console.log(
 >
  <div className="space-y-6">
 
-    {aiMode === "command" && (
+{aiMode === "command" && (
   <AICommandCenter />
 )}
 
@@ -1583,9 +1583,13 @@ console.log(
   <AIThinkingCard />
 )}
 
-{aiMode === "decision" && scanResult?.ai && (
-  <AIDecisionCard
-    ai={scanResult.ai}
+{aiMode === "decision" && (
+  <ActivePositions
+    positions={positions}
+    loading={loading}
+    fetchPositions={fetchPositions}
+    manualSell={manualSell}
+    manualSellAll={manualSellAll}
   />
 )}
 
@@ -1641,13 +1645,7 @@ console.log(
   ) : null}
 </div>
 
-    <ActivePositions
-      positions={positions}
-      loading={loading}
-      fetchPositions={fetchPositions}
-      manualSell={manualSell}
-      manualSellAll={manualSellAll}
-    />
+   
   </div>
 </div>
 
