@@ -1028,8 +1028,7 @@ export default function ActivePositions({
         p-4
         rounded-xl
         shadow-sm
-        mt-6
-        mb-10
+        mb-2
       "
     >
       {/* ================================================= */}
@@ -1056,7 +1055,7 @@ export default function ActivePositions({
               dark:text-gray-100
             "
           >
-            Active Positions
+            Active Position Intelligence
           </h2>
 
           <div
@@ -1067,7 +1066,7 @@ export default function ActivePositions({
               mt-1
             "
           >
-            Live positions with AI intelligence
+            Live position, performance, and AI decision
           </div>
         </div>
 
