@@ -38,10 +38,9 @@ export default function ActivePositions({
   }
 
   function getRecommendationClass(recommendation) {
-    const value =
-      String(recommendation || "")
-        .toUpperCase()
-        .replace("_", " ");
+    const value = String(recommendation || "")
+      .toUpperCase()
+      .replace(/_/g, " ");
 
     if (
       value.includes("FULL EXIT") ||
@@ -68,8 +67,7 @@ export default function ActivePositions({
   }
 
   function getHealthClass(health) {
-    const value =
-      String(health || "").toUpperCase();
+    const value = String(health || "").toUpperCase();
 
     if (
       value.includes("CRITICAL") ||
@@ -96,8 +94,7 @@ export default function ActivePositions({
   }
 
   function getProtectionClass(protection) {
-    const value =
-      String(protection || "").toUpperCase();
+    const value = String(protection || "").toUpperCase();
 
     if (
       value.includes("HIGH") ||
@@ -154,7 +151,7 @@ export default function ActivePositions({
   }
 
   // =====================================================
-  // AI POSITION PANEL
+  // AI POSITION INTELLIGENCE
   // =====================================================
 
   function AIPositionIntelligence({ position }) {
@@ -185,7 +182,6 @@ export default function ActivePositions({
     return (
       <div
         className="
-          mt-5
           rounded-xl
           border
           border-cyan-200
@@ -199,7 +195,15 @@ export default function ActivePositions({
         {/* AI HEADER */}
         {/* ================================================= */}
 
-        <div className="flex items-center justify-between gap-3 mb-4">
+        <div
+          className="
+            flex
+            items-center
+            justify-between
+            gap-3
+            mb-3
+          "
+        >
           <div>
             <div
               className="
@@ -256,32 +260,71 @@ export default function ActivePositions({
             border
             border-gray-200
             dark:border-gray-700
-            p-4
-            mb-4
+            p-3
+            mb-3
           "
         >
           <div
             className="
-              text-xs
-              uppercase
-              tracking-wide
-              text-gray-500
-              dark:text-gray-400
-              mb-1
+              flex
+              flex-col
+              sm:flex-row
+              sm:items-center
+              sm:justify-between
+              gap-2
             "
           >
-            AI Recommendation
-          </div>
+            <div>
+              <div
+                className="
+                  text-xs
+                  uppercase
+                  tracking-wide
+                  text-gray-500
+                  dark:text-gray-400
+                  mb-1
+                "
+              >
+                AI Recommendation
+              </div>
 
-          <div
-            className={`
-              text-2xl
-              font-bold
-              ${getRecommendationClass(recommendation)}
-            `}
-          >
-            {String(recommendation)
-              .replace(/_/g, " ")}
+              <div
+                className={`
+                  text-2xl
+                  font-bold
+                  ${getRecommendationClass(
+                    recommendation
+                  )}
+                `}
+              >
+                {String(recommendation).replace(
+                  /_/g,
+                  " "
+                )}
+              </div>
+            </div>
+
+            <div className="text-right">
+              <div
+                className="
+                  text-xs
+                  text-gray-500
+                  dark:text-gray-400
+                "
+              >
+                Confidence
+              </div>
+
+              <div
+                className={`
+                  text-xl
+                  font-bold
+                  ${getConfidenceClass(confidence)}
+                `}
+              >
+                {confidence}%
+              </div>
+            </div>
           </div>
 
           <div
@@ -305,44 +348,9 @@ export default function ActivePositions({
             grid
             grid-cols-2
             md:grid-cols-4
-            gap-3
+            gap-2
           "
         >
-          {/* CONFIDENCE */}
-
-          <div
-            className="
-              rounded-lg
-              bg-white
-              dark:bg-gray-800
-              border
-              border-gray-200
-              dark:border-gray-700
-              p-3
-            "
-          >
-            <div
-              className="
-                text-xs
-                text-gray-500
-                dark:text-gray-400
-              "
-            >
-              Confidence
-            </div>
-
-            <div
-              className={`
-                text-lg
-                font-bold
-                mt-1
-                ${getConfidenceClass(confidence)}
-              `}
-            >
-              {confidence}%
-            </div>
-          </div>
-
           {/* HEALTH */}
 
           <div
@@ -353,7 +361,7 @@ export default function ActivePositions({
               border
               border-gray-200
               dark:border-gray-700
-              p-3
+              p-2.5
             "
           >
             <div
@@ -388,7 +396,7 @@ export default function ActivePositions({
               border
               border-gray-200
               dark:border-gray-700
-              p-3
+              p-2.5
             "
           >
             <div
@@ -402,13 +410,12 @@ export default function ActivePositions({
             </div>
 
             <div
-              className="
+              className={`
                 text-sm
                 font-semibold
-                text-gray-900
-                dark:text-gray-100
                 mt-1
-              "
+                ${getRecommendationClass(action)}
+              `}
             >
               {String(action).replace(/_/g, " ")}
             </div>
@@ -424,7 +431,7 @@ export default function ActivePositions({
               border
               border-gray-200
               dark:border-gray-700
-              p-3
+              p-2.5
             "
           >
             <div
@@ -438,91 +445,93 @@ export default function ActivePositions({
             </div>
 
             <div
-              className="
+              className={`
                 text-sm
                 font-semibold
-                text-gray-900
-                dark:text-gray-100
                 mt-1
-              "
+                ${getHealthClass(trend)}
+              `}
             >
               {String(trend).replace(/_/g, " ")}
+            </div>
+          </div>
+
+          {/* PROTECTION */}
+
+          <div
+            className="
+              rounded-lg
+              bg-white
+              dark:bg-gray-800
+              border
+              border-gray-200
+              dark:border-gray-700
+              p-2.5
+            "
+          >
+            <div
+              className="
+                text-xs
+                text-gray-500
+                dark:text-gray-400
+              "
+            >
+              Protection
+            </div>
+
+            <div
+              className={`
+                text-sm
+                font-semibold
+                mt-1
+                ${getProtectionClass(protection)}
+              `}
+            >
+              {String(protection).replace(/_/g, " ")}
             </div>
           </div>
         </div>
 
         {/* ================================================= */}
-        {/* PROTECTION */}
+        {/* CURRENT TASK */}
         {/* ================================================= */}
 
         <div
           className="
-            mt-3
+            mt-2
             rounded-lg
             bg-white
             dark:bg-gray-800
             border
             border-gray-200
             dark:border-gray-700
-            p-3
+            px-3
+            py-2
+            flex
+            items-center
+            justify-between
+            gap-3
           "
         >
           <div
             className="
-              flex
-              flex-col
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-              gap-3
+              text-xs
+              text-gray-500
+              dark:text-gray-400
             "
           >
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                🛡 AI Protection
-              </div>
+            Current AI Task
+          </div>
 
-              <div
-                className={`
-                  text-sm
-                  font-semibold
-                  mt-1
-                  ${getProtectionClass(protection)}
-                `}
-              >
-                {String(protection).replace(/_/g, " ")}
-              </div>
-            </div>
-
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Current AI Task
-              </div>
-
-              <div
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-gray-100
-                  mt-1
-                "
-              >
-                {String(task).replace(/_/g, " ")}
-              </div>
-            </div>
+          <div
+            className="
+              text-sm
+              font-semibold
+              text-gray-900
+              dark:text-gray-100
+            "
+          >
+            {String(task).replace(/_/g, " ")}
           </div>
         </div>
       </div>
@@ -568,106 +577,107 @@ export default function ActivePositions({
         "
       >
         {/* ================================================= */}
-        {/* POSITION HEADER */}
+        {/* AI POSITION INTELLIGENCE
+            AI IS NOW ABOVE THE ACTIVE POSITION
+        ================================================= */}
+
+        <div className="p-3">
+          <AIPositionIntelligence
+            position={position}
+          />
+        </div>
+
         {/* ================================================= */}
+        {/* ACTIVE POSITION
+        ================================================= */}
 
         <div
           className="
-            p-4
-            border-b
+            border-t
             border-gray-200
             dark:border-gray-700
           "
         >
+          {/* ================================================= */}
+          {/* ACTIVE POSITION HEADER */}
+          {/* ================================================= */}
+
           <div
             className="
-              flex
-              flex-col
-              sm:flex-row
-              sm:items-start
-              sm:justify-between
-              gap-3
+              px-3
+              py-3
+              border-b
+              border-gray-200
+              dark:border-gray-700
             "
           >
-            <div>
-              <div className="flex items-center gap-2">
-                <div
-                  className="
-                    font-semibold
-                    text-lg
-                    text-gray-900
-                    dark:text-gray-100
-                  "
-                >
-                  {shortMint(position.mint)}
-                </div>
-
-                <button
-                  onClick={() =>
-                    copyMint(position.mint)
-                  }
-                  className="
-                    text-gray-400
-                    hover:text-blue-500
-                    transition
-                  "
-                  title="Copy contract address"
-                >
-                  <FiCopy size={15} />
-                </button>
-
-                {copiedMint === position.mint && (
-                  <span
-                    className="
-                      text-xs
-                      text-green-500
-                    "
-                  >
-                    Copied
-                  </span>
-                )}
-              </div>
-
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                  mt-1
-                "
-              >
-                TP Stage:{" "}
-                {Number(position.tpStage || 0)}
-              </div>
-            </div>
-
             <div
               className="
                 flex
                 items-center
-                gap-2
+                justify-between
+                gap-3
               "
             >
-              <span
+              <div>
+                <div className="flex items-center gap-2">
+                  <div
+                    className="
+                      font-semibold
+                      text-lg
+                      text-gray-900
+                      dark:text-gray-100
+                    "
+                  >
+                    {shortMint(position.mint)}
+                  </div>
+
+                  <button
+                    onClick={() =>
+                      copyMint(position.mint)
+                    }
+                    className="
+                      text-gray-400
+                      hover:text-blue-500
+                      transition
+                    "
+                    title="Copy contract address"
+                  >
+                    <FiCopy size={15} />
+                  </button>
+
+                  {copiedMint === position.mint && (
+                    <span
+                      className="
+                        text-xs
+                        text-green-500
+                      "
+                    >
+                      Copied
+                    </span>
+                  )}
+                </div>
+
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                    mt-1
+                  "
+                >
+                  TP Stage:{" "}
+                  {Number(position.tpStage || 0)}
+                </div>
+              </div>
+
+              <div
                 className="
-                  px-2.5
-                  py-1
-                  rounded-full
-                  text-xs
-                  font-semibold
-                  bg-green-100
-                  dark:bg-green-950/30
-                  text-green-600
-                  dark:text-green-400
+                  flex
+                  items-center
+                  gap-2
                 "
               >
-                ●{" "}
-                {String(
-                  position.status || "open"
-                ).toUpperCase()}
-              </span>
-
-              {recommendation !== "HOLD" && (
                 <span
                   className="
                     px-2.5
@@ -675,255 +685,266 @@ export default function ActivePositions({
                     rounded-full
                     text-xs
                     font-semibold
-                    bg-gray-100
-                    dark:bg-gray-700
-                    text-gray-700
-                    dark:text-gray-200
+                    bg-green-100
+                    dark:bg-green-950/30
+                    text-green-600
+                    dark:text-green-400
                   "
                 >
-                  AI
+                  ●{" "}
+                  {String(
+                    position.status || "open"
+                  ).toUpperCase()}
                 </span>
-              )}
-            </div>
-          </div>
-        </div>
 
-        {/* ================================================= */}
-        {/* POSITION PERFORMANCE */}
-        {/* ================================================= */}
-
-        <div className="p-4">
-          <div
-            className="
-              text-xs
-              uppercase
-              tracking-wide
-              text-gray-400
-              mb-3
-            "
-          >
-            Position Performance
-          </div>
-
-          <div
-            className="
-              grid
-              grid-cols-2
-              sm:grid-cols-4
-              gap-4
-            "
-          >
-            {/* QUANTITY */}
-
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Quantity
-              </div>
-
-              <div
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-gray-100
-                  mt-1
-                "
-              >
-                {formatNumber(
-                  tokenAmount,
-                  4
-                )}
-              </div>
-            </div>
-
-            {/* VALUE */}
-
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Value
-              </div>
-
-              <div
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-gray-100
-                  mt-1
-                "
-              >
-                $
-                {formatNumber(value)}
-              </div>
-            </div>
-
-            {/* ENTRY */}
-
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Entry
-              </div>
-
-              <div
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-gray-100
-                  mt-1
-                "
-              >
-                {formatNumber(
-                  position.entryPrice
-                )}
-              </div>
-            </div>
-
-            {/* CURRENT */}
-
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Current
-              </div>
-
-              <div
-                className="
-                  text-sm
-                  font-semibold
-                  text-gray-900
-                  dark:text-gray-100
-                  mt-1
-                "
-              >
-                {formatNumber(
-                  position.currentPrice
+                {recommendation !== "HOLD" && (
+                  <span
+                    className="
+                      px-2.5
+                      py-1
+                      rounded-full
+                      text-xs
+                      font-semibold
+                      bg-gray-100
+                      dark:bg-gray-700
+                      text-gray-700
+                      dark:text-gray-200
+                    "
+                  >
+                    AI
+                  </span>
                 )}
               </div>
             </div>
           </div>
 
-          {/* PNL SUMMARY */}
-
-          <div
-            className="
-              mt-4
-              flex
-              flex-col
-              sm:flex-row
-              sm:items-center
-              sm:justify-between
-              gap-3
-              rounded-xl
-              bg-gray-50
-              dark:bg-gray-900/40
-              p-3
-            "
-          >
-            <div>
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                Price Change
-              </div>
-
-              <div
-                className={`
-                  text-xl
-                  font-bold
-                  mt-1
-                  ${getChangeClass(changePercent)}
-                `}
-              >
-                {changePercent.toFixed(2)}%
-              </div>
-            </div>
-
-            <div className="sm:text-right">
-              <div
-                className="
-                  text-xs
-                  text-gray-500
-                  dark:text-gray-400
-                "
-              >
-                PnL
-              </div>
-
-              <div
-                className={`
-                  text-lg
-                  font-semibold
-                  mt-1
-                  ${getChangeClass(pnlSol)}
-                `}
-              >
-                {formatNumber(pnlSol)} SOL
-              </div>
-            </div>
-          </div>
-
           {/* ================================================= */}
-          {/* AI INTELLIGENCE */}
+          {/* COMPACT POSITION PERFORMANCE */}
           {/* ================================================= */}
 
-          <AIPositionIntelligence
-            position={position}
-          />
-
-          {/* ================================================= */}
-          {/* MANUAL ACTIONS */}
-          {/* ================================================= */}
-
-          <div
-            className="
-              mt-5
-              rounded-xl
-              border
-              border-gray-200
-              dark:border-gray-700
-              p-4
-            "
-          >
+          <div className="px-3 py-3">
             <div
               className="
+                text-xs
+                uppercase
+                tracking-wide
+                text-gray-400
+                mb-2
+              "
+            >
+              Position Performance
+            </div>
+
+            <div
+              className="
+                grid
+                grid-cols-2
+                sm:grid-cols-4
+                gap-x-3
+                gap-y-2
+              "
+            >
+              {/* QUANTITY */}
+
+              <div>
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Quantity
+                </div>
+
+                <div
+                  className="
+                    text-sm
+                    font-semibold
+                    text-gray-900
+                    dark:text-gray-100
+                    mt-1
+                  "
+                >
+                  {formatNumber(
+                    tokenAmount,
+                    4
+                  )}
+                </div>
+              </div>
+
+              {/* VALUE */}
+
+              <div>
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Value
+                </div>
+
+                <div
+                  className="
+                    text-sm
+                    font-semibold
+                    text-gray-900
+                    dark:text-gray-100
+                    mt-1
+                  "
+                >
+                  $
+                  {formatNumber(value)}
+                </div>
+              </div>
+
+              {/* ENTRY */}
+
+              <div>
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Entry
+                </div>
+
+                <div
+                  className="
+                    text-sm
+                    font-semibold
+                    text-gray-900
+                    dark:text-gray-100
+                    mt-1
+                  "
+                >
+                  {formatNumber(
+                    position.entryPrice
+                  )}
+                </div>
+              </div>
+
+              {/* CURRENT */}
+
+              <div>
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Current
+                </div>
+
+                <div
+                  className="
+                    text-sm
+                    font-semibold
+                    text-gray-900
+                    dark:text-gray-100
+                    mt-1
+                  "
+                >
+                  {formatNumber(
+                    position.currentPrice
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ================================================= */}
+            {/* COMPACT PNL SUMMARY */}
+            {/* ================================================= */}
+
+            <div
+              className="
+                mt-3
                 flex
-                flex-col
-                sm:flex-row
-                sm:items-center
-                sm:justify-between
-                gap-2
-                mb-3
+                items-center
+                justify-between
+                gap-3
+                rounded-lg
+                bg-gray-50
+                dark:bg-gray-900/40
+                px-3
+                py-2
               "
             >
               <div>
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  Price Change
+                </div>
+
+                <div
+                  className={`
+                    text-xl
+                    font-bold
+                    mt-0.5
+                    ${getChangeClass(changePercent)}
+                  `}
+                >
+                  {changePercent.toFixed(2)}%
+                </div>
+              </div>
+
+              <div className="text-right">
+                <div
+                  className="
+                    text-xs
+                    text-gray-500
+                    dark:text-gray-400
+                  "
+                >
+                  PnL
+                </div>
+
+                <div
+                  className={`
+                    text-lg
+                    font-semibold
+                    mt-0.5
+                    ${getChangeClass(pnlSol)}
+                  `}
+                >
+                  {formatNumber(pnlSol)} SOL
+                </div>
+              </div>
+            </div>
+
+            {/* ================================================= */}
+            {/* MANUAL ACTIONS */}
+            {/* ================================================= */}
+
+            <div
+              className="
+                mt-3
+                rounded-lg
+                border
+                border-gray-200
+                dark:border-gray-700
+                p-3
+              "
+            >
+              <div
+                className="
+                  flex
+                  items-center
+                  justify-between
+                  gap-2
+                  mb-2
+                "
+              >
                 <div
                   className="
                     text-sm
@@ -935,80 +956,70 @@ export default function ActivePositions({
                   Manual Action
                 </div>
 
-                <div
-                  className="
-                    text-xs
-                    text-gray-500
-                    dark:text-gray-400
-                    mt-1
-                  "
-                >
-                  Execute a manual partial or full sell.
-                </div>
-              </div>
-
-              {confidence > 0 && (
-                <div
-                  className="
-                    text-xs
-                    text-gray-500
-                    dark:text-gray-400
-                  "
-                >
-                  AI confidence:{" "}
-                  <span
-                    className={`
-                      font-semibold
-                      ${getConfidenceClass(confidence)}
-                    `}
-                  >
-                    {confidence}%
-                  </span>
-                </div>
-              )}
-            </div>
-
-            <div
-              className="
-                grid
-                grid-cols-2
-                sm:grid-cols-4
-                gap-2
-              "
-            >
-              {[25, 50, 75, 100].map(
-                (percent) => (
-                  <button
-                    key={percent}
-                    onClick={() =>
-                      handleSellPercent(
-                        position.mint,
-                        percent
-                      )
-                    }
+                {confidence > 0 && (
+                  <div
                     className="
-                      py-2.5
-                      rounded-lg
                       text-xs
-                      font-medium
-                      border
-                      border-gray-300
-                      dark:border-gray-600
-                      bg-white
-                      dark:bg-gray-800
-                      text-gray-900
-                      dark:text-gray-100
-                      hover:bg-gray-100
-                      dark:hover:bg-gray-700
-                      transition
+                      text-gray-500
+                      dark:text-gray-400
                     "
                   >
-                    {percent === 100
-                      ? "Sell All"
-                      : `Sell ${percent}%`}
-                  </button>
-                )
-              )}
+                    AI confidence:{" "}
+                    <span
+                      className={`
+                        font-semibold
+                        ${getConfidenceClass(
+                          confidence
+                        )}
+                      `}
+                    >
+                      {confidence}%
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              <div
+                className="
+                  grid
+                  grid-cols-4
+                  gap-2
+                "
+              >
+                {[25, 50, 75, 100].map(
+                  (percent) => (
+                    <button
+                      key={percent}
+                      onClick={() =>
+                        handleSellPercent(
+                          position.mint,
+                          percent
+                        )
+                      }
+                      className="
+                        py-2
+                        rounded-lg
+                        text-xs
+                        font-medium
+                        border
+                        border-gray-300
+                        dark:border-gray-600
+                        bg-white
+                        dark:bg-gray-800
+                        text-gray-900
+                        dark:text-gray-100
+                        hover:bg-gray-100
+                        dark:hover:bg-gray-700
+                        transition
+                      "
+                    >
+                      {percent === 100
+                        ? "Sell All"
+                        : `Sell ${percent}%`}
+                    </button>
+                  )
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -1043,7 +1054,7 @@ export default function ActivePositions({
           sm:justify-between
           sm:items-center
           gap-3
-          mb-5
+          mb-4
         "
       >
         <div>
@@ -1127,7 +1138,7 @@ export default function ActivePositions({
         <div
           className="
             text-center
-            py-10
+            py-8
             text-gray-500
             dark:text-gray-400
           "
@@ -1135,7 +1146,7 @@ export default function ActivePositions({
           No active positions.
         </div>
       ) : (
-        <div className="space-y-5">
+        <div className="space-y-3">
           {positions.map((position, index) => (
             <PositionCard
               key={
