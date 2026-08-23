@@ -1,4 +1,4 @@
- // AutoswapDashboard.jsx (final — adds Elite Analytics, pro charts, risk metrics)
+// AutoswapDashboard.jsx (final — adds Elite Analytics, pro charts, risk metrics)
 import React, { useEffect, useState, useMemo } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
 import "@solana/wallet-adapter-react-ui/styles.css";
