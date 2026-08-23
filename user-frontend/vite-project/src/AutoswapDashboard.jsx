@@ -1575,23 +1575,17 @@ console.log(
 >
  <div className="space-y-6">
 
-{aiMode === "command" && (
-  <AICommandCenter />
-)}
+{/* ===================================================
+    ACTIVE POSITION / AI POSITION CARD
+    =================================================== */}
 
-{aiMode === "thinking" && (
-  <AIThinkingCard />
-)}
-
-{aiMode === "decision" && (
-  <ActivePositions
-    positions={positions}
-    loading={loading}
-    fetchPositions={fetchPositions}
-    manualSell={manualSell}
-    manualSellAll={manualSellAll}
-  />
-)}
+<ActivePositions
+  positions={positions}
+  loading={loading}
+  fetchPositions={fetchPositions}
+  manualSell={manualSell}
+  manualSellAll={manualSellAll}
+/>
 
     <PerformanceSummary
       totalPnl={totalPnl}
