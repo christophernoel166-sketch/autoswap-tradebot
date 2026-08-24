@@ -404,36 +404,7 @@ export default function AIDecisionCard({ ai }) {
       ? "BLACKLISTED"
       : "CLEAN";
 
-  /* ========================================================
-     PATTERN INTELLIGENCE
-  ======================================================== */
 
-  const patternKey =
-    ai.signalScore?.patternKey ??
-    ai.pattern?.key ??
-    "N/A";
-
-  let patternQuality = "Unknown";
-
-  if (
-    historicalSamples >= 50 &&
-    historicalWinRate >= 75
-  ) {
-    patternQuality = "Excellent";
-  } else if (
-    historicalSamples >= 25 &&
-    historicalWinRate >= 60
-  ) {
-    patternQuality = "Good";
-  } else if (
-    historicalSamples >= 10
-  ) {
-    patternQuality = "Average";
-  } else if (
-    historicalSamples > 0
-  ) {
-    patternQuality = "Limited Data";
-  }
 
   /* ========================================================
      REASONING
@@ -613,7 +584,7 @@ export default function AIDecisionCard({ ai }) {
           PRIMARY METRICS
       ==================================================== */}
 
-      <div className="grid grid-cols-2 gap-3 px-5 pb-5 md:grid-cols-3">
+      <div className="grid grid-cols-2 gap-2 px-5 pb-5 sm:grid-cols-3 lg:grid-cols-6">
 
         <MetricCard
           title="Forecast"
@@ -670,7 +641,7 @@ export default function AIDecisionCard({ ai }) {
           valueColor="text-purple-300"
         />
 
-        <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3">
+        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
 
           <MetricCard
             title="Similar Tokens"
@@ -737,7 +708,7 @@ export default function AIDecisionCard({ ai }) {
 
         </div>
 
-        <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-4">
+        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
 
           <MetricCard
             title="Previous Launches"
@@ -767,17 +738,11 @@ export default function AIDecisionCard({ ai }) {
             }
           />
 
-        </div>
-
-        <div className="mt-3 rounded-lg border border-emerald-500/20 bg-gray-900/70 p-3">
-
-          <div className="text-xs text-gray-400">
-            Overall Verdict
-          </div>
-
-          <div className="mt-1 text-lg font-bold text-emerald-300">
-            {developerVerdict}
-          </div>
+          <MetricCard
+            title="Overall Verdict"
+            value={developerVerdict}
+            color="text-emerald-300"
+          />
 
         </div>
 
@@ -899,38 +864,6 @@ export default function AIDecisionCard({ ai }) {
             title="Chart"
             score={chartScore}
           />
-
-        </div>
-
-      </div>
-
-      {/* ====================================================
-          PATTERN INTELLIGENCE
-      ==================================================== */}
-
-      <div className="mx-5 mb-5 rounded-lg border border-gray-700/60 bg-gray-900/60 p-4">
-
-        <div className="text-xs uppercase tracking-wide text-gray-400">
-          Pattern Intelligence
-        </div>
-
-        <div className="mt-2 break-all font-mono text-xs text-purple-300">
-          {patternKey}
-        </div>
-
-        <div className="mt-3 flex flex-wrap gap-2">
-
-          <span className="rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs font-semibold text-green-300">
-            Win Rate {historicalWinRate}%
-          </span>
-
-          <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-3 py-1 text-xs font-semibold text-purple-300">
-            {patternQuality}
-          </span>
-
-          <span className="rounded-full border border-gray-600 px-3 py-1 text-xs text-gray-300">
-            {historicalSamples} Samples
-          </span>
 
         </div>
 
