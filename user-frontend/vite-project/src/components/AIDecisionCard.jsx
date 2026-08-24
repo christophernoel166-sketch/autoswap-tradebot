@@ -1,3 +1,471 @@
+// src/components/AIDecisionCard.jsx
+
+import React from "react";
+
+/* ==========================================================
+   HELPERS
+========================================================== */
+
+function getScoreColor(score) {
+  const value = Number(score || 0);
+
+  if (value >= 85) return "text-green-400";
+  if (value >= 70) return "text-cyan-300";
+  if (value >= 55) return "text-yellow-400";
+
+  return "text-red-400";
+}
+
+function getRecommendationColor(recommendation) {
+  switch (recommendation) {
+    case "STRONG_BUY":
+    case "BUY":
+      return "text-green-400";
+
+    case "CAUTION_BUY":
+      return "text-yellow-400";
+
+    case "WATCH":
+      return "text-blue-400";
+
+    case "HOLD":
+      return "text-gray-300";
+
+    case "SELL":
+    case "STRONG_SELL":
+    case "FULL_EXIT":
+    case "CAUTION_SELL":
+      return "text-red-400";
+
+    default:
+      return "text-yellow-400";
+  }
+}
+
+function getRecommendationDescription(recommendation) {
+  switch (recommendation) {
+    case "STRONG_BUY":
+      return "Strong opportunity detected. Multiple AI signals support an entry.";
+
+    case "BUY":
+      return "AI detects a favorable trading opportunity.";
+
+    case "CAUTION_BUY":
+      return "Potential opportunity with moderate risk. Monitor closely.";
+
+    case "WATCH":
+      return "Token is tradeable, but current conditions do not strongly support entry.";
+
+    case "HOLD":
+      return "Existing market conditions do not justify a new aggressive action.";
+
+    case "CAUTION_SELL":
+      return "Downside risk is increasing. Position should be monitored closely.";
+
+    case "SELL":
+      return "AI detects deteriorating conditions and recommends reducing exposure.";
+
+    case "STRONG_SELL":
+      return "Strong bearish conditions detected.";
+
+    case "FULL_EXIT":
+      return "AI recommends exiting the position because risk conditions have deteriorated.";
+
+    default:
+      return "AI has completed the token analysis.";
+  }
+}
+
+function ScannerScore({ title, score }) {
+  const value = Number(score || 0);
+
+  return (
+    <div className="rounded-lg bg-gray-900/80 border border-gray-700/60 px-3 py-2">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-xs text-gray-400">
+          {title}
+        </span>
+
+        <span
+          className={`text-sm font-bold ${getScoreColor(value)}`}
+        >
+          {value}
+        </span>
+      </div>
+
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-gray-800">
+        <div
+          className="h-full rounded-full bg-cyan-400 transition-all duration-500"
+          style={{
+            width: `${Math.max(
+              0,
+              Math.min(100, value)
+            )}%`,
+          }}
+        />
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({
+  title,
+  value,
+  color = "text-white",
+  subtitle,
+}) {
+  return (
+    <div className="rounded-lg bg-gray-900/70 border border-gray-700/50 px-3 py-3">
+      <div className="text-xs text-gray-400">
+        {title}
+      </div>
+
+      <div
+        className={`mt-1 text-lg font-bold ${color}`}
+      >
+        {value}
+      </div>
+
+      {subtitle && (
+        <div className="mt-1 text-[11px] text-gray-500">
+          {subtitle}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionHeader({
+  eyebrow,
+  title,
+  value,
+  valueColor = "text-white",
+}) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <div>
+        {eyebrow && (
+          <div className="text-xs uppercase tracking-wide text-gray-400">
+            {eyebrow}
+          </div>
+        )}
+
+        <div className="mt-1 text-lg font-semibold text-white">
+          {title}
+        </div>
+      </div>
+
+      {value !== undefined && (
+        <div className="text-right">
+          <div className="text-[11px] text-gray-500">
+            {eyebrow === "Historical Intelligence"
+              ? "Memory Confidence"
+              : "Trust Score"}
+          </div>
+
+          <div
+            className={`text-xl font-bold ${valueColor}`}
+          >
+            {value}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ==========================================================
+   MAIN COMPONENT
+========================================================== */
+
+export default function AIDecisionCard({ ai }) {
+  if (!ai) {
+    return null;
+  }
+
+  console.log("🧠 AI SCAN RESULT", ai);
+
+  /* ========================================================
+     RECOMMENDATION
+  ======================================================== */
+
+  const recommendation =
+    typeof ai.recommendation === "string"
+      ? ai.recommendation
+      : ai.recommendation?.recommendation ??
+        ai.recommendation?.action ??
+        "WATCH";
+
+  const recommendationLabel =
+    String(recommendation)
+      .replaceAll("_", " ")
+      .toUpperCase();
+
+  const recommendationColor =
+    getRecommendationColor(
+      recommendation
+    );
+
+  const recommendationDescription =
+    getRecommendationDescription(
+      recommendation
+    );
+
+  /* ========================================================
+     CONFIDENCE
+  ======================================================== */
+
+  const rawConfidence =
+    ai.confidence ??
+    ai.signalScore?.confidenceScore ??
+    ai.recommendation?.confidence ??
+    0;
+
+  const confidence = Math.max(
+    0,
+    Math.min(
+      100,
+      Number(rawConfidence || 0)
+    )
+  );
+
+  /* ========================================================
+     FORECAST / AI SCORE
+  ======================================================== */
+
+  const forecastScore = Number(
+    ai.forecast?.forecastScore ??
+      ai.signalScore?.forecastScore ??
+      0
+  );
+
+  const adjustedScore = Number(
+    ai.signalScore
+      ?.adjustedForecastScore ??
+      ai.signalScore?.aiScore ??
+      forecastScore
+  );
+
+  /* ========================================================
+     HISTORICAL INTELLIGENCE
+  ======================================================== */
+
+  const historicalWinRate =
+    Number(
+      ai.signalScore?.historicalWinRate ??
+        ai.historical?.winRate ??
+        0
+    );
+
+  const historicalSamples =
+    Number(
+      ai.signalScore?.historicalSamples ??
+        ai.historical?.samples ??
+        0
+    );
+
+  const memoryConfidence =
+    ai.signalScore?.memoryConfidence ??
+    ai.historical?.confidence ??
+    "--";
+
+  const moonshotRate =
+    ai.signalScore?.moonshotRate ??
+    ai.historical?.moonshotRate ??
+    0;
+
+  const rugRate =
+    ai.signalScore?.rugRate ??
+    ai.historical?.rugRate ??
+    0;
+
+  const expectedPeak =
+    ai.signalScore?.expectedPeakReturn ??
+    ai.historical?.expectedPeakReturn ??
+    0;
+
+  const expectedROI =
+    ai.signalScore?.expectedROI ??
+    ai.historical?.expectedROI ??
+    0;
+
+  /* ========================================================
+     SCANNER SCORES
+  ======================================================== */
+
+  const scores =
+    ai.recommendation?.scannerScores ??
+    ai.scannerScores ??
+    {};
+
+  const momentumScore =
+    Number(scores.momentum ?? 0);
+
+  const volumeScore =
+    Number(scores.volume ?? 0);
+
+  const liquidityScore =
+    Number(scores.liquidity ?? 0);
+
+  const securityScore =
+    Number(scores.security ?? 0);
+
+  const walletScore =
+    Number(scores.wallet ?? 0);
+
+  const holderScore =
+    Number(scores.holder ?? 0);
+
+  const chartScore =
+    Number(scores.chart ?? 0);
+
+  /* ========================================================
+     CONSENSUS
+  ======================================================== */
+
+  const consensus =
+    Number(
+      ai.recommendation?.consensus ??
+        ai.consensus ??
+        0
+    );
+
+  const trustScore =
+    Number(
+      ai.recommendation?.trustScore ??
+        ai.trustScore ??
+        0
+    );
+
+  const positiveVotes =
+    Number(
+      ai.recommendation?.positiveVotes ??
+        ai.positiveVotes ??
+        0
+    );
+
+  const totalVotes =
+    ai.recommendation?.scannerVotes
+      ? Object.keys(
+          ai.recommendation.scannerVotes
+        ).length
+      : ai.scannerVotes
+      ? Object.keys(
+          ai.scannerVotes
+        ).length
+      : 7;
+
+  /* ========================================================
+     DEVELOPER INTELLIGENCE
+  ======================================================== */
+
+  const developerWallet =
+    ai.developerWallet?.wallet ??
+    ai.developer?.wallet ??
+    ai.signalScore?.developerWallet ??
+    "Unknown";
+
+  const developerTrust =
+    Number(
+      ai.developerTrustScore ??
+        ai.signalScore
+          ?.developerTrustScore ??
+        trustScore
+    );
+
+  const developerVerdict =
+    ai.signalScore?.developerVerdict ??
+    ai.developer?.verdict ??
+    "UNKNOWN";
+
+  const previousLaunches =
+    Number(
+      ai.developer?.tokensCreated ??
+        ai.developer?.previousLaunches ??
+        0
+    );
+
+  const successfulLaunches =
+    Number(
+      ai.developer?.successfulTokens ??
+        ai.developer?.successfulLaunches ??
+        0
+    );
+
+  const ruggedLaunches =
+    Number(
+      ai.developer?.rugs ??
+        ai.developer?.ruggedTokens ??
+        0
+    );
+
+  const blacklistStatus =
+    ai.signalScore?.blacklisted
+      ? "BLACKLISTED"
+      : "CLEAN";
+
+  /* ========================================================
+     PATTERN INTELLIGENCE
+  ======================================================== */
+
+  const patternKey =
+    ai.signalScore?.patternKey ??
+    ai.pattern?.key ??
+    "N/A";
+
+  let patternQuality = "Unknown";
+
+  if (
+    historicalSamples >= 50 &&
+    historicalWinRate >= 75
+  ) {
+    patternQuality = "Excellent";
+  } else if (
+    historicalSamples >= 25 &&
+    historicalWinRate >= 60
+  ) {
+    patternQuality = "Good";
+  } else if (
+    historicalSamples >= 10
+  ) {
+    patternQuality = "Average";
+  } else if (
+    historicalSamples > 0
+  ) {
+    patternQuality = "Limited Data";
+  }
+
+  /* ========================================================
+     REASONING
+  ======================================================== */
+
+  const reasoning =
+    Array.isArray(
+      ai.recommendation?.reasoning
+    )
+      ? ai.recommendation.reasoning
+      : Array.isArray(ai.reasoning)
+      ? ai.reasoning
+      : [];
+
+  const explanation =
+    Array.isArray(
+      ai.recommendation?.explanation
+    )
+      ? ai.recommendation.explanation
+      : Array.isArray(ai.explanation)
+      ? ai.explanation
+      : [];
+
+  const contradictions =
+    Array.isArray(
+      ai.recommendation?.contradictions
+    )
+      ? ai.recommendation.contradictions
+      : Array.isArray(ai.contradictions)
+      ? ai.contradictions
+      : [];
+
 /* ========================================================
    RENDER
 ======================================================== */
