@@ -21,7 +21,7 @@ import Toggle from "./ui/Toggle";
 import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
-
+import AIDecisionCard from "./components/AIDecisionCard";
 import AIThinkingCard from "./components/AIThinkingCard";
 import { getSocket } from "./services/socket";
 import {
@@ -1608,92 +1608,90 @@ console.log(
     mobileTab === "dashboard" ? "block" : "hidden"
   } lg:block`}
 >
- <div className="space-y-6">
+  <div className="space-y-6">
 
-{/* ===================================================
-    INTELLIGENT MAIN DISPLAY
-    SCAN RESULT ↔ ACTIVE POSITION INTELLIGENCE
-    =================================================== */}
+    {/* ===================================================
+        INTELLIGENT MAIN DISPLAY
+        AI SCAN RESULT ↔ ACTIVE POSITION INTELLIGENCE
+        =================================================== */}
 
-{aiDisplayMode === "scan" ? (
+    {aiDisplayMode === "scan" ? (
 
-  /* ===============================
-     SCAN MODE
-     =============================== */
+      scanResult?.ai ? (
 
-  <ManualTrade
-    manualTokenMint={manualTokenMint}
-    setManualTokenMint={setManualTokenMint}
-    scanManualToken={scanManualToken}
-    scanLoading={scanLoading}
-    scanResult={scanResult}
-    scanError={scanError}
-    walletAddress={walletAddress}
-    chartEntry={chartEntry}
-    chartLoading={chartLoading}
-    chartError={chartError}
-    handleChartAnalysis={handleChartAnalysis}
-    showChartConfirm={showChartConfirm}
-    setShowChartConfirm={setShowChartConfirm}
-    notifications={notifications}
-  />
+        <AIDecisionCard
+          ai={scanResult.ai}
+        />
 
-) : (
+      ) : (
 
-  /* ===============================
-     ACTIVE POSITION MODE
-     =============================== */
+        <AIThinkingCard />
 
-  <ActivePositions
-    positions={positions}
-    loading={loading}
-    fetchPositions={fetchPositions}
-    manualSell={manualSell}
-    manualSellAll={manualSellAll}
-  />
+      )
 
-)}
+    ) : (
 
-{/* ===================================================
-    PERFORMANCE
-    =================================================== */}
+      <ActivePositions
+        positions={positions}
+        loading={loading}
+        fetchPositions={fetchPositions}
+        manualSell={manualSell}
+        manualSellAll={manualSellAll}
+      />
 
-<PerformanceSummary
-  totalPnl={totalPnl}
-  metrics={metrics}
-  tokenFilter={tokenFilter}
-  setTokenFilter={setTokenFilter}
-  dateFrom={dateFrom}
-  setDateFrom={setDateFrom}
-  dateTo={dateTo}
-  setDateTo={setDateTo}
-  fmt={fmt}
-/>
+    )}
 
-   
+    {/* ===================================================
+        TOKEN SCANNER
+        =================================================== */}
 
-   <div className="bg-gray-800 rounded-xl p-4">
-  <button
-    type="button"
-    onClick={() => setShowTradeHistory((prev) => !prev)}
-    className="w-full flex items-center justify-between text-left"
-  >
-    <h3 className="text-lg font-semibold text-white">
-      Trade History ({filteredHistory.length})
-    </h3>
-    <span className="text-white text-xl">
-      {showTradeHistory ? "▲" : "▼"}
-    </span>
-  </button>
+    <ManualTrade
+      manualTokenMint={manualTokenMint}
+      setManualTokenMint={setManualTokenMint}
+      scanManualToken={scanManualToken}
+      scanLoading={scanLoading}
+      scanResult={scanResult}
+      scanError={scanError}
+      walletAddress={walletAddress}
+      chartEntry={chartEntry}
+      chartLoading={chartLoading}
+      chartError={chartError}
+      handleChartAnalysis={handleChartAnalysis}
+      showChartConfirm={showChartConfirm}
+      setShowChartConfirm={setShowChartConfirm}
+      notifications={notifications}
+    />
 
-  {showTradeHistory ? (
-    <div className="mt-4">
-      <TradeHistory filteredHistory={filteredHistory} />
+    {/* ===================================================
+        TRADE HISTORY
+        =================================================== */}
+
+    <div className="bg-gray-800 rounded-xl p-4">
+      <button
+        type="button"
+        onClick={() =>
+          setShowTradeHistory((prev) => !prev)
+        }
+        className="w-full flex items-center justify-between text-left"
+      >
+        <h3 className="text-lg font-semibold text-white">
+          Trade History ({filteredHistory.length})
+        </h3>
+
+        <span className="text-white text-xl">
+          {showTradeHistory ? "▲" : "▼"}
+        </span>
+      </button>
+
+      {showTradeHistory ? (
+        <div className="mt-4">
+          <TradeHistory
+            filteredHistory={filteredHistory}
+          />
+        </div>
+      ) : null}
     </div>
-  ) : null}
-</div>
 
-   
   </div>
 </div>
 
