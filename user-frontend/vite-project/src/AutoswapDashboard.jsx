@@ -65,6 +65,12 @@ const [scanError, setScanError] = useState("");
 const [chartEntry, setChartEntry] = useState(null);
 const [chartLoading, setChartLoading] = useState(false);
 const [chartError, setChartError] = useState("");
+// ===================================================
+// SCAN / ACTIVE POSITION DISPLAY MODE
+// ===================================================
+
+const [aiDisplayMode, setAiDisplayMode] = useState("position");
+// "position" | "scan"
 const [showChartConfirm, setShowChartConfirm] = useState(false);
 const [newTokens, setNewTokens] = useState([]);
 const [loadingNewTokens, setLoadingNewTokens] = useState(false);
@@ -487,6 +493,9 @@ const scanMode = params.get("mode") || "default";
         setScanError("");
         setScanResult(null);
 
+
+
+
         const API_BASE = import.meta.env.VITE_API_BASE || "";
 
         const endpoint =
@@ -521,6 +530,32 @@ const response = await fetch(endpoint, {
     }, 300);
   }
 }, [connected, publicKey, walletAddress]);
+
+
+// ===================================================
+// 🔄 SCAN RESULT → ACTIVE POSITION INTELLIGENCE
+// ===================================================
+
+useEffect(() => {
+  if (!scanResult) return;
+
+  // Keep scan result visible
+  setAiDisplayMode("scan");
+
+  // Give the user time to read the scan result
+  const timer = setTimeout(() => {
+    // If there is an active position,
+    // return to Active Position Intelligence.
+    if (positions.length > 0) {
+      setAiDisplayMode("position");
+    }
+
+    // If there is NO active position,
+    // remain on the scan result.
+  }, 8000);
+
+  return () => clearTimeout(timer);
+}, [scanResult, chartEntry, positions.length]);
 
 // ===================================================
 // 🔄 STEP 4.1 — AUTO-REFRESH USER WHILE LINK POPUP OPEN
@@ -691,7 +726,7 @@ async function scanManualToken() {
 
     // AI enters thinking mode immediately
     setAiMode("thinking");
-
+setAiDisplayMode("scan");
     setScanLoading(true);
     setScanError("");
     setScanResult(null);
@@ -1576,44 +1611,63 @@ console.log(
  <div className="space-y-6">
 
 {/* ===================================================
-    ACTIVE POSITION / AI POSITION CARD
+    INTELLIGENT MAIN DISPLAY
+    SCAN RESULT ↔ ACTIVE POSITION INTELLIGENCE
     =================================================== */}
 
-<ActivePositions
-  positions={positions}
-  loading={loading}
-  fetchPositions={fetchPositions}
-  manualSell={manualSell}
-  manualSellAll={manualSellAll}
-/>
+{aiDisplayMode === "scan" ? (
 
-    <PerformanceSummary
-      totalPnl={totalPnl}
-      metrics={metrics}
-      tokenFilter={tokenFilter}
-      setTokenFilter={setTokenFilter}
-      dateFrom={dateFrom}
-      setDateFrom={setDateFrom}
-      dateTo={dateTo}
-      setDateTo={setDateTo}
-      fmt={fmt}
-    />
+  /* ===============================
+     SCAN MODE
+     =============================== */
 
-<ManualTrade
-  manualTokenMint={manualTokenMint}
-  setManualTokenMint={setManualTokenMint}
-  scanManualToken={scanManualToken}
-  scanLoading={scanLoading}
-  scanResult={scanResult}
-  scanError={scanError}
-  walletAddress={walletAddress}
-  chartEntry={chartEntry}
-  chartLoading={chartLoading}
-  chartError={chartError}
-  handleChartAnalysis={handleChartAnalysis}
-  showChartConfirm={showChartConfirm}
-  setShowChartConfirm={setShowChartConfirm}
-  notifications={notifications}
+  <ManualTrade
+    manualTokenMint={manualTokenMint}
+    setManualTokenMint={setManualTokenMint}
+    scanManualToken={scanManualToken}
+    scanLoading={scanLoading}
+    scanResult={scanResult}
+    scanError={scanError}
+    walletAddress={walletAddress}
+    chartEntry={chartEntry}
+    chartLoading={chartLoading}
+    chartError={chartError}
+    handleChartAnalysis={handleChartAnalysis}
+    showChartConfirm={showChartConfirm}
+    setShowChartConfirm={setShowChartConfirm}
+    notifications={notifications}
+  />
+
+) : (
+
+  /* ===============================
+     ACTIVE POSITION MODE
+     =============================== */
+
+  <ActivePositions
+    positions={positions}
+    loading={loading}
+    fetchPositions={fetchPositions}
+    manualSell={manualSell}
+    manualSellAll={manualSellAll}
+  />
+
+)}
+
+{/* ===================================================
+    PERFORMANCE
+    =================================================== */}
+
+<PerformanceSummary
+  totalPnl={totalPnl}
+  metrics={metrics}
+  tokenFilter={tokenFilter}
+  setTokenFilter={setTokenFilter}
+  dateFrom={dateFrom}
+  setDateFrom={setDateFrom}
+  dateTo={dateTo}
+  setDateTo={setDateTo}
+  fmt={fmt}
 />
 
    
