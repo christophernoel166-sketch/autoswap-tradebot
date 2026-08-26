@@ -1206,6 +1206,57 @@ async function manualSell(mint, percent = 100) {
   fetchHistory();
 }
 
+// ===================================================
+// 🟢 AI / MANUAL BUY
+// ===================================================
+async function handleManualBuy() {
+  try {
+    if (!walletAddress || !scanResult?.token?.mintAddress) {
+      alert("Wallet or token is missing");
+      return;
+    }
+
+    const res = await fetch(`${API_BASE}/api/tokens/manual-buy`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        walletAddress,
+        tokenMint: scanResult.token.mintAddress,
+        source: "manual_dashboard",
+        scanResult: {
+          evaluation: scanResult.evaluation,
+          expiresAt: scanResult.expiresAt,
+          scannedAt: scanResult.scannedAt,
+        },
+      }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.ok) {
+      throw new Error(
+        data?.error || "Failed to queue manual buy"
+      );
+    }
+
+    setMessage({
+      type: "success",
+      text: "Trade submitted successfully",
+    });
+
+  } catch (err) {
+    console.error("handleManualBuy error:", err);
+
+    setMessage({
+      type: "error",
+      text: err.message || "Manual buy failed",
+    });
+  }
+}
+
+
 async function manualSellAll() {
   if (!confirm("Sell ALL positions?")) return;
 
@@ -1619,9 +1670,99 @@ console.log(
 
       scanResult?.ai ? (
 
-        <AIDecisionCard
-          ai={scanResult.ai}
-        />
+       <AIDecisionCard
+  ai={scanResult.ai}
+
+  actions={
+    <>
+      {/* SCAN TOKEN */}
+      <button
+        type="button"
+        onClick={scanManualToken}
+        disabled={
+          scanLoading ||
+          !walletAddress ||
+          !manualTokenMint.trim()
+        }
+        className="
+          px-4 py-2
+          rounded-lg
+          text-sm
+          font-semibold
+          bg-purple-600
+          hover:bg-purple-700
+          text-white
+          disabled:opacity-50
+          disabled:cursor-not-allowed
+          transition
+        "
+      >
+        {scanLoading
+          ? "Scanning..."
+          : "Scan Token"}
+      </button>
+
+
+      {/* CHART ANALYSIS */}
+      <button
+        type="button"
+        onClick={() => setShowChartConfirm(true)}
+        disabled={
+          chartLoading ||
+          !walletAddress ||
+          !scanResult?.token?.mintAddress
+        }
+        className="
+          px-4 py-2
+          rounded-lg
+          text-sm
+          font-semibold
+          bg-purple-600
+          hover:bg-purple-700
+          text-white
+          disabled:opacity-50
+          disabled:cursor-not-allowed
+          transition
+        "
+      >
+        {chartLoading
+          ? "Loading..."
+          : chartEntry
+          ? "✓ Chart Ready"
+          : "Chart Analysis"}
+      </button>
+
+
+      {/* BUY */}
+      <button
+        type="button"
+        onClick={handleManualBuy}
+        disabled={
+          !scanResult?.evaluation?.showBuy ||
+          !walletAddress
+        }
+        className="
+          px-4 py-2
+          rounded-lg
+          text-sm
+          font-semibold
+          bg-green-600
+          hover:bg-green-700
+          text-white
+          disabled:opacity-50
+          disabled:cursor-not-allowed
+          transition
+        "
+      >
+        {scanResult?.evaluation?.buyConfidence === "MEDIUM"
+          ? "Buy (Caution)"
+          : "Buy"}
+      </button>
+    </>
+  }
+/>
+
+
 
       ) : (
 

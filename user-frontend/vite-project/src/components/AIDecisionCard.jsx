@@ -178,7 +178,10 @@ function SectionHeader({
    MAIN COMPONENT
 ========================================================== */
 
-export default function AIDecisionCard({ ai }) {
+export default function AIDecisionCard({
+  ai,
+  actions,
+}) {
   if (!ai) {
     return null;
   }
@@ -560,6 +563,16 @@ export default function AIDecisionCard({ ai }) {
           </div>
 
         </div>
+
+        {/* ====================================================
+            AI ACTIONS
+            ==================================================== */}
+
+        {actions && (
+          <div className="mt-5 flex flex-wrap items-center gap-2">
+            {actions}
+          </div>
+        )}
 
         {/* Confidence bar */}
 

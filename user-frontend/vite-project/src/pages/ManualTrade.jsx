@@ -284,13 +284,13 @@ setTimeout(() => {
             className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
           />
 
-          <button
-            onClick={scanManualToken}
-            disabled={scanLoading || !manualTokenMint.trim()}
-            className="w-full sm:w-auto px-5 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {scanLoading ? "Scanning..." : "Scan Token"}
-          </button>
+         // <button
+          // onClick={scanManualToken}
+           // disabled={scanLoading || !manualTokenMint.trim()}
+           // className="w-full sm:w-auto px-5 py-3 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-medium  // disabled:opacity-50 disabled:cursor-not-allowed"
+        //  >
+           // {scanLoading ? "Scanning..." : "Scan Token"}
+         // </button>
 
           {scanError ? (
             <div className="text-sm text-red-600 dark:text-red-400">
@@ -392,59 +392,6 @@ setTimeout(() => {
 
    
 
-   <div className="ml-auto flex items-center gap-2 relative">
-  {!chartEntry ? (
-    <button
-      type="button"
-      onClick={() => setShowChartConfirm(true)}
-      disabled={chartLoading || !walletAddress}
-      className="px-3 py-1 rounded-md text-xs font-medium bg-purple-600 hover:bg-purple-700 text-white disabled:opacity-50"
-    >
-      {chartLoading
-        ? "Loading..."
-        : "Chart Analysis"}
-    </button>
-  ) : (
-    <span className="text-green-400 text-xs font-semibold">
-      ✓ Chart Ready
-    </span>
-  )}
-
-  <button
-    type="button"
-    onClick={handleManualBuy}
-    disabled={!showBuy || !walletAddress}
-    className={`px-3 py-1 rounded-md text-xs font-medium ${buyButtonClass}`}
-  >
-    {buyConfidence === "MEDIUM"
-      ? "Buy (Caution)"
-      : "Buy"}
-  </button>
-
-{buyToast && (
-  <div
-    className={`absolute top-full right-0 mt-2 z-50 w-64 rounded-lg border p-3 shadow-lg ${
-      buyToast.type === "success"
-        ? "bg-green-900 border-green-500"
-        : buyToast.type === "error"
-        ? "bg-red-900 border-red-500"
-        : "bg-blue-900 border-blue-500"
-    }`}
-  >
-    <div className="font-semibold text-white">
-      {buyToast.title}
-    </div>
-
-    <div className="text-xs text-gray-200 mt-1">
-      {buyToast.message}
-    </div>
-  </div>
-)}
-
-</div> 
-
-  </div>
-</div>
 
 
 
