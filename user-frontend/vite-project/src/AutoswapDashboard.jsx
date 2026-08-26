@@ -1672,94 +1672,140 @@ console.log(
 
        <AIDecisionCard
   ai={scanResult.ai}
+actions={
+  <div className="w-full">
 
-  actions={
-    <>
-      {/* SCAN TOKEN */}
-      <button
-        type="button"
-        onClick={scanManualToken}
-        disabled={
-          scanLoading ||
-          !walletAddress ||
-          !manualTokenMint.trim()
-        }
-        className="
-          px-4 py-2
-          rounded-lg
-          text-sm
-          font-semibold
-          bg-purple-600
-          hover:bg-purple-700
-          text-white
-          disabled:opacity-50
-          disabled:cursor-not-allowed
-          transition
-        "
-      >
-        {scanLoading
-          ? "Scanning..."
-          : "Scan Token"}
-      </button>
+    {/* =====================================================
+        TOKEN INPUT + SCAN
+        ===================================================== */}
+
+    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+
+      {/* CONTRACT ADDRESS + SCAN */}
+
+      <div className="flex min-w-0 flex-1 gap-2">
+
+        <input
+          type="text"
+          value={manualTokenMint}
+          onChange={(e) => setManualTokenMint(e.target.value)}
+          placeholder="Paste token contract address"
+          className="
+            min-w-0
+            flex-1
+            px-4 py-2
+            rounded-lg
+            border border-gray-700
+            bg-gray-900
+            text-sm
+            text-white
+            placeholder-gray-500
+            outline-none
+            focus:border-purple-500
+            transition
+          "
+        />
+
+        {/* SCAN TOKEN */}
+
+        <button
+          type="button"
+          onClick={scanManualToken}
+          disabled={
+            scanLoading ||
+            !walletAddress ||
+            !manualTokenMint.trim()
+          }
+          className="
+            shrink-0
+            px-4 py-2
+            rounded-lg
+            text-sm
+            font-semibold
+            bg-purple-600
+            hover:bg-purple-700
+            text-white
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition
+          "
+        >
+          {scanLoading ? "Scanning..." : "Scan Token"}
+        </button>
+
+      </div>
 
 
-      {/* CHART ANALYSIS */}
-      <button
-        type="button"
-        onClick={() => setShowChartConfirm(true)}
-        disabled={
-          chartLoading ||
-          !walletAddress ||
-          !scanResult?.token?.mintAddress
-        }
-        className="
-          px-4 py-2
-          rounded-lg
-          text-sm
-          font-semibold
-          bg-purple-600
-          hover:bg-purple-700
-          text-white
-          disabled:opacity-50
-          disabled:cursor-not-allowed
-          transition
-        "
-      >
-        {chartLoading
-          ? "Loading..."
-          : chartEntry
-          ? "✓ Chart Ready"
-          : "Chart Analysis"}
-      </button>
+      {/* =====================================================
+          CHART ANALYSIS + BUY
+          ===================================================== */}
+
+      <div className="flex shrink-0 items-center gap-2">
+
+        {/* CHART ANALYSIS */}
+
+        <button
+          type="button"
+          onClick={() => setShowChartConfirm(true)}
+          disabled={
+            chartLoading ||
+            !walletAddress ||
+            !scanResult?.token?.mintAddress
+          }
+          className="
+            px-4 py-2
+            rounded-lg
+            text-sm
+            font-semibold
+            bg-purple-600
+            hover:bg-purple-700
+            text-white
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition
+          "
+        >
+          {chartLoading
+            ? "Loading..."
+            : chartEntry
+            ? "✓ Chart Ready"
+            : "Chart Analysis"}
+        </button>
 
 
-      {/* BUY */}
-      <button
-        type="button"
-        onClick={handleManualBuy}
-        disabled={
-          !scanResult?.evaluation?.showBuy ||
-          !walletAddress
-        }
-        className="
-          px-4 py-2
-          rounded-lg
-          text-sm
-          font-semibold
-          bg-green-600
-          hover:bg-green-700
-          text-white
-          disabled:opacity-50
-          disabled:cursor-not-allowed
-          transition
-        "
-      >
-        {scanResult?.evaluation?.buyConfidence === "MEDIUM"
-          ? "Buy (Caution)"
-          : "Buy"}
-      </button>
-    </>
-  }
+        {/* BUY */}
+
+        <button
+          type="button"
+          onClick={handleManualBuy}
+          disabled={
+            !scanResult?.evaluation?.showBuy ||
+            !walletAddress
+          }
+          className="
+            px-4 py-2
+            rounded-lg
+            text-sm
+            font-semibold
+            bg-green-600
+            hover:bg-green-700
+            text-white
+            disabled:opacity-50
+            disabled:cursor-not-allowed
+            transition
+          "
+        >
+          {scanResult?.evaluation?.buyConfidence === "MEDIUM"
+            ? "Buy (Caution)"
+            : "Buy"}
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+}
 />
 
 
