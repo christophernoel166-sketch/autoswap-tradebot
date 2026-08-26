@@ -1818,13 +1818,95 @@ actions={
 
     ) : (
 
-      <ActivePositions
-        positions={positions}
-        loading={loading}
-        fetchPositions={fetchPositions}
-        manualSell={manualSell}
-        manualSellAll={manualSellAll}
-      />
+        
+
+      <>
+        {/* ===================================================
+            SCAN NEW TOKEN
+            Available while Active Position Intelligence
+            is being displayed.
+            =================================================== */}
+
+        <div className="bg-gray-800 rounded-xl p-4">
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+
+            {/* CONTRACT ADDRESS */}
+
+            <div className="flex min-w-0 flex-1 gap-2">
+
+              <input
+                type="text"
+                value={manualTokenMint}
+                onChange={(e) =>
+                  setManualTokenMint(e.target.value)
+                }
+                placeholder="Paste token contract address"
+                className="
+                  min-w-0
+                  flex-1
+                  px-4 py-2
+                  rounded-lg
+                  border border-gray-700
+                  bg-gray-900
+                  text-sm
+                  text-white
+                  placeholder-gray-500
+                  outline-none
+                  focus:border-purple-500
+                  transition
+                "
+              />
+
+              {/* SCAN TOKEN */}
+
+              <button
+                type="button"
+                onClick={scanManualToken}
+                disabled={
+                  scanLoading ||
+                  !walletAddress ||
+                  !manualTokenMint.trim()
+                }
+                className="
+                  shrink-0
+                  px-4 py-2
+                  rounded-lg
+                  text-sm
+                  font-semibold
+                  bg-purple-600
+                  hover:bg-purple-700
+                  text-white
+                  disabled:opacity-50
+                  disabled:cursor-not-allowed
+                  transition
+                "
+              >
+                {scanLoading
+                  ? "Scanning..."
+                  : "Scan Token"}
+              </button>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* ===================================================
+            ACTIVE POSITION INTELLIGENCE
+            =================================================== */}
+
+        <ActivePositions
+          positions={positions}
+          loading={loading}
+          fetchPositions={fetchPositions}
+          manualSell={manualSell}
+          manualSellAll={manualSellAll}
+        />
+
+      </>
 
     )}
 
