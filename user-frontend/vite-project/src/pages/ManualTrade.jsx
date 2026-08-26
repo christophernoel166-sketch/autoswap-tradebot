@@ -267,6 +267,7 @@ const chartActionColor =
 setTimeout(() => {
   setBuyToast(null);
 }, 3000);
+
     } catch (err) {
       alert(err.message || "Manual buy failed");
     }
@@ -274,8 +275,15 @@ setTimeout(() => {
 
   return (
     <div className="space-y-6">
+
+      {/* ===================================================
+          MANUAL TOKEN SCAN
+          =================================================== */}
+
       <Section title="Manual Token Scan">
+
         <div className="space-y-3">
+
           <input
             type="text"
             value={manualTokenMint}
@@ -284,21 +292,34 @@ setTimeout(() => {
             className="w-full rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-4 py-3 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 dark:placeholder-gray-500 outline-none"
           />
 
-    
-
           {scanError ? (
             <div className="text-sm text-red-600 dark:text-red-400">
               {scanError}
             </div>
           ) : null}
+
         </div>
+
       </Section>
+
+
+      {/* ===================================================
+          SCAN RESULT
+          =================================================== */}
 
       {scanResult ? (
         <>
+
+          {/* ===================================================
+              LIVE CHART
+              =================================================== */}
+
           {scanResult?.pairAddress ? (
+
             <Section title="Live Chart">
+
               <div className="w-full overflow-hidden rounded-lg border border-gray-200 dark:border-gray-700">
+
                 <iframe
                   title="Token Chart"
                   src={`https://dexscreener.com/solana/${scanResult.pairAddress}?embed=1&theme=dark`}
@@ -306,224 +327,330 @@ setTimeout(() => {
                   frameBorder="0"
                   allowFullScreen
                 />
+
               </div>
+
             </Section>
+
           ) : (
+
             <Section title="Live Chart">
+
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 Chart not available for this token.
               </div>
+
             </Section>
+
           )}
 
+
+          {/* ===================================================
+              SCAN SUMMARY
+              =================================================== */}
+
           <Section title="Scan Summary">
+
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+
               <div>
+
                 <div className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                   {token?.name || "Scanned Token"}
                 </div>
+
                 <div className="text-sm text-gray-500 dark:text-gray-400 break-all">
                   {token?.mintAddress || manualTokenMint}
                 </div>
+
               </div>
 
+
               <div className="flex items-center gap-2 flex-wrap">
+
                 {token?.boosted ? (
                   <span className="px-3 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                     Boosted
                   </span>
                 ) : null}
 
-               
               </div>
+
             </div>
 
 
-<div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
-  <div className="flex flex-wrap items-center gap-5 text-sm">
+            {/* ===================================================
+                SCORE / STATUS / EXPIRATION
+                =================================================== */}
 
-    <div>
-      <span className="text-gray-400">
-        SCORE
-      </span>{" "}
-      <span className="font-bold text-white">
-        {formatValue(evaluation?.score)}
-      </span>
-    </div>
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-3">
 
-   <div>
-  <span className="text-gray-400">
-    STATUS
-  </span>{" "}
-  <span
-    className={`font-bold ${
-      verdict === "SAFE"
-        ? "text-green-400"
-        : verdict === "CAUTION"
-        ? "text-yellow-400"
-        : "text-red-400"
-    }`}
-  >
-    {verdict}
-  </span>
-</div>
+              <div className="flex flex-wrap items-center gap-5 text-sm">
 
-    <div>
-      <span className="text-gray-400">
-        EXPIRES
-      </span>{" "}
-      <span className="font-semibold text-white">
-        {scanResult?.expiresAt
-          ? new Date(
-              scanResult.expiresAt
-            ).toLocaleTimeString()
-          : "—"}
-      </span>
-    </div>
+                {/* SCORE */}
+
+                <div>
+
+                  <span className="text-gray-400">
+                    SCORE
+                  </span>{" "}
+
+                  <span className="font-bold text-white">
+                    {formatValue(evaluation?.score)}
+                  </span>
+
+                </div>
 
 
+                {/* STATUS */}
+
+                <div>
+
+                  <span className="text-gray-400">
+                    STATUS
+                  </span>{" "}
+
+                  <span
+                    className={`font-bold ${
+                      verdict === "SAFE"
+                        ? "text-green-400"
+                        : verdict === "CAUTION"
+                        ? "text-yellow-400"
+                        : "text-red-400"
+                    }`}
+                  >
+                    {verdict}
+                  </span>
+
+                </div>
 
 
-   
+                {/* EXPIRES */}
+
+                <div>
+
+                  <span className="text-gray-400">
+                    EXPIRES
+                  </span>{" "}
+
+                  <span className="font-semibold text-white">
+                    {scanResult?.expiresAt
+                      ? new Date(
+                          scanResult.expiresAt
+                        ).toLocaleTimeString()
+                      : "—"}
+                  </span>
+
+                </div>
 
 
+                {/* BUY STATUS */}
 
+                {!showBuy ? (
 
-{!showBuy ? (
-  <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
-    Buy is unavailable for this token right now.
-  </div>
-) : buyConfidence === "MEDIUM" ? (
-  <div className="mt-3 text-xs text-yellow-700 dark:text-yellow-400">
-    ⚠️ Caution trade: token is tradable but not in the safest category.
-  </div>
-) : null}
+                  <div className="mt-4 text-sm text-yellow-700 dark:text-yellow-400">
+                    Buy is unavailable for this token right now.
+                  </div>
 
-              
+                ) : buyConfidence === "MEDIUM" ? (
+
+                  <div className="mt-3 text-xs text-yellow-700 dark:text-yellow-400">
+                    ⚠️ Caution trade: token is tradable but not in the safest category.
+                  </div>
+
+                ) : null}
+
+              </div>
+
+            </div>
+
           </Section>
 
 
+          {/* ===================================================
+              FORECAST SNAPSHOT
+              =================================================== */}
 
-{volumeAnalysis &&
- liquidityAnalysis &&
- forecast ? (
-  <Section title="Forecast Snapshot">
-    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
-      <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
+          {volumeAnalysis &&
+          liquidityAnalysis &&
+          forecast ? (
 
-        <div>
-          <span className="text-gray-400">
-            VOL
-          </span>{" "}
-          <span className="font-semibold text-white">
-            {volumeAnalysis.volumeScore}
-          </span>
-        </div>
+            <Section title="Forecast Snapshot">
 
-        <div>
-          <span className="text-gray-400">
-            LIQ
-          </span>{" "}
-          <span className="font-semibold text-white">
-            {liquidityAnalysis.liquidityScore}
-          </span>
-        </div>
+              <div className="bg-gray-50 dark:bg-gray-700 rounded-lg px-4 py-2">
 
-        <div>
-          <span className="text-gray-400">
-            FC
-          </span>{" "}
-          <span className="font-semibold text-white">
-            {forecast.forecastScore}
-          </span>
-        </div>
+                <div className="flex flex-wrap items-center gap-3 text-xs font-medium">
 
-        <div>
-          <span
-            className={`font-semibold ${
-              forecast.verdict.includes("BULLISH")
-                ? "text-green-400"
-                : forecast.verdict.includes("BEARISH")
-                ? "text-red-400"
-                : "text-yellow-400"
-            }`}
-          >
-            {forecast.verdict}
-          </span>
-        </div>
+                  {/* VOL */}
 
-        <div>
-          <span className="text-gray-400">
-            1H
-          </span>{" "}
-          <span
-            className={`font-semibold ${
-              forecast.shortTerm?.verdict?.includes("BULLISH")
-                ? "text-green-400"
-                : forecast.shortTerm?.verdict?.includes("BEARISH")
-                ? "text-red-400"
-                : "text-yellow-400"
-            }`}
-          >
-            {forecast.shortTerm?.verdict || "-"}
-          </span>
-        </div>
+                  <div>
 
-        <div>
-          <span className="text-gray-400">
-            24H
-          </span>{" "}
-          <span
-            className={`font-semibold ${
-              forecast.midTerm?.verdict?.includes("BULLISH")
-                ? "text-green-400"
-                : forecast.midTerm?.verdict?.includes("BEARISH")
-                ? "text-red-400"
-                : "text-yellow-400"
-            }`}
-          >
-            {forecast.midTerm?.verdict || "-"}
-          </span>
-        </div>
+                    <span className="text-gray-400">
+                      VOL
+                    </span>{" "}
 
-        <div>
-          <span className="text-gray-400">
-            7D
-          </span>{" "}
-          <span
-            className={`font-semibold ${
-              forecast.longTerm?.verdict?.includes("BULLISH")
-                ? "text-green-400"
-                : forecast.longTerm?.verdict?.includes("BEARISH")
-                ? "text-red-400"
-                : "text-yellow-400"
-            }`}
-          >
-            {forecast.longTerm?.verdict || "-"}
-          </span>
-        </div>
+                    <span className="font-semibold text-white">
+                      {volumeAnalysis.volumeScore}
+                    </span>
 
-        <div>
-          <span className="text-gray-400">
-            CONF
-          </span>{" "}
-          <span className="font-semibold text-white">
-            {scanResult?.ai?.confidence ?? forecast.confidence ?? 0}%
-          </span>
-        </div>
+                  </div>
 
-      </div>
-    </div>
-  </Section>
-) : null}
 
-<ChartEntrySection
-  chartEntry={chartEntry}
-  chartActionColor={chartActionColor}
-  formatValue={formatValue}
-  Section={Section}
-  MetricRow={MetricRow}
-/>
+                  {/* LIQ */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      LIQ
+                    </span>{" "}
+
+                    <span className="font-semibold text-white">
+                      {liquidityAnalysis.liquidityScore}
+                    </span>
+
+                  </div>
+
+
+                  {/* FORECAST */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      FC
+                    </span>{" "}
+
+                    <span className="font-semibold text-white">
+                      {forecast.forecastScore}
+                    </span>
+
+                  </div>
+
+
+                  {/* FORECAST VERDICT */}
+
+                  <div>
+
+                    <span
+                      className={`font-semibold ${
+                        forecast.verdict.includes("BULLISH")
+                          ? "text-green-400"
+                          : forecast.verdict.includes("BEARISH")
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                      }`}
+                    >
+                      {forecast.verdict}
+                    </span>
+
+                  </div>
+
+
+                  {/* 1H */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      1H
+                    </span>{" "}
+
+                    <span
+                      className={`font-semibold ${
+                        forecast.shortTerm?.verdict?.includes("BULLISH")
+                          ? "text-green-400"
+                          : forecast.shortTerm?.verdict?.includes("BEARISH")
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                      }`}
+                    >
+                      {forecast.shortTerm?.verdict || "-"}
+                    </span>
+
+                  </div>
+
+
+                  {/* 24H */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      24H
+                    </span>{" "}
+
+                    <span
+                      className={`font-semibold ${
+                        forecast.midTerm?.verdict?.includes("BULLISH")
+                          ? "text-green-400"
+                          : forecast.midTerm?.verdict?.includes("BEARISH")
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                      }`}
+                    >
+                      {forecast.midTerm?.verdict || "-"}
+                    </span>
+
+                  </div>
+
+
+                  {/* 7D */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      7D
+                    </span>{" "}
+
+                    <span
+                      className={`font-semibold ${
+                        forecast.longTerm?.verdict?.includes("BULLISH")
+                          ? "text-green-400"
+                          : forecast.longTerm?.verdict?.includes("BEARISH")
+                          ? "text-red-400"
+                          : "text-yellow-400"
+                      }`}
+                    >
+                      {forecast.longTerm?.verdict || "-"}
+                    </span>
+
+                  </div>
+
+
+                  {/* CONFIDENCE */}
+
+                  <div>
+
+                    <span className="text-gray-400">
+                      CONF
+                    </span>{" "}
+
+                    <span className="font-semibold text-white">
+                      {scanResult?.ai?.confidence ??
+                        forecast.confidence ??
+                        0}
+                      %
+                    </span>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </Section>
+
+          ) : null}
+
+
+          {/* ===================================================
+              CHART ENTRY ANALYSIS
+              =================================================== */}
+
+          <ChartEntrySection
+            chartEntry={chartEntry}
+            chartActionColor={chartActionColor}
+            formatValue={formatValue}
+            Section={Section}
+            MetricRow={MetricRow}
+          />
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
 
