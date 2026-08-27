@@ -1,6 +1,6 @@
 // src/components/AIDecisionCard.jsx
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 
 /* ==========================================================
    HELPERS
@@ -181,7 +181,25 @@ function SectionHeader({
 export default function AIDecisionCard({
   ai,
   actions,
+  chartEntry,
 }) {
+  const [showChartPopup, setShowChartPopup] = useState(false);
+
+  useEffect(() => {
+    if (!chartEntry) {
+      setShowChartPopup(false);
+      return;
+    }
+
+    setShowChartPopup(true);
+
+    const timer = setTimeout(() => {
+      setShowChartPopup(false);
+    }, 40000);
+
+    return () => clearTimeout(timer);
+  }, [chartEntry]);
+
   if (!ai) {
     return null;
   }
@@ -635,7 +653,127 @@ export default function AIDecisionCard({
           color="text-white"
         />
 
-      </div>
+           </div>
+
+      {/* ====================================================
+          TEMPORARY CHART ANALYSIS RESULT
+          Appears below Primary Metrics
+          Automatically disappears after 40 seconds
+          ==================================================== */}
+
+      {showChartPopup && chartEntry && (
+        <div className="mx-5 mb-5 rounded-xl border border-purple-500/30 bg-purple-500/5 p-4">
+
+          {/* HEADER */}
+
+          <div className="flex items-center justify-between gap-3">
+
+            <div>
+              <div className="text-xs uppercase tracking-wide text-purple-300">
+                Chart Analysis
+              </div>
+
+              <div className="mt-1 text-lg font-semibold text-white">
+                {chartEntry?.action ||
+                  chartEntry?.verdict ||
+                  chartEntry?.signal ||
+                  "Chart Entry Analysis"}
+              </div>
+            </div>
+
+            <div className="text-right">
+
+              <div className="text-[11px] text-gray-500">
+                Confidence
+              </div>
+
+              <div className="text-lg font-bold text-cyan-300">
+                {chartEntry?.confidence !== undefined
+                  ? `${chartEntry.confidence}%`
+                  : "--"}
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* CHART METRICS */}
+
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+
+            <MetricCard
+              title="Score"
+              value={chartEntry?.score ?? "--"}
+              color="text-cyan-300"
+            />
+
+            <MetricCard
+              title="Trend Strength"
+              value={
+                chartEntry?.trendStrength !== undefined
+                  ? `${chartEntry.trendStrength}%`
+                  : "--"
+              }
+              color="text-green-400"
+            />
+
+            <MetricCard
+              title="Current Price"
+              value={chartEntry?.currentPrice ?? "--"}
+              color="text-white"
+            />
+
+            <MetricCard
+              title="Profit Potential"
+              value={
+                chartEntry?.profitPotentialPct !== undefined
+                  ? `${chartEntry.profitPotentialPct}%`
+                  : "--"
+              }
+              color="text-green-400"
+            />
+
+          </div>
+
+
+          {/* ENTRY / RISK / TARGETS */}
+
+          <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+
+            <MetricCard
+              title="Ideal Entry"
+              value={chartEntry?.idealEntry ?? "--"}
+              color="text-white"
+            />
+
+            <MetricCard
+              title="Stop Loss"
+              value={chartEntry?.invalidationLevel ?? "--"}
+              color="text-red-400"
+            />
+
+            <MetricCard
+              title="TP1"
+              value={chartEntry?.takeProfitLevel ?? "--"}
+              color="text-green-400"
+            />
+
+            <MetricCard
+              title="Entry Range"
+              value={
+                chartEntry?.entryMin !== undefined &&
+                chartEntry?.entryMax !== undefined
+                  ? `${chartEntry.entryMin} - ${chartEntry.entryMax}`
+                  : "--"
+              }
+              color="text-cyan-300"
+            />
+
+          </div>
+
+        </div>
+      )}
 
       {/* ====================================================
           HISTORICAL INTELLIGENCE
