@@ -148,6 +148,7 @@ const [buyToast, setBuyToast] =
   useState(null);
 const [lastNotificationId, setLastNotificationId] =
   useState(null);
+const [showChartResult, setShowChartResult] = useState(false);
 
 // Support both new and legacy API responses
 const forecast =
@@ -196,6 +197,12 @@ useEffect(() => {
     }, 3000);
   }
 }, [notifications, lastNotificationId]);
+
+useEffect(() => {
+  if (chartEntry) {
+    setShowChartResult(true);
+  }
+}, [chartEntry]);
 
 
   const verdict = evaluation?.verdict || null;
@@ -1360,6 +1367,66 @@ setTimeout(() => {
           ) : null}
         </>
       ) : null}
+
+
+{showChartResult && chartEntry && (
+  <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-4">
+    <div className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-2xl bg-white dark:bg-gray-900 shadow-2xl">
+
+      {/* HEADER */}
+      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 px-6 py-4">
+
+        <div>
+          <h2 className="text-lg font-bold text-gray-900 dark:text-white">
+            AI Chart Analysis
+          </h2>
+
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            Advanced entry analysis
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => setShowChartResult(false)}
+          className="text-gray-500 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white text-xl"
+          aria-label="Close chart analysis"
+        >
+          ✕
+        </button>
+
+      </div>
+
+      {/* RESULT */}
+      <div className="p-6">
+
+        <ChartEntrySection
+          chartEntry={chartEntry}
+          chartActionColor={chartActionColor}
+          formatValue={formatValue}
+          Section={Section}
+          MetricRow={MetricRow}
+        />
+
+      </div>
+
+      {/* FOOTER */}
+      <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end">
+
+        <button
+          type="button"
+          onClick={() => setShowChartResult(false)}
+          className="px-5 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold"
+        >
+          Close
+        </button>
+
+      </div>
+
+    </div>
+  </div>
+)}
+
 
       {showChartConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
