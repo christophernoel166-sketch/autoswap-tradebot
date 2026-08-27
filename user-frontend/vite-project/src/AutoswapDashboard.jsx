@@ -817,16 +817,18 @@ setAiMode("thinking");
   );
 }
 
-    setChartEntry(data.chartEntry || null);
+setChartEntry(data.chartEntry || null);
 
 if (data.chartEntry) {
+  setAiMode("decision");
 
-    setAiMode("decision");
+  // Show the temporary chart result for 40 seconds
+  setTimeout(() => {
+    setChartEntry(null);
+  }, 40000);
 
 } else {
-
-    setAiMode("command");
-
+  setAiMode("command");
 }
 
   } catch (err) {
