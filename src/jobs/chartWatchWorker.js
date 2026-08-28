@@ -42,17 +42,25 @@ async function processCycle() {
 
   const grouped = new Map();
 
-  for (const watch of watches) {
+for (const watch of watches) {
 
-    const mint = watch.tokenMint;
+  const mint = watch.mintAddress;
 
-    if (!grouped.has(mint)) {
-      grouped.set(mint, []);
-    }
+  if (!mint) {
+    LOG.warn(
+      `⚠️ Chart watch ${watch._id} has no mintAddress`
+    );
 
-    grouped.get(mint).push(watch);
-
+    continue;
   }
+
+  if (!grouped.has(mint)) {
+    grouped.set(mint, []);
+  }
+
+  grouped.get(mint).push(watch);
+
+}
 
   LOG.info(
     `🪙 ${grouped.size} unique tokens to analyze`
@@ -109,9 +117,9 @@ async function processCycle() {
           continue;
         }
 
-        LOG.info(
-          `📈 ${watch.tokenSymbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
-        );
+      LOG.info(
+  `📈 ${watch.symbol || tokenMint}: ${result.previousAction} → ${result.currentAction}`
+);
 
         // ================================================
         // DASHBOARD NOTIFICATION

@@ -73,6 +73,10 @@ export async function monitorExistingAnalysis(
     };
   }
 
+  // ===================================================
+  // ANALYSIS UNAVAILABLE
+  // ===================================================
+
   if (!latestAnalysis?.ok) {
     watch.lastCheckedAt = new Date();
 
@@ -85,8 +89,12 @@ export async function monitorExistingAnalysis(
     };
   }
 
+  // ===================================================
+  // ACTION TRACKING
+  // ===================================================
+
   const previousAction =
-    watch.chartEntry?.action ?? null;
+    watch.currentAction ?? null;
 
   const currentAction =
     latestAnalysis.action ?? null;
@@ -94,20 +102,143 @@ export async function monitorExistingAnalysis(
   const changed =
     previousAction !== currentAction;
 
+  // ===================================================
+  // DETERMINE EVENT
+  // ===================================================
+
   const event =
     determineMonitorEvent(
       previousAction,
       currentAction
     );
 
-  watch.chartEntry = latestAnalysis;
-
-  watch.lastCheckedAt = new Date();
+  // ===================================================
+  // MOVE CURRENT ACTION → PREVIOUS ACTION
+  // THEN STORE NEW ACTION
+  // ===================================================
 
   if (changed) {
-    watch.lastEvent = event;
-    watch.lastEventAt = new Date();
+
+    watch.previousAction =
+      previousAction;
+
+    watch.currentAction =
+      currentAction;
+
   }
+
+  // ===================================================
+  // REFRESH CHART DATA
+  // ===================================================
+
+  watch.trend =
+    latestAnalysis?.metrics?.trend ??
+    watch.trend;
+
+  watch.confidence =
+    latestAnalysis?.metrics?.confidence ??
+    watch.confidence;
+
+  watch.entryMin =
+    latestAnalysis?.metrics?.entryMin ??
+    watch.entryMin;
+
+  watch.entryMax =
+    latestAnalysis?.metrics?.entryMax ??
+    watch.entryMax;
+
+  watch.breakoutLevel =
+    latestAnalysis?.metrics?.breakoutLevel ??
+    watch.breakoutLevel;
+
+  watch.invalidationLevel =
+    latestAnalysis?.metrics?.invalidationLevel ??
+    watch.invalidationLevel;
+
+  watch.takeProfitLevel =
+    latestAnalysis?.metrics?.takeProfitLevel ??
+    watch.takeProfitLevel;
+
+  // ===================================================
+  // STORE COMPLETE ANALYSIS SNAPSHOT
+  // ===================================================
+
+  watch.analysisSnapshot = {
+    ...(watch.analysisSnapshot || {}),
+    chartEntry: latestAnalysis,
+  };
+
+  // ===================================================
+  // MONITOR DATA
+  // ===================================================
+
+  watch.lastCheckedAt =
+    new Date();
+
+  watch.monitorCount =
+    (watch.monitorCount || 0) + 1;
+
+  // ===================================================
+  // UPDATE LAST EVENT
+  // ===================================================
+
+  if (changed && event) {
+
+    watch.lastEvent =
+      event;
+
+    watch.lastEventAt =
+      new Date();
+
+  }
+
+  // ===================================================
+  // COMPLETE WATCH WHEN ENTRY IS CONFIRMED
+  // ===================================================
+
+  if (
+    currentAction === "enter_now"
+  ) {
+
+    watch.status =
+      "BUY_NOW";
+
+    watch.finalResult =
+      "BUY_TRIGGERED";
+
+    watch.completedAt =
+      new Date();
+
+    watch.lastReason =
+      "Chart analysis confirmed entry conditions.";
+
+  }
+
+  // ===================================================
+  // INVALIDATE WATCH
+  // ===================================================
+
+  else if (
+    currentAction === "avoid"
+  ) {
+
+    watch.status =
+      "INVALIDATED";
+
+    watch.finalResult =
+      "INVALIDATED";
+
+    watch.completedAt =
+      new Date();
+
+    watch.lastReason =
+      "Chart analysis invalidated the setup.";
+
+  }
+
+  // ===================================================
+  // SAVE
+  // ===================================================
 
   await watch.save();
 
@@ -148,7 +279,7 @@ export async function monitorChartWatch(
 
   const latestAnalysis =
     await analyzeChartEntry(
-      watch.tokenMint
+      watch.mintAddress
     );
 
   return monitorExistingAnalysis(

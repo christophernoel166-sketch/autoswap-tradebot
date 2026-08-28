@@ -8,40 +8,79 @@ function buildNotification(result, watch) {
 
   switch (result.event) {
 
+    // ===================================================
+    // BREAKOUT CONFIRMED
+    // ===================================================
+
     case "BREAKOUT_CONFIRMED":
       return {
         type: "success",
         title: "🚀 Breakout Confirmed",
-        message: `${watch.tokenSymbol || "Token"} has confirmed its breakout. Entry conditions have been met.`,
+        message: `${
+          watch.symbol || "Token"
+        } has confirmed its breakout. Entry conditions have been met.`,
       };
+
+
+    // ===================================================
+    // PULLBACK COMPLETED
+    // ===================================================
 
     case "PULLBACK_COMPLETED":
       return {
         type: "success",
         title: "📈 Pullback Complete",
-        message: `${watch.tokenSymbol || "Token"} has completed its pullback and is ready for entry.`,
+        message: `${
+          watch.symbol || "Token"
+        } has completed its pullback and is ready for entry.`,
       };
+
+
+    // ===================================================
+    // SETUP INVALIDATED
+    // ===================================================
 
     case "SETUP_INVALIDATED":
       return {
         type: "warning",
         title: "❌ Setup Invalidated",
-        message: `${watch.tokenSymbol || "Token"} is no longer a valid trade setup.`,
+        message: `${
+          watch.symbol || "Token"
+        } is no longer a valid trade setup.`,
       };
+
+
+    // ===================================================
+    // BREAKOUT FAILED
+    // ===================================================
 
     case "BREAKOUT_FAILED":
       return {
         type: "warning",
         title: "⚠️ Breakout Failed",
-        message: `${watch.tokenSymbol || "Token"} failed to confirm its breakout.`,
+        message: `${
+          watch.symbol || "Token"
+        } failed to confirm its breakout.`,
       };
+
+
+    // ===================================================
+    // PULLBACK FAILED
+    // ===================================================
 
     case "PULLBACK_FAILED":
       return {
         type: "warning",
         title: "⚠️ Pullback Failed",
-        message: `${watch.tokenSymbol || "Token"} failed to complete its pullback.`,
+        message: `${
+          watch.symbol || "Token"
+        } failed to complete its pullback.`,
       };
+
+
+    // ===================================================
+    // UNKNOWN / NO EVENT
+    // ===================================================
 
     default:
       return null;
@@ -49,6 +88,7 @@ function buildNotification(result, watch) {
   }
 
 }
+
 
 // =====================================================
 // SEND NOTIFICATION
@@ -59,8 +99,15 @@ export async function notifyChartWatch(
   result
 ) {
 
+  if (!watch || !result) {
+    return;
+  }
+
   const payload =
-    buildNotification(result, watch);
+    buildNotification(
+      result,
+      watch
+    );
 
   if (!payload) {
     return;
@@ -68,8 +115,17 @@ export async function notifyChartWatch(
 
   await createNotification({
 
+    // ===================================================
+    // USER
+    // ===================================================
+
     walletAddress:
       watch.walletAddress,
+
+
+    // ===================================================
+    // NOTIFICATION
+    // ===================================================
 
     type:
       payload.type,
@@ -80,16 +136,25 @@ export async function notifyChartWatch(
     message:
       payload.message,
 
+
+    // ===================================================
+    // CHART WATCH DATA
+    // ===================================================
+
     data: {
 
       watchId:
         watch._id,
 
+      // Notification payload field
+      // intentionally remains tokenMint
       tokenMint:
-        watch.tokenMint,
+        watch.mintAddress,
 
+      // Notification payload field
+      // intentionally remains tokenSymbol
       tokenSymbol:
-        watch.tokenSymbol,
+        watch.symbol,
 
       previousAction:
         result.previousAction,
