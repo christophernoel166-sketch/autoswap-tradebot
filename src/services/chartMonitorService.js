@@ -48,6 +48,40 @@ export function determineMonitorEvent(
 }
 
 // =====================================================
+// UPDATE PRICE TRACKING
+// =====================================================
+
+function updatePriceTracking(
+  watch,
+  currentPrice
+) {
+  if (!Number.isFinite(currentPrice)) {
+    return;
+  }
+
+  watch.lastPrice =
+    currentPrice;
+
+  if (
+    watch.highestPriceSeen == null ||
+    currentPrice >
+      watch.highestPriceSeen
+  ) {
+    watch.highestPriceSeen =
+      currentPrice;
+  }
+
+  if (
+    watch.lowestPriceSeen == null ||
+    currentPrice <
+      watch.lowestPriceSeen
+  ) {
+    watch.lowestPriceSeen =
+      currentPrice;
+  }
+}
+
+// =====================================================
 // UPDATE AN EXISTING WATCH USING AN ALREADY-COMPUTED
 // CHART ANALYSIS
 // =====================================================
@@ -58,18 +92,29 @@ export async function monitorExistingAnalysis(
 ) {
   const watch =
     typeof watchOrId === "string"
-      ? await ChartWatch.findById(watchOrId)
+      ? await ChartWatch.findById(
+          watchOrId
+        )
       : watchOrId;
 
   if (!watch) {
-    throw new Error("Chart watch not found.");
+    throw new Error(
+      "Chart watch not found."
+    );
   }
 
-  if (watch.status !== "ACTIVE") {
+  // ===================================================
+  // ONLY ACTIVE WATCHES ARE MONITORED
+  // ===================================================
+
+  if (
+    watch.status !== "ACTIVE"
+  ) {
     return {
       changed: false,
       skipped: true,
-      reason: "Watch is not active.",
+      reason:
+        "Watch is not active.",
     };
   }
 
@@ -77,30 +122,64 @@ export async function monitorExistingAnalysis(
   // ANALYSIS UNAVAILABLE
   // ===================================================
 
-  if (!latestAnalysis?.ok) {
-    watch.lastCheckedAt = new Date();
+  if (
+    !latestAnalysis?.ok
+  ) {
+    watch.lastCheckedAt =
+      new Date();
+
+    watch.monitorCount =
+      (watch.monitorCount || 0) +
+      1;
 
     await watch.save();
 
     return {
       changed: false,
       skipped: true,
-      reason: "Chart analysis unavailable.",
+      reason:
+        "Chart analysis unavailable.",
     };
   }
 
   // ===================================================
-  // ACTION TRACKING
+  // CURRENT PRICE
+  // ===================================================
+
+  const currentPrice =
+    Number(
+      latestAnalysis
+        ?.metrics
+        ?.currentPrice
+    );
+
+  // ===================================================
+  // PREVIOUS ACTION
+  //
+  // IMPORTANT:
+  // ChartWatch stores the current state directly
+  // in currentAction.
   // ===================================================
 
   const previousAction =
-    watch.currentAction ?? null;
+    watch.currentAction ??
+    null;
+
+  // ===================================================
+  // NEW ACTION
+  // ===================================================
 
   const currentAction =
-    latestAnalysis.action ?? null;
+    latestAnalysis.action ??
+    null;
+
+  // ===================================================
+  // DETERMINE WHETHER STATE CHANGED
+  // ===================================================
 
   const changed =
-    previousAction !== currentAction;
+    previousAction !==
+    currentAction;
 
   // ===================================================
   // DETERMINE EVENT
@@ -113,93 +192,316 @@ export async function monitorExistingAnalysis(
     );
 
   // ===================================================
-  // MOVE CURRENT ACTION → PREVIOUS ACTION
-  // THEN STORE NEW ACTION
+  // UPDATE ACTION STATE
   // ===================================================
 
   if (changed) {
-
     watch.previousAction =
       previousAction;
 
     watch.currentAction =
       currentAction;
-
   }
 
   // ===================================================
-  // REFRESH CHART DATA
+  // REFRESH TREND
   // ===================================================
 
-  watch.trend =
-    latestAnalysis?.metrics?.trend ??
-    watch.trend;
-
-  watch.confidence =
-    latestAnalysis?.metrics?.confidence ??
-    watch.confidence;
-
-  watch.entryMin =
-    latestAnalysis?.metrics?.entryMin ??
-    watch.entryMin;
-
-  watch.entryMax =
-    latestAnalysis?.metrics?.entryMax ??
-    watch.entryMax;
-
-  watch.breakoutLevel =
-    latestAnalysis?.metrics?.breakoutLevel ??
-    watch.breakoutLevel;
-
-  watch.invalidationLevel =
-    latestAnalysis?.metrics?.invalidationLevel ??
-    watch.invalidationLevel;
-
-  watch.takeProfitLevel =
-    latestAnalysis?.metrics?.takeProfitLevel ??
-    watch.takeProfitLevel;
+  if (
+    latestAnalysis
+      ?.metrics
+      ?.trend != null
+  ) {
+    watch.trend =
+      latestAnalysis.metrics.trend;
+  }
 
   // ===================================================
-  // STORE COMPLETE ANALYSIS SNAPSHOT
+  // REFRESH CONFIDENCE
   // ===================================================
 
-  watch.analysisSnapshot = {
-    ...(watch.analysisSnapshot || {}),
-    chartEntry: latestAnalysis,
-  };
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.confidence
+      )
+    )
+  ) {
+    watch.confidence =
+      Number(
+        latestAnalysis.confidence
+      );
+  } else if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.confidence
+      )
+    )
+  ) {
+    watch.confidence =
+      Number(
+        latestAnalysis
+          .metrics
+          .confidence
+      );
+  }
 
   // ===================================================
-  // MONITOR DATA
+  // REFRESH ENTRY MIN
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.entryMin
+      )
+    )
+  ) {
+    watch.entryMin =
+      Number(
+        latestAnalysis
+          .metrics
+          .entryMin
+      );
+  } else if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.entryZone
+          ?.low
+      )
+    )
+  ) {
+    watch.entryMin =
+      Number(
+        latestAnalysis
+          .entryZone
+          .low
+      );
+  }
+
+  // ===================================================
+  // REFRESH ENTRY MAX
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.entryMax
+      )
+    )
+  ) {
+    watch.entryMax =
+      Number(
+        latestAnalysis
+          .metrics
+          .entryMax
+      );
+  } else if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.entryZone
+          ?.high
+      )
+    )
+  ) {
+    watch.entryMax =
+      Number(
+        latestAnalysis
+          .entryZone
+          .high
+      );
+  }
+
+  // ===================================================
+  // REFRESH BREAKOUT LEVEL
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.breakoutLevel
+      )
+    )
+  ) {
+    watch.breakoutLevel =
+      Number(
+        latestAnalysis
+          .metrics
+          .breakoutLevel
+      );
+  }
+
+  // ===================================================
+  // REFRESH INVALIDATION LEVEL
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.invalidationLevel
+      )
+    )
+  ) {
+    watch.invalidationLevel =
+      Number(
+        latestAnalysis
+          .metrics
+          .invalidationLevel
+      );
+  } else if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.stopLoss
+      )
+    )
+  ) {
+    watch.invalidationLevel =
+      Number(
+        latestAnalysis.stopLoss
+      );
+  }
+
+  // ===================================================
+  // REFRESH TAKE PROFIT
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.metrics
+          ?.takeProfitLevel
+      )
+    )
+  ) {
+    watch.takeProfitLevel =
+      Number(
+        latestAnalysis
+          .metrics
+          .takeProfitLevel
+      );
+  } else if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.targets
+          ?.tp1
+      )
+    )
+  ) {
+    watch.takeProfitLevel =
+      Number(
+        latestAnalysis
+          .targets
+          .tp1
+      );
+  }
+
+  // ===================================================
+  // REFRESH FORECAST / CONFIDENCE
+  // ===================================================
+
+  if (
+    Number.isFinite(
+      Number(
+        latestAnalysis
+          ?.forecastScore
+      )
+    )
+  ) {
+    watch.forecastScore =
+      Number(
+        latestAnalysis
+          .forecastScore
+      );
+  }
+
+  // ===================================================
+  // UPDATE LIVE PRICE TRACKING
+  // ===================================================
+
+  updatePriceTracking(
+    watch,
+    currentPrice
+  );
+
+  // ===================================================
+  // MONITOR COUNT
+  // ===================================================
+
+  watch.monitorCount =
+    (watch.monitorCount || 0) +
+    1;
+
+  // ===================================================
+  // LAST CHECKED
   // ===================================================
 
   watch.lastCheckedAt =
     new Date();
 
-  watch.monitorCount =
-    (watch.monitorCount || 0) + 1;
+  // ===================================================
+  // STORE LATEST ANALYSIS
+  //
+  // Keep the most recent analysis available for
+  // dashboard/details endpoints.
+  // ===================================================
+
+  watch.analysisSnapshot = {
+    ...(watch.analysisSnapshot || {}),
+
+    chartEntry:
+      latestAnalysis,
+
+    lastUpdatedAt:
+      new Date(),
+  };
 
   // ===================================================
-  // UPDATE LAST EVENT
+  // EVENT INFORMATION
   // ===================================================
 
-  if (changed && event) {
-
+  if (
+    changed &&
+    event
+  ) {
     watch.lastEvent =
       event;
 
     watch.lastEventAt =
       new Date();
-
   }
 
   // ===================================================
-  // COMPLETE WATCH WHEN ENTRY IS CONFIRMED
+  // ENTRY CONFIRMED
+  //
+  // IMPORTANT:
+  // Only transition when the action actually changed
+  // into enter_now.
+  //
+  // This prevents repeatedly processing the same
+  // ENTER_NOW state.
   // ===================================================
 
   if (
-    currentAction === "enter_now"
+    changed &&
+    currentAction ===
+      "enter_now"
   ) {
-
     watch.status =
       "BUY_NOW";
 
@@ -210,18 +512,27 @@ export async function monitorExistingAnalysis(
       new Date();
 
     watch.lastReason =
-      "Chart analysis confirmed entry conditions.";
-
+      event ===
+      "PULLBACK_COMPLETED"
+        ? "Pullback completed and chart conditions confirmed entry."
+        : event ===
+          "BREAKOUT_CONFIRMED"
+        ? "Breakout confirmed and chart conditions confirmed entry."
+        : "Chart analysis confirmed entry conditions.";
   }
 
   // ===================================================
-  // INVALIDATE WATCH
+  // INVALIDATED
+  //
+  // Only invalidate when the action actually changes
+  // into avoid.
   // ===================================================
 
   else if (
-    currentAction === "avoid"
+    changed &&
+    currentAction ===
+      "avoid"
   ) {
-
     watch.status =
       "INVALIDATED";
 
@@ -233,21 +544,30 @@ export async function monitorExistingAnalysis(
 
     watch.lastReason =
       "Chart analysis invalidated the setup.";
-
   }
 
   // ===================================================
-  // SAVE
+  // SAVE WATCH
   // ===================================================
 
   await watch.save();
 
+  // ===================================================
+  // RETURN MONITOR RESULT
+  // ===================================================
+
   return {
     changed,
+
     event,
+
     previousAction,
+
     currentAction,
-    analysis: latestAnalysis,
+
+    analysis:
+      latestAnalysis,
+
     watch,
   };
 }
@@ -262,25 +582,40 @@ export async function monitorChartWatch(
 ) {
   const watch =
     typeof watchOrId === "string"
-      ? await ChartWatch.findById(watchOrId)
+      ? await ChartWatch.findById(
+          watchOrId
+        )
       : watchOrId;
 
   if (!watch) {
-    throw new Error("Chart watch not found.");
+    throw new Error(
+      "Chart watch not found."
+    );
   }
 
-  if (watch.status !== "ACTIVE") {
+  if (
+    watch.status !== "ACTIVE"
+  ) {
     return {
       changed: false,
       skipped: true,
-      reason: "Watch is not active.",
+      reason:
+        "Watch is not active.",
     };
   }
+
+  // ===================================================
+  // RUN FRESH CHART ANALYSIS
+  // ===================================================
 
   const latestAnalysis =
     await analyzeChartEntry(
       watch.mintAddress
     );
+
+  // ===================================================
+  // APPLY NEW ANALYSIS
+  // ===================================================
 
   return monitorExistingAnalysis(
     watch,
