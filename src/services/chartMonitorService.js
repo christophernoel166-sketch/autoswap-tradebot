@@ -59,25 +59,20 @@ function updatePriceTracking(
     return;
   }
 
-  watch.lastPrice =
-    currentPrice;
+  watch.lastPrice = currentPrice;
 
   if (
     watch.highestPriceSeen == null ||
-    currentPrice >
-      watch.highestPriceSeen
+    currentPrice > watch.highestPriceSeen
   ) {
-    watch.highestPriceSeen =
-      currentPrice;
+    watch.highestPriceSeen = currentPrice;
   }
 
   if (
     watch.lowestPriceSeen == null ||
-    currentPrice <
-      watch.lowestPriceSeen
+    currentPrice < watch.lowestPriceSeen
   ) {
-    watch.lowestPriceSeen =
-      currentPrice;
+    watch.lowestPriceSeen = currentPrice;
   }
 }
 
@@ -92,9 +87,7 @@ export async function monitorExistingAnalysis(
 ) {
   const watch =
     typeof watchOrId === "string"
-      ? await ChartWatch.findById(
-          watchOrId
-        )
+      ? await ChartWatch.findById(watchOrId)
       : watchOrId;
 
   if (!watch) {
@@ -122,9 +115,7 @@ export async function monitorExistingAnalysis(
   // ANALYSIS UNAVAILABLE
   // ===================================================
 
-  if (
-    !latestAnalysis?.ok
-  ) {
+  if (!latestAnalysis?.ok) {
     watch.lastCheckedAt =
       new Date();
 
@@ -156,9 +147,7 @@ export async function monitorExistingAnalysis(
   // ===================================================
   // PREVIOUS ACTION
   //
-  // IMPORTANT:
-  // ChartWatch stores the current state directly
-  // in currentAction.
+  // currentAction is the authoritative state.
   // ===================================================
 
   const previousAction =
@@ -223,8 +212,7 @@ export async function monitorExistingAnalysis(
   if (
     Number.isFinite(
       Number(
-        latestAnalysis
-          ?.confidence
+        latestAnalysis?.confidence
       )
     )
   ) {
@@ -364,8 +352,7 @@ export async function monitorExistingAnalysis(
   } else if (
     Number.isFinite(
       Number(
-        latestAnalysis
-          ?.stopLoss
+        latestAnalysis?.stopLoss
       )
     )
   ) {
@@ -412,7 +399,7 @@ export async function monitorExistingAnalysis(
   }
 
   // ===================================================
-  // REFRESH FORECAST / CONFIDENCE
+  // REFRESH FORECAST SCORE
   // ===================================================
 
   if (
@@ -456,9 +443,6 @@ export async function monitorExistingAnalysis(
 
   // ===================================================
   // STORE LATEST ANALYSIS
-  //
-  // Keep the most recent analysis available for
-  // dashboard/details endpoints.
   // ===================================================
 
   watch.analysisSnapshot = {
@@ -487,51 +471,47 @@ export async function monitorExistingAnalysis(
   }
 
   // ===================================================
-  // ENTRY CONFIRMED
+  // ENTER NOW
   //
   // IMPORTANT:
-  // Only transition when the action actually changed
-  // into enter_now.
   //
-  // This prevents repeatedly processing the same
-  // ENTER_NOW state.
+  // ENTER_NOW means:
+  // "AI currently sees a valid entry."
+  //
+  // It DOES NOT mean:
+  // "User bought."
+  //
+  // Therefore:
+  // - Keep watch ACTIVE
+  // - Do NOT set BUY_NOW
+  // - Do NOT set BUY_TRIGGERED
+  // - Do NOT set completedAt
+  //
+  // The actual BUY action is handled separately
+  // by the trading execution flow.
   // ===================================================
 
   if (
     changed &&
-    currentAction ===
-      "enter_now"
+    currentAction === "enter_now"
   ) {
-    watch.status =
-      "BUY_NOW";
-
-    watch.finalResult =
-      "BUY_TRIGGERED";
-
-    watch.completedAt =
-      new Date();
-
     watch.lastReason =
-      event ===
-      "PULLBACK_COMPLETED"
-        ? "Pullback completed and chart conditions confirmed entry."
-        : event ===
-          "BREAKOUT_CONFIRMED"
-        ? "Breakout confirmed and chart conditions confirmed entry."
-        : "Chart analysis confirmed entry conditions.";
+      event === "PULLBACK_COMPLETED"
+        ? "Pullback completed and chart conditions currently confirm an entry opportunity."
+        : event === "BREAKOUT_CONFIRMED"
+        ? "Breakout confirmed and chart conditions currently confirm an entry opportunity."
+        : "Chart analysis currently confirms an entry opportunity.";
   }
 
   // ===================================================
   // INVALIDATED
   //
-  // Only invalidate when the action actually changes
-  // into avoid.
+  // Only invalidate when the setup changes into avoid.
   // ===================================================
 
   else if (
     changed &&
-    currentAction ===
-      "avoid"
+    currentAction === "avoid"
   ) {
     watch.status =
       "INVALIDATED";
