@@ -22,7 +22,7 @@ import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
 import AIDecisionCard from "./components/AIDecisionCard";
-import LiveChartMonitorCard from "./components/manualTrade/LiveChartMonitorCard";
+import LiveChartMonitorCard from "./components/LiveChartMonitorCard";
 import AIThinkingCard from "./components/AIThinkingCard";
 import { getSocket } from "./services/socket";
 import {
