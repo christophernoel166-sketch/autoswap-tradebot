@@ -22,6 +22,7 @@ import WithdrawStatusList from "./wallet/WithdrawStatusList";
 import ExecutionSettings from "./settings/ExecutionSettings";
 import WalletHistoryTable from "./wallet/WalletHistoryTable";
 import AIDecisionCard from "./components/AIDecisionCard";
+import LiveChartMonitorCard from "./components/manualTrade/LiveChartMonitorCard";
 import AIThinkingCard from "./components/AIThinkingCard";
 import { getSocket } from "./services/socket";
 import {
@@ -65,6 +66,7 @@ const [scanError, setScanError] = useState("");
 const [chartEntry, setChartEntry] = useState(null);
 const [chartLoading, setChartLoading] = useState(false);
 const [chartError, setChartError] = useState("");
+const [liveChartWatch, setLiveChartWatch] = useState(null);
 // ===================================================
 // SCAN / ACTIVE POSITION DISPLAY MODE
 // ===================================================
@@ -818,6 +820,15 @@ setAiMode("thinking");
 }
 
 setChartEntry(data.chartEntry || null);
+
+if (data.monitoring?.active) {
+  setLiveChartWatch({
+    ...data.monitoring,
+    chartEntry: data.chartEntry || null,
+  });
+} else {
+  setLiveChartWatch(null);
+}
 
 if (data.chartEntry) {
   setAiMode("decision");
@@ -1738,6 +1749,8 @@ actions={
       </div>
 
 
+
+
       {/* =====================================================
           CHART ANALYSIS + BUY
           ===================================================== */}
@@ -1810,6 +1823,11 @@ actions={
 }
 />
 
+{liveChartWatch?.active && (
+  <LiveChartMonitorCard
+    watch={liveChartWatch}
+  />
+)}
 
 
       ) : (

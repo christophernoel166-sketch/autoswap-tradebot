@@ -1,5 +1,5 @@
 // src/components/AIDecisionCard.jsx
-
+import LiveChartMonitorCard from "./LiveChartMonitorCard";
 import React, { useEffect, useState } from "react";
 
 /* ==========================================================
@@ -182,6 +182,7 @@ export default function AIDecisionCard({
   ai,
   actions,
   chartEntry,
+liveChartWatch,
 }) {
   const [showChartPopup, setShowChartPopup] = useState(false);
 
@@ -610,6 +611,14 @@ export default function AIDecisionCard({
         </div>
 
       </div>
+
+            {/* ====================================================
+          LIVE CHART MONITOR
+      ==================================================== */}
+
+      <LiveChartMonitorCard
+        watch={liveChartWatch}
+      />
 
       {/* ====================================================
           PRIMARY METRICS
