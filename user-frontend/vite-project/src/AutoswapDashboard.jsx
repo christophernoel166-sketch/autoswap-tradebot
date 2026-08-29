@@ -1674,11 +1674,7 @@ console.log(
 >
   <div className="space-y-6">
 
-    {/* ===================================================
-        INTELLIGENT MAIN DISPLAY
-        AI SCAN RESULT ↔ ACTIVE POSITION INTELLIGENCE
-        =================================================== */}
-{aiDisplayMode === "scan" ? (
+  {aiDisplayMode === "scan" ? (
 
   scanResult?.ai ? (
 
@@ -1858,12 +1854,6 @@ console.log(
         Available while Active Position Intelligence
         is being displayed.
         =================================================== */}
-
-    {/* KEEP YOUR EXISTING CONTENT HERE */}
-
-  </>
-
-)}
 
         <div className="bg-gray-800 rounded-xl p-4">
 
