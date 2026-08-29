@@ -12,6 +12,14 @@ import {
   dispatchChartNotification,
 } from "../services/chartNotificationDispatcher.js";
 
+import {
+  emitToRoom,
+} from "../services/socketService.js";
+
+import {
+  serializeChartWatch,
+} from "../services/chartWatchSerializer.js";
+
 const LOG = console;
 
 // =====================================================
@@ -22,6 +30,126 @@ const CHECK_INTERVAL_MS = 30000;
 
 let workerRunning = false;
 let cycleRunning = false;
+
+// =====================================================
+// EMIT LIVE CHART WATCH UPDATE
+// =====================================================
+//
+// This sends the latest analysis to the user's private
+// Socket.IO wallet room.
+//
+// IMPORTANT:
+// This happens EVERY successful monitoring cycle,
+// even when the action has not changed.
+//
+// That allows the frontend card to remain truly live.
+// =====================================================
+
+function emitLiveChartWatchUpdate(
+  watch,
+  result
+) {
+
+  if (!watch || !result) {
+    return false;
+  }
+
+  const walletAddress =
+    String(
+      watch.walletAddress || ""
+    ).trim();
+
+  if (!walletAddress) {
+
+    LOG.warn(
+      `⚠️ Cannot emit chart watch update: watch ${watch._id} has no walletAddress`
+    );
+
+    return false;
+  }
+
+  const room =
+    `wallet:${walletAddress}`;
+
+  // ===================================================
+  // SERIALIZE THE CURRENT WATCH
+  // ===================================================
+
+  const serializedWatch =
+    serializeChartWatch(
+      result.watch || watch
+    );
+
+  // ===================================================
+  // LIVE PAYLOAD
+  // ===================================================
+
+  const payload = {
+
+    watch:
+      serializedWatch,
+
+    // Latest complete chart analysis.
+    analysis:
+      result.analysis || null,
+
+    // Action transition information.
+    previousAction:
+      result.previousAction || null,
+
+    currentAction:
+      result.currentAction || null,
+
+    event:
+      result.event || null,
+
+    changed:
+      Boolean(
+        result.changed
+      ),
+
+    updatedAt:
+      new Date(),
+
+  };
+
+  // ===================================================
+  // EMIT TO USER WALLET ROOM
+  // ===================================================
+
+  const emitted =
+    emitToRoom(
+      room,
+      "chart_watch_update",
+      payload
+    );
+
+  if (emitted) {
+
+    LOG.info(
+      `📡 Live chart update sent: ${watch.symbol || watch.mintAddress}`,
+      {
+        watchId:
+          watch._id?.toString?.() ||
+          watch._id,
+
+        walletAddress,
+
+        action:
+          result.currentAction || null,
+
+        changed:
+          Boolean(result.changed),
+
+        event:
+          result.event || null,
+      }
+    );
+
+  }
+
+  return emitted;
+}
 
 // =====================================================
 // PROCESS ONE MONITORING CYCLE
@@ -66,8 +194,8 @@ async function processCycle() {
     // =================================================
     // GROUP WATCHES BY TOKEN
     //
-    // Multiple users may be watching the same token.
-    // Analyze that token only once per cycle.
+    // Multiple users can watch the same token.
+    // Analyze each token only once per cycle.
     // =================================================
 
     const grouped =
@@ -132,27 +260,6 @@ async function processCycle() {
             tokenMint
           );
 
-        LOG.info(
-          `📈 Chart analysis completed for ${tokenMint}`,
-          {
-            action:
-              latestAnalysis?.action ??
-              null,
-
-            confidence:
-              latestAnalysis?.confidence ??
-              0,
-
-            score:
-              latestAnalysis?.score ??
-              0,
-
-            setupType:
-              latestAnalysis?.setupType ??
-              null,
-          }
-        );
-
       } catch (err) {
 
         LOG.error(
@@ -161,10 +268,7 @@ async function processCycle() {
             err
         );
 
-        // Do not break the entire worker.
-        // Continue with the next token.
         continue;
-
       }
 
       // ===============================================
@@ -199,20 +303,31 @@ async function processCycle() {
             );
 
           // =========================================
+          // SEND LIVE UPDATE EVERY CYCLE
+          //
+          // IMPORTANT:
+          // We do NOT put this behind result.changed.
+          //
+          // The frontend needs fresh price, RSI,
+          // EMA, entry zone, confidence, etc.
+          // even while the action remains unchanged.
+          // =========================================
+
+          emitLiveChartWatchUpdate(
+            watch,
+            result
+          );
+
+          // =========================================
           // NO ACTION CHANGE
           //
-          // The watch was still monitored and its
-          // latest analysis was stored, but there is
-          // no new event to notify about.
+          // We already sent the live update above.
+          // We simply don't send a new notification.
           // =========================================
 
           if (
             !result?.changed
           ) {
-
-            LOG.info(
-              `⏳ ${watch.symbol || tokenMint}: ${result.currentAction || "no action change"}`
-            );
 
             continue;
           }
@@ -235,7 +350,10 @@ async function processCycle() {
           );
 
           // =========================================
-          // DISPATCH DASHBOARD / OTHER NOTIFICATIONS
+          // DASHBOARD / TELEGRAM NOTIFICATIONS
+          //
+          // These are separate from the live Socket.IO
+          // update above.
           // =========================================
 
           if (

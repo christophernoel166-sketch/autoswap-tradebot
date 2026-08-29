@@ -466,6 +466,215 @@ useEffect(() => {
 
 }, [walletAddress]);
 
+// ===================================================
+// 📡 LIVE CHART WATCH UPDATES
+// ===================================================
+// Receives fresh chart analysis from the backend
+// worker every time the active watch is re-evaluated.
+// ===================================================
+
+useEffect(() => {
+
+  if (!walletAddress) {
+    return;
+  }
+
+  const socket = getSocket();
+
+  if (!socket) {
+    return;
+  }
+
+  const onChartWatchUpdate = (payload) => {
+
+    if (!payload) {
+      return;
+    }
+
+    // ================================================
+    // BACKEND PAYLOAD STRUCTURE
+    //
+    // payload.watch  = serialized ChartWatch
+    // payload.analysis = latest chart analysis
+    // ================================================
+
+    const incomingWatch =
+      payload.watch || null;
+
+    const incomingWatchId =
+      incomingWatch?.id ||
+      incomingWatch?._id ||
+      payload.watchId ||
+      null;
+
+    const incomingWallet =
+      incomingWatch?.walletAddress ||
+      payload.walletAddress ||
+      null;
+
+    // ================================================
+    // IGNORE OTHER WALLETS
+    // ================================================
+
+    if (
+      incomingWallet &&
+      incomingWallet !== walletAddress
+    ) {
+      return;
+    }
+
+    // ================================================
+    // IGNORE OTHER WATCHES
+    // ================================================
+
+    if (
+      liveChartWatch?.watchId &&
+      incomingWatchId &&
+      String(incomingWatchId) !==
+        String(liveChartWatch.watchId)
+    ) {
+      return;
+    }
+
+    console.log(
+      "📡 LIVE CHART WATCH UPDATE:",
+      payload
+    );
+
+    // ================================================
+    // DETERMINE WATCH STATUS
+    // ================================================
+
+    const incomingStatus =
+      incomingWatch?.status ||
+      payload.status ||
+      null;
+
+    // ================================================
+    // BUILD UPDATED WATCH
+    // ================================================
+
+    const updatedWatch = {
+
+      // Keep previous frontend state
+      ...(liveChartWatch || {}),
+
+      // Apply latest backend watch data
+      ...(incomingWatch || {}),
+
+      // ==============================================
+      // NORMALIZED WATCH ID
+      // ==============================================
+
+      watchId:
+        incomingWatchId ||
+        liveChartWatch?.watchId ||
+        null,
+
+      // ==============================================
+      // LATEST CHART ANALYSIS
+      // ==============================================
+
+      chartEntry:
+        payload.analysis ||
+        incomingWatch?.chartEntry ||
+        liveChartWatch?.chartEntry ||
+        null,
+
+      // ==============================================
+      // ACTION STATE
+      // ==============================================
+
+      currentAction:
+        payload.currentAction ||
+        incomingWatch?.currentAction ||
+        liveChartWatch?.currentAction ||
+        null,
+
+      previousAction:
+        payload.previousAction ||
+        incomingWatch?.previousAction ||
+        liveChartWatch?.previousAction ||
+        null,
+
+      // ==============================================
+      // EVENT
+      // ==============================================
+
+      event:
+        payload.event ||
+        null,
+
+      // ==============================================
+      // ACTION CHANGE FLAG
+      // ==============================================
+
+      changed:
+        Boolean(
+          payload.changed
+        ),
+
+      // ==============================================
+      // WATCH STATUS
+      // ==============================================
+
+      status:
+        incomingStatus ||
+        liveChartWatch?.status ||
+        "ACTIVE",
+
+      // ==============================================
+      // ACTIVE STATE
+      // ==============================================
+
+      active:
+        incomingStatus
+          ? incomingStatus === "ACTIVE"
+          : liveChartWatch?.active ?? true,
+
+      // ==============================================
+      // LAST UPDATE
+      // ==============================================
+
+      updatedAt:
+        payload.updatedAt ||
+        new Date(),
+    };
+
+    // ================================================
+    // UPDATE CARD
+    // ================================================
+
+    setLiveChartWatch(
+      updatedWatch
+    );
+
+  };
+
+  // ================================================
+  // LISTEN FOR BACKEND WATCH UPDATES
+  // ================================================
+
+  socket.on(
+    "chart_watch_update",
+    onChartWatchUpdate
+  );
+
+  // ================================================
+  // CLEANUP
+  // ================================================
+
+  return () => {
+
+    socket.off(
+      "chart_watch_update",
+      onChartWatchUpdate
+    );
+
+  };
+
+}, [walletAddress]);
+
 
 // FETCH NEW TOKENS
 useEffect(() => {
