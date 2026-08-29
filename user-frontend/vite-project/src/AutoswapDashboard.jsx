@@ -1859,11 +1859,7 @@ console.log(
         is being displayed.
         =================================================== */}
 
-    {/* KEEP YOUR EXISTING CONTENT HERE */}
 
-  </>
-
-)}
 
         <div className="bg-gray-800 rounded-xl p-4">
 
