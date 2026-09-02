@@ -1593,17 +1593,51 @@ async function reRequestChannel(channelId) {
     });
   }, [history, tokenFilter, dateFrom, dateTo]);
 
-  // compute per-trade pnl and returns
-  const tradesWithPnl = useMemo(() => {
-    return filteredHistory.map(t => {
-      const entry = Number(t.entryPrice || t.entry || 0);
-      const exit = Number(t.exitPrice || t.exit || 0);
-      const size = Number(t.amountSol || t.solAmount || t.amount || 0);
-      const pnl = (exit - entry) * size;
-      const ret = entry > 0 ? (exit - entry) / entry : 0;
-      return { ...t, entry, exit, size, pnl, ret };
-    });
-  }, [filteredHistory]);
+ // ===================================================
+// AUTHORITATIVE TRADE PNL
+// ===================================================
+// Use backend execution-based P/L.
+// Do NOT reconstruct P/L from entry/exit prices.
+//
+// pnlSol = actual SOL received - actual SOL spent
+// pnlPercent = execution-based percentage from backend
+// ===================================================
+const tradesWithPnl = useMemo(() => {
+  return filteredHistory.map((t) => {
+    const entry = Number(t.entryPrice || t.entry || 0);
+    const exit = Number(t.exitPrice || t.exit || 0);
+
+    const size = Number(
+      t.amountSol ||
+      t.solAmount ||
+      t.amount ||
+      0
+    );
+
+    // ✅ AUTHORITATIVE REALIZED SOL P/L
+    const pnl = Number.isFinite(Number(t.pnlSol))
+      ? Number(t.pnlSol)
+      : 0;
+
+    // ✅ AUTHORITATIVE RETURN %
+    // Prefer backend pnlPercent.
+    // Fall back to price return only for old records.
+    const ret = Number.isFinite(Number(t.pnlPercent))
+      ? Number(t.pnlPercent) / 100
+      : entry > 0
+        ? (exit - entry) / entry
+        : 0;
+
+    return {
+      ...t,
+      entry,
+      exit,
+      size,
+      pnl,
+      ret,
+    };
+  });
+}, [filteredHistory]);
 
   // risk and performance metrics
   const metrics = useMemo(() => {

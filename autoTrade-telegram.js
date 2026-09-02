@@ -1226,8 +1226,11 @@ async function saveTradeToBackend({
   walletAddress,
   mint,
   solAmount,
+  tokenAmount,
+  solReceived,
   entryPrice,
   exitPrice,
+  pnlPercent,
   buyTxid,
   sellTxid,
   sourceChannel,
@@ -1241,54 +1244,139 @@ async function saveTradeToBackend({
     const payload = {
       walletAddress: String(walletAddress),
       tradeType,
+
       tokenMint: mint,
-      amountSol: solAmount || 0,
-      amountToken: 0,
-      entryPrice: entryPrice || 0,
-      exitPrice: exitPrice || 0,
+
+      // ===================================================
+      // 💰 AUTHORITATIVE EXECUTION ACCOUNTING
+      // ===================================================
+
+      // SOL committed/spent on the BUY
+      amountSol:
+        Number.isFinite(Number(solAmount))
+          ? Number(solAmount)
+          : 0,
+
+      // Actual tokens received/sold
+      amountToken:
+        Number.isFinite(Number(tokenAmount))
+          ? Number(tokenAmount)
+          : 0,
+
+      // Actual SOL received from SELL
+      solReceived:
+        Number.isFinite(Number(solReceived))
+          ? Number(solReceived)
+          : 0,
+
+      // Actual execution prices
+      entryPrice:
+        Number.isFinite(Number(entryPrice))
+          ? Number(entryPrice)
+          : 0,
+
+      exitPrice:
+        Number.isFinite(Number(exitPrice))
+          ? Number(exitPrice)
+          : 0,
+
+      // Actual trade PNL
+      pnlPercent:
+        Number.isFinite(Number(pnlPercent))
+          ? Number(pnlPercent)
+          : null,
+
       buyTxid: buyTxid || null,
       sellTxid: sellTxid || null,
+
       status: "closed",
+
       source: "telegram",
-      params: { sourceChannel, reason },
+
+      params: {
+        sourceChannel,
+        reason,
+      },
+
       state: {},
+
       createdAt: new Date().toISOString(),
     };
 
-   LOG.info({ endpoint, base: BACKEND_BASE }, "🧪 saveTradeToBackend sending");
+    LOG.info(
+      {
+        endpoint,
+        base: BACKEND_BASE,
 
-const res = await fetch(endpoint, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(payload),
-});
+        walletAddress,
+        mint,
 
-// ✅ ADD THIS (right here)
-const text = await res.text().catch(() => "");
-LOG.info(
-  { endpoint, status: res.status, statusText: res.statusText, body: text },
-  "🧪 saveTradeToBackend response"
-);
+        // Accounting debug
+        amountSol: payload.amountSol,
+        amountToken: payload.amountToken,
+        solReceived: payload.solReceived,
+        entryPrice: payload.entryPrice,
+        exitPrice: payload.exitPrice,
+        pnlPercent: payload.pnlPercent,
 
-if (!res.ok) {
-  LOG.error(
-    {
-      endpoint,
-      status: res.status,
-      statusText: res.statusText,
-      body: text, // ✅ reuse the same text
-      walletAddress,
-      mint,
-      reason,
-      tradeType,
-    },
-    "saveTradeToBackend failed"
-  );
-  return;
-}
+        buyTxid: payload.buyTxid,
+        sellTxid: payload.sellTxid,
+      },
+      "🧪 saveTradeToBackend sending AUTHORITATIVE TRADE DATA"
+    );
 
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
 
-    LOG.info({ walletAddress, mint, reason }, "Trade saved to backend");
+    const text = await res.text().catch(() => "");
+
+    LOG.info(
+      {
+        endpoint,
+        status: res.status,
+        statusText: res.statusText,
+        body: text,
+      },
+      "🧪 saveTradeToBackend response"
+    );
+
+    if (!res.ok) {
+      LOG.error(
+        {
+          endpoint,
+          status: res.status,
+          statusText: res.statusText,
+          body: text,
+          walletAddress,
+          mint,
+          reason,
+          tradeType,
+        },
+        "saveTradeToBackend failed"
+      );
+
+      return;
+    }
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        amountSol: payload.amountSol,
+        amountToken: payload.amountToken,
+        solReceived: payload.solReceived,
+        entryPrice: payload.entryPrice,
+        exitPrice: payload.exitPrice,
+        pnlPercent: payload.pnlPercent,
+      },
+      "✅ AUTHORITATIVE TRADE SAVED TO BACKEND"
+    );
+
   } catch (err) {
     console.error("❌ saveTradeToBackend error (raw)", err);
 
@@ -1300,6 +1388,7 @@ if (!res.ok) {
         mint,
         reason,
         tradeType,
+
         errName: err?.name,
         errMessage: err?.message,
         errCode: err?.code,
@@ -1530,11 +1619,51 @@ LOG.info(
       await redis.hset(posKey, "status", "closed");
       await redis.srem(walletPositionsKey(walletAddress), mint);
 
-      // Fetch exit price (best effort)
-      let exitPrice = 0;
-      try {
-        exitPrice = await getDexScreenerPrice(mint);
-      } catch {}
+     // ===================================================
+// 💰 ACTUAL MANUAL SELL EXECUTION PRICE
+// ===================================================
+
+const actualTokensSold =
+  Number(
+    sellRes?.tokenAmount ||
+    sellRes?.txid?.tokenAmount ||
+    0
+  );
+
+const actualSolReceived =
+  Number(
+    sellRes?.solReceived ||
+    0
+  );
+
+let exitPrice = null;
+
+if (
+  Number.isFinite(actualTokensSold) &&
+  actualTokensSold > 0 &&
+  Number.isFinite(actualSolReceived) &&
+  actualSolReceived >= 0
+) {
+
+  exitPrice =
+    actualSolReceived /
+    actualTokensSold;
+
+} else {
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      actualTokensSold,
+      actualSolReceived,
+      sellRes,
+    },
+    "⚠️ Unable to calculate actual MANUAL SELL execution price"
+  );
+
+}
+
 
       // Entry price (prefer monitor state entryPrices map)
       const entryPrice =
@@ -1545,17 +1674,39 @@ LOG.info(
       // Save trade to backend (best effort)
       try {
         await saveTradeToBackend({
-          walletAddress,
-          mint,
-          solAmount: info.solAmount || 0,
-          entryPrice: entryPrice || 0,
-          exitPrice: exitPrice || 0,
-          buyTxid: info.buyTxid || null,
-          sellTxid,
-          sourceChannel: info.sourceChannel || "manual_redis",
-          reason: "manual_sell",
-          tradeType: "manual",
-        });
+  walletAddress,
+  mint,
+  solAmount: info.solAmount || 0,
+
+  entryPrice:
+    Number(entryPrice || 0),
+
+  exitPrice:
+    Number(exitPrice || 0),
+
+  buyTxid:
+    info.buyTxid || null,
+
+  sellTxid,
+
+  sourceChannel:
+    info.sourceChannel || "manual_redis",
+
+  reason:
+    "manual_sell",
+
+  tradeType:
+    "manual",
+
+  // Actual execution information
+  tokenAmount:
+    actualTokensSold,
+
+  solReceived:
+    actualSolReceived,
+});
+
+
       } catch (err) {
         LOG.error(
           { err, walletAddress, mint },
@@ -3678,33 +3829,201 @@ LOG.info(
       return;
     }
 
-        if (isFullExit) {
-      const key = positionKey(walletAddress, mint);
+if (isFullExit) {
 
-      await redis.hset(key, "status", "closed");
-      await redis.srem(walletPositionsKey(walletAddress), mint);
+  const key =
+    positionKey(
+      walletAddress,
+      mint
+    );
 
-      try {
-        exitPrice = await getDexScreenerPrice(mint);
-      } catch {}
+  await redis.hset(
+    key,
+    "status",
+    "closed"
+  );
 
-      await saveTradeToBackend({
-          action,
+  await redis.srem(
+    walletPositionsKey(walletAddress),
+    mint
+  );
+
+
+  // ===================================================
+  // 💰 ACTUAL SELL EXECUTION DATA
+  // ===================================================
+  //
+  // sellRes comes directly from the executed swap.
+  //
+  // tokenAmount = actual tokens sold
+  // solReceived = actual SOL received
+  //
+  // Therefore:
+  //
+  // actual exit price =
+  // actual SOL received / actual tokens sold
+  //
+  // NEVER use DexScreener here.
+  // ===================================================
+
+  const actualTokensSold =
+    Number(
+      sellRes?.tokenAmount ||
+      sellRes?.txid?.tokenAmount ||
+      0
+    );
+
+  const actualSolReceived =
+    Number(
+      sellRes?.solReceived ||
+      0
+    );
+
+
+  let exitPrice = null;
+
+
+  if (
+    Number.isFinite(actualTokensSold) &&
+    actualTokensSold > 0 &&
+    Number.isFinite(actualSolReceived) &&
+    actualSolReceived >= 0
+  ) {
+
+    exitPrice =
+      actualSolReceived /
+      actualTokensSold;
+
+  } else {
+
+    LOG.warn(
+      {
         walletAddress,
         mint,
-        solAmount,
-        entryPrice: entry,
-        exitPrice,
-        buyTxid,
-        sellTxid,
-        sourceChannel,
-        reason,
-      });
+        actualTokensSold,
+        actualSolReceived,
+        sellRes,
+      },
+      "⚠️ Unable to calculate actual SELL execution price"
+    );
 
-      state.users.delete(walletAddress);
-      state.entryPrices.delete(walletAddress);
-      state.highestPrices.delete(walletAddress);
-    }
+  }
+
+
+  // ===================================================
+  // 🧮 ACTUAL TRADE PNL
+  // ===================================================
+
+  const actualEntryPrice =
+    Number(entry);
+
+  const actualExitPrice =
+    Number(exitPrice);
+
+  let pnlPercent = null;
+
+  if (
+    Number.isFinite(actualEntryPrice) &&
+    actualEntryPrice > 0 &&
+    Number.isFinite(actualExitPrice)
+  ) {
+
+    pnlPercent =
+      (
+        (actualExitPrice - actualEntryPrice) /
+        actualEntryPrice
+      ) * 100;
+
+  }
+
+
+  // ===================================================
+  // 🔎 EXECUTION ACCOUNTING DEBUG
+  // ===================================================
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+
+      entryPrice:
+        actualEntryPrice,
+
+      exitPrice:
+        actualExitPrice,
+
+      tokensSold:
+        actualTokensSold,
+
+      solReceived:
+        actualSolReceived,
+
+      pnlPercent,
+
+      buyTxid,
+      sellTxid,
+
+    },
+    "💰 ACTUAL TRADE EXECUTION ACCOUNTING"
+  );
+
+
+  // ===================================================
+  // 💾 SAVE AUTHORITATIVE TRADE RECORD
+  // ===================================================
+
+  await saveTradeToBackend({
+
+    action,
+
+    walletAddress,
+
+    mint,
+
+    solAmount,
+
+    entryPrice:
+      actualEntryPrice,
+
+    exitPrice:
+      actualExitPrice,
+
+    buyTxid,
+
+    sellTxid,
+
+    sourceChannel,
+
+    reason,
+
+    // Actual execution information
+    tokenAmount:
+      actualTokensSold,
+
+    solReceived:
+      actualSolReceived,
+
+    pnlPercent,
+
+  });
+
+
+  // ===================================================
+  // 🧹 REMOVE FROM MONITORING
+  // ===================================================
+
+  state.users.delete(
+    walletAddress
+  );
+
+  state.entryPrices.delete(
+    walletAddress
+  );
+
+  state.highestPrices.delete(
+    walletAddress
+  );
+}
 
 LOG.info(
   {
@@ -4081,28 +4400,64 @@ if (balance < REQUIRED_LAMPORTS) {
   return;
 }
 
-   // 🚀 Execute BUY from USER wallet
+// 🚀 Execute BUY from USER wallet
 // ===================================================
 const buyResult = await executeSwap(wallet, quote);
 
 const buyTxid = buyResult?.txid;
 
-const tokenDecimals =
-  Number(quote?.outputMintDecimals || 6);
+// ===================================================
+// 💰 AUTHORITATIVE ON-CHAIN BUY EXECUTION
+// ===================================================
+//
+// IMPORTANT:
+// Do NOT use buyResult.tokenAmount here.
+// That field is retained for backward compatibility
+// and represents the Jupiter quote output.
+//
+// The authoritative values come from the confirmed
+// Solana transaction metadata.
+//
+// ===================================================
 
-const tokenAmount =
-  Number(buyResult?.tokenAmount || 0) /
-  Math.pow(10, tokenDecimals);
+const actualSolSpent =
+  Number(buyResult?.actualSolSpent || 0);
+
+const actualTokensReceived =
+  Number(buyResult?.actualOutputTokenAmount || 0);
+
+const actualTokenDecimals =
+  Number(
+    buyResult?.actualOutputTokenDecimals ??
+    quote?.outputMintDecimals ??
+    6
+  );
 
 LOG.info(
   {
     wallet: user.walletAddress,
     mint,
     buyTxid,
-    tokenAmount,
+
+    actualSolSpent,
+    actualTokensReceived,
+    actualTokenDecimals,
+
+    executionPrice:
+      buyResult?.executionPriceSolPerToken ?? null,
+
+    transactionFeeSol:
+      buyResult?.transactionFeeSol ?? null,
+
+    quotedTokenAmount:
+      buyResult?.tokenAmount ?? null,
   },
-  "✅ BUY executed (user wallet)"
+  "✅ BUY executed — AUTHORITATIVE ON-CHAIN VALUES"
 );
+
+// ===================================================
+// BUY NOTIFICATION
+// ===================================================
 
 await createNotification({
   walletAddress:
@@ -4113,23 +4468,51 @@ await createNotification({
   title: "Buy Executed",
 
   message:
-    `Successfully purchased ${Number(
-      tokenAmount || 0
-    ).toFixed(4)} tokens`,
+    `Successfully purchased ${actualTokensReceived.toFixed(4)} tokens`,
 });
 
-// 💸 Charge platform BUY fee (INSERT THIS HERE)
-await chargeBuyFee(wallet, buyTxid, mint);
-   // ===================================================
-// 📈 Determine entry price (DexScreener basis)
+// 💸 Charge platform BUY fee
+await chargeBuyFee(
+  wallet,
+  buyTxid,
+  mint
+);
+
 // ===================================================
+// 📈 ACTUAL BUY EXECUTION PRICE
+// ===================================================
+//
+// Entry price is based exclusively on confirmed
+// on-chain execution values.
+//
+// SOL spent / actual tokens received
+//
+// Do NOT use DexScreener.
+// Do NOT use Jupiter quoted output.
+// ===================================================
+
 let entryPrice = null;
-try {
-  entryPrice = await getDexScreenerPrice(mint);
-} catch {
+
+if (
+  Number.isFinite(actualSolSpent) &&
+  actualSolSpent > 0 &&
+  Number.isFinite(actualTokensReceived) &&
+  actualTokensReceived > 0
+) {
+  entryPrice =
+    actualSolSpent /
+    actualTokensReceived;
+
+} else {
   LOG.warn(
-    { wallet: user.walletAddress, mint },
-    "⚠️ Failed to fetch DexScreener entry price"
+    {
+      wallet: user.walletAddress,
+      mint,
+      actualSolSpent,
+      actualTokensReceived,
+      buyResult,
+    },
+    "⚠️ Unable to calculate actual BUY execution price"
   );
 }
 
@@ -4162,11 +4545,11 @@ try {
   // POSITION AMOUNTS
   // ===================================================
 
-  [POSITION_FIELDS.solAmount]:
-    String(solAmount),
+ [POSITION_FIELDS.solAmount]:
+  String(actualSolSpent),
 
-  tokenAmount:
-    String(tokenAmount),
+tokenAmount:
+  String(actualTokensReceived),
 
 
   // ===================================================
@@ -4288,31 +4671,44 @@ setTimeout(async () => {
     const state = await ensureMonitor(mint);
 state.startLoop?.();
 
-    state.users.set(String(user.walletAddress), {
-      walletAddress: user.walletAddress,
-      wallet,   // 🔥 CRITICAL — store wallet object
-      tpStage: 0,
-      profile: {
-  tp1Percent: user.tp1,
-  tp1SellPercent: user.tp1SellPercent,
-  tp2Percent: user.tp2,
-  tp2SellPercent: user.tp2SellPercent,
-  tp3Percent: user.tp3,
-  tp3SellPercent: user.tp3SellPercent,
-  stopLossPercent: user.stopLoss,
+state.users.set(String(user.walletAddress), {
+  walletAddress: user.walletAddress,
+  wallet,
+  tpStage: 0,
 
-  // trailing is active immediately after buy
-  trailingDistancePercent: Number(user.trailingDistance || 0),
-// activate trailing only after X% profit
-  trailingActivationPercent: Number(user.trailingTrigger || 5),
-},
-      buyTxid,
-      solAmount,
-      tokenAmount,
-      entryPrice,
-      sourceChannel,
-      slippageBps,
-    });
+  profile: {
+    tp1Percent: user.tp1,
+    tp1SellPercent: user.tp1SellPercent,
+    tp2Percent: user.tp2,
+    tp2SellPercent: user.tp2SellPercent,
+    tp3Percent: user.tp3,
+    tp3SellPercent: user.tp3SellPercent,
+    stopLossPercent: user.stopLoss,
+
+    trailingDistancePercent:
+      Number(user.trailingDistance || 0),
+
+    trailingActivationPercent:
+      Number(user.trailingTrigger || 5),
+  },
+
+  buyTxid,
+
+  // ===================================================
+  // 💰 AUTHORITATIVE ON-CHAIN POSITION AMOUNTS
+  // ===================================================
+
+  solAmount:
+    actualSolSpent,
+
+  tokenAmount:
+    actualTokensReceived,
+
+  entryPrice,
+
+  sourceChannel,
+  slippageBps,
+});
     
     // ✅ Step 3A: initialize per-wallet highest immediately
 if (entryPrice) {

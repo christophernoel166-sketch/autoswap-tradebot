@@ -24,16 +24,29 @@ router.post("/record", async (req, res) => {
       tokenMint: d.tokenMint,
       buyTxid: d.buyTxid || null,
       sellTxid: d.sellTxid || null,
-      amountSol: Number(d.amountSol || 0),
-      amountToken: Number(d.amountToken || 0),
-      entryPrice: Number(d.entryPrice || 0),
-      exitPrice: Number(d.exitPrice || 0),
-      pnlSol:
-        d.entryPrice && d.exitPrice
-          ? Number(d.amountSol || 0) *
-            ((Number(d.exitPrice) - Number(d.entryPrice)) /
-              Number(d.entryPrice))
-          : 0,
+
+     amountSol: Number(d.amountSol || 0),
+amountToken: Number(d.amountToken || 0),
+
+// ✅ Actual SOL received from confirmed SELL execution
+solReceived: Number(d.solReceived || 0),
+
+// ✅ Actual PnL percentage from confirmed execution prices
+pnlPercent:
+  Number.isFinite(Number(d.pnlPercent))
+    ? Number(d.pnlPercent)
+    : null,
+
+entryPrice: Number(d.entryPrice || 0),
+exitPrice: Number(d.exitPrice || 0),
+
+// ✅ Authoritative realized PnL from actual confirmed execution amounts
+pnlSol:
+  Number.isFinite(Number(d.solReceived)) &&
+  Number.isFinite(Number(d.amountSol))
+    ? Number(d.solReceived) - Number(d.amountSol)
+    : 0,
+
       status: d.status || "closed",
       source: d.source || "telegram",
       params: d.params || {},

@@ -61,8 +61,11 @@ export default function TradeHistory({ filteredHistory }) {
                 const exit = Number(h.exitPrice || 0);
 
                 // ✅ Percent PnL based on price change
-                const pct =
-                  entry > 0 ? ((exit - entry) / entry) * 100 : 0;
+                const pct = Number.isFinite(Number(h.pnlPercent))
+  ? Number(h.pnlPercent)
+  : entry > 0
+    ? ((exit - entry) / entry) * 100
+    : 0;
 
                 const buySig = h.buyTxid || null;
                 const sellSig = h.sellTxid || null;

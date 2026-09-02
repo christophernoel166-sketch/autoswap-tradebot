@@ -22,6 +22,11 @@ const TradeSchema = new mongoose.Schema({
 
   // ✅ realized PnL (in SOL), approximate
   pnlSol: { type: Number, default: 0 },
+// ✅ Actual SOL received from confirmed SELL execution
+solReceived: { type: Number, default: 0 },
+
+// ✅ Realized PnL percentage based on actual execution prices
+pnlPercent: { type: Number, default: null },
 
   status: { type: String, default: "open" },   // open, closed, canceled
   buyTxid: { type: String },
