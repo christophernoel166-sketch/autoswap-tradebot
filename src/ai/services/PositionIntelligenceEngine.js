@@ -105,9 +105,7 @@ function getConfidence(
 ) {
 
     return Number(
-
-        context?.confidence ?? 0
-
+        context?.confidence?.overall ?? 0
     );
 
 }

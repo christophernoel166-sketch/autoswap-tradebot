@@ -2101,15 +2101,49 @@ async function monitorUser(mint, price, walletAddress, info, state) {
 // Resolve and validate position prices
 // ===================================================
 
-const rawEntry =
+// ===================================================
+// Resolve position prices
+// ===================================================
+
+// Authoritative execution price.
+// This remains SOL/token.
+const rawEntrySol =
     state.entryPrices.get(walletAddress) ??
     storedEntryPrice;
 
-const entry =
-    Number(rawEntry);
+const entryPriceSol =
+    Number(rawEntrySol);
 
-const currentPrice =
+// Live market price from DexScreener.
+// This is USD/token.
+const currentPriceUsd =
     Number(price);
+
+// Entry USD price captured when the position opened.
+let entryPriceUsd =
+    Number(info.entryPriceUsd);
+
+// Legacy-position fallback.
+// Older positions may not have entryPriceUsd.
+if (
+    !Number.isFinite(entryPriceUsd) ||
+    entryPriceUsd <= 0
+) {
+    const solPriceUsd =
+        Number(
+            state.solPriceUsd
+        );
+
+    if (
+        Number.isFinite(solPriceUsd) &&
+        solPriceUsd > 0 &&
+        Number.isFinite(entryPriceSol) &&
+        entryPriceSol > 0
+    ) {
+        entryPriceUsd =
+            entryPriceSol * solPriceUsd;
+    }
+}
 
 
 // ===================================================
@@ -2117,51 +2151,49 @@ const currentPrice =
 // ===================================================
 
 if (
-    !Number.isFinite(entry) ||
-    entry <= 0
+    !Number.isFinite(entryPriceSol) ||
+    entryPriceSol <= 0
 ) {
-
     LOG.warn(
         {
             walletAddress,
             mint,
-            rawEntry,
+            rawEntrySol,
+            entryPriceSol,
         },
-        "⚠️ monitorUser skipped — invalid entry price"
+        "⚠️ monitorUser skipped — invalid entry SOL price"
     );
 
     return;
 }
-
 
 // ===================================================
 // Validate current market price
 // ===================================================
 
 if (
-    !Number.isFinite(currentPrice) ||
-    currentPrice <= 0
+    !Number.isFinite(currentPriceUsd) ||
+    currentPriceUsd <= 0
 ) {
-
     LOG.warn(
         {
             walletAddress,
             mint,
             price,
+            currentPriceUsd,
         },
-        "⚠️ monitorUser skipped — invalid current price"
+        "⚠️ monitorUser skipped — invalid current USD price"
     );
 
     return;
 }
-
 
 // ===================================================
 // Calculate PNL
 // ===================================================
 
 const change =
-    ((currentPrice - entry) / entry) * 100;
+    ((currentPriceUsd - entryPriceUsd) / entryPriceUsd) * 100;
 
 
 // ===================================================
@@ -2261,16 +2293,35 @@ const aiContext =
         // POSITION PRICES
         // ==========================================
 
-        entryPrice: entry,
+       entryPrice: entryPriceUsd,
 
-        currentPrice: currentPrice,
+currentPrice: currentPriceUsd,
 
-        highestPrice:
-            state.highestPrices?.get(
-                walletAddress
-            ),
+highestPrice:
+    state.highestPrices?.get(
+        walletAddress
+    ),
 
-        changePercent: change,
+changePercent: change,
+
+// Preserve authoritative execution price.
+entryPriceSol:
+    entryPriceSol,
+
+entryPriceUsd:
+    entryPriceUsd,
+
+currentPriceUsd:
+    currentPriceUsd,
+
+currentMarketCap:
+    state.currentMarketCap ?? null,
+
+currentLiquidity:
+    state.currentLiquidity ?? null,
+
+currentMarketSnapshot:
+    state.lastMarketSnapshot ?? null,
 
         // ==========================================
         // POSITION SIZE
@@ -5105,11 +5156,18 @@ entrySnapshot,
 });
     
     // ✅ Step 3A: initialize per-wallet highest immediately
-if (entryPrice) {
+// Step 3A: initialize per-wallet highest using USD price
+if (state.lastPrice != null) {
   const wa = String(user.walletAddress);
+  const currentUsdPrice = Number(state.lastPrice);
   const prev = state.highestPrices.get(wa);
-  if (prev == null || entryPrice > prev) {
-    state.highestPrices.set(wa, entryPrice);
+
+  if (
+    Number.isFinite(currentUsdPrice) &&
+    currentUsdPrice > 0 &&
+    (prev == null || currentUsdPrice > prev)
+  ) {
+    state.highestPrices.set(wa, currentUsdPrice);
   }
 }
 
