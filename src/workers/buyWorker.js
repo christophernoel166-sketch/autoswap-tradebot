@@ -40,49 +40,79 @@ async function processOneBuyJob(job) {
 }
 
 const tradeRequest = {
-requestId: `${walletAddress}:${mint}:${Date.now()}`,
-    action: "BUY",
+  // Preserve all fields that were carried by the queued job.
+  // This is important because the queue intentionally transports
+  // the complete job object.
+  ...job,
 
-    user,
+  // Worker-authoritative fields
+  requestId:
+    job?.requestId ||
+    `${walletAddress}:${mint}:${Date.now()}`,
 
-    walletAddress: user.walletAddress,
+  action: "BUY",
 
-    wallet: null,
+  // Always use the freshly loaded authoritative user record.
+  user,
 
-    mint,
+  walletAddress: user.walletAddress,
 
-    sourceChannel: channelId,
+  // Preserve an explicitly supplied wallet if one exists.
+  // Otherwise the main trade executor can resolve it as before.
+  wallet: job?.wallet ?? null,
 
-    percent: 100,
+  mint,
 
-    reason: "SIGNAL_APPROVED",
+  sourceChannel:
+    job?.sourceChannel ??
+    channelId,
 
-    slippageBps: null,
+  percent:
+    job?.percent ??
+    100,
+
+  reason:
+    job?.reason ??
+    "SIGNAL_APPROVED",
+
+  slippageBps:
+    job?.slippageBps ??
+    null,
 
   metadata: {
+    ...(job?.metadata || {}),
 
     source: "BUY_WORKER",
-
     worker: "BUY_WORKER",
-
     queue: "BUY_QUEUE",
 
     receivedAt: new Date(),
 
-    signalSource: channelId,
+    signalSource:
+      job?.signalSource ??
+      channelId,
 
-    aiReviewed: false,
-
-}
-
+    aiReviewed:
+      job?.metadata?.aiReviewed ??
+      false,
+  },
 };
 
 console.info("🧠 Submitting trade request", {
   requestId: tradeRequest.requestId,
   walletAddress,
   mint,
-  sourceChannel: channelId,
+  sourceChannel: tradeRequest.sourceChannel,
   source: "BUY_WORKER",
+
+  // Diagnostic only — lets us verify that AI/scanner
+  // information survived the queue → worker boundary.
+  hasAIContext: Boolean(
+    tradeRequest.aiContext ||
+    tradeRequest.entryContext ||
+    tradeRequest.scannerContext ||
+    tradeRequest.entrySnapshot
+  ),
 });
 
 await executeTradeHandler(tradeRequest);

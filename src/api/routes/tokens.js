@@ -1340,6 +1340,781 @@ console.log(
 );
 
 // =====================================================
+// CANONICAL AI EVIDENCE
+// =====================================================
+//
+// Purpose:
+// - Normalize scanner outputs into one AI evidence contract.
+// - Do NOT recreate scanner scoring formulas.
+// - Prefer scanner-native evidence where available.
+// - Keep profit-wallet intelligence separate from general
+//   wallet intelligence.
+// - Historical evidence is added AFTER historicalMemory exists.
+//
+// =====================================================
+
+const addCanonicalEvidence = (
+  key,
+  {
+    confidenceContribution = 0,
+    confidenceWeight = 1,
+    strengths = [],
+    weaknesses = [],
+    risks = [],
+    assumptions = [],
+    convictionDrivers = [],
+    monitoringPriorities = [],
+    invalidationCriteria = [],
+  } = {}
+) => {
+  aiContext.evidence[key] = {
+    confidenceContribution: Math.max(
+      0,
+      Math.min(100, Number(confidenceContribution) || 0)
+    ),
+
+    confidenceWeight: Math.max(
+      0,
+      Number(confidenceWeight) || 0
+    ),
+
+    strengths: Array.isArray(strengths)
+      ? strengths.filter(Boolean)
+      : [],
+
+    weaknesses: Array.isArray(weaknesses)
+      ? weaknesses.filter(Boolean)
+      : [],
+
+    risks: Array.isArray(risks)
+      ? risks.filter(Boolean)
+      : [],
+
+    assumptions: Array.isArray(assumptions)
+      ? assumptions.filter(Boolean)
+      : [],
+
+    convictionDrivers: Array.isArray(convictionDrivers)
+      ? convictionDrivers.filter(Boolean)
+      : [],
+
+    monitoringPriorities: Array.isArray(
+      monitoringPriorities
+    )
+      ? monitoringPriorities.filter(Boolean)
+      : [],
+
+    invalidationCriteria: Array.isArray(
+      invalidationCriteria
+    )
+      ? invalidationCriteria.filter(Boolean)
+      : [],
+  };
+};
+
+
+// =====================================================
+// MARKET EVIDENCE
+// =====================================================
+
+const marketMetrics =
+  market?.metrics || {};
+
+const marketLiquidity =
+  Number(marketMetrics.liquidityUsd || 0);
+
+const marketCap =
+  Number(marketMetrics.marketCapUsd || 0);
+
+const marketPrice =
+  Number(marketMetrics.priceUsd || 0);
+
+const volume5m =
+  Number(marketMetrics.volume5mUsd || 0);
+
+const buys5m =
+  Number(marketMetrics.buys5m || 0);
+
+const sells5m =
+  Number(marketMetrics.sells5m || 0);
+
+const marketBuySellRatio =
+  sells5m > 0
+    ? buys5m / sells5m
+    : buys5m > 0
+      ? buys5m
+      : 0;
+
+// Market evidence remains a contextual evidence layer.
+// It does NOT replace the dedicated volume/liquidity scanners.
+
+const marketStrength = Math.min(
+  100,
+  Math.max(
+    0,
+    (
+      Math.min(100, marketLiquidity / 1000) *
+      0.35
+    ) +
+    (
+      Math.min(100, volume5m / 100) *
+      0.30
+    ) +
+    (
+      Math.min(
+        100,
+        marketBuySellRatio * 50
+      ) * 0.20
+    ) +
+    (
+      marketCap > 0 ? 15 : 0
+    )
+  )
+);
+
+addCanonicalEvidence("market", {
+  confidenceContribution: marketStrength,
+  confidenceWeight: 10,
+
+  strengths:
+    marketLiquidity > 0
+      ? [
+          "Active market liquidity is present",
+        ]
+      : [],
+
+  weaknesses:
+    marketLiquidity <= 0
+      ? [
+          "Market liquidity is unavailable",
+        ]
+      : [],
+
+  risks:
+    marketLiquidity > 0 &&
+    marketLiquidity < 10000
+      ? [
+          "Liquidity is relatively thin",
+        ]
+      : [],
+
+  assumptions:
+    marketPrice > 0
+      ? [
+          "Current market price is available",
+        ]
+      : [],
+
+  convictionDrivers:
+    marketBuySellRatio > 1
+      ? [
+          "Buy pressure exceeds sell pressure",
+        ]
+      : [],
+
+  monitoringPriorities: [
+    "Monitor price, market cap and liquidity",
+    "Monitor trading activity",
+    "Monitor buy/sell pressure",
+  ],
+
+  invalidationCriteria:
+    marketLiquidity > 0 &&
+    marketLiquidity < 5000
+      ? [
+          "Severe liquidity deterioration",
+        ]
+      : [],
+});
+
+
+// =====================================================
+// MOMENTUM EVIDENCE
+// =====================================================
+
+const momentumScore = Number(
+  momentumData?.score ??
+  momentumData?.momentumScore ??
+  0
+);
+
+const momentumEvidence =
+  momentumData?.evidence || {};
+
+addCanonicalEvidence("momentum", {
+  confidenceContribution:
+    momentumEvidence.confidenceContribution ??
+    momentumScore,
+
+  confidenceWeight:
+    momentumEvidence.confidenceWeight ??
+    3,
+
+  strengths:
+    momentumData?.momentumStrength === "VERY_STRONG" ||
+    momentumData?.momentumStrength === "STRONG"
+      ? [
+          "Momentum is accelerating",
+        ]
+      : momentumEvidence.strengths || [],
+
+  weaknesses:
+    momentumEvidence.weaknesses || [],
+
+  risks:
+    momentumEvidence.risks || [],
+
+  assumptions:
+    momentumEvidence.assumptions || [],
+
+  convictionDrivers:
+    momentumEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    momentumEvidence.monitoringPriorities?.length
+      ? momentumEvidence.monitoringPriorities
+      : [
+          "Monitor momentum continuation",
+          "Monitor velocity breakout strength",
+        ],
+
+  invalidationCriteria:
+    momentumEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// VOLUME EVIDENCE
+// =====================================================
+
+const volumeScore = Number(
+  volumeAnalysis?.volumeScore ??
+  volumeAnalysis?.score ??
+  0
+);
+
+const volumeEvidence =
+  volumeAnalysis?.evidence || {};
+
+addCanonicalEvidence("volume", {
+  confidenceContribution:
+    volumeEvidence.confidenceContribution ??
+    volumeScore,
+
+  confidenceWeight:
+    volumeEvidence.confidenceWeight ??
+    4,
+
+  strengths:
+    volumeEvidence.strengths || [],
+
+  weaknesses:
+    volumeEvidence.weaknesses || [],
+
+  risks:
+    volumeEvidence.risks || [],
+
+  assumptions:
+    volumeEvidence.assumptions || [],
+
+  convictionDrivers:
+    volumeEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    volumeEvidence.monitoringPriorities || [
+      "Monitor volume continuation",
+      "Monitor volume acceleration",
+    ],
+
+  invalidationCriteria:
+    volumeEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// LIQUIDITY EVIDENCE
+// =====================================================
+
+const liquidityScore = Number(
+  liquidityAnalysis?.liquidityScore ??
+  liquidityAnalysis?.score ??
+  0
+);
+
+const liquidityEvidence =
+  liquidityAnalysis?.evidence || {};
+
+addCanonicalEvidence("liquidity", {
+  confidenceContribution:
+    liquidityEvidence.confidenceContribution ??
+    liquidityScore,
+
+  confidenceWeight:
+    liquidityEvidence.confidenceWeight ??
+    5,
+
+  strengths:
+    liquidityEvidence.strengths || [],
+
+  weaknesses:
+    liquidityEvidence.weaknesses || [],
+
+  risks:
+    liquidityEvidence.risks || [],
+
+  assumptions:
+    liquidityEvidence.assumptions || [],
+
+  convictionDrivers:
+    liquidityEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    liquidityEvidence.monitoringPriorities || [
+      "Monitor liquidity stability",
+      "Monitor liquidity deterioration",
+    ],
+
+  invalidationCriteria:
+    liquidityEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// GENERAL WALLET INTELLIGENCE EVIDENCE
+// =====================================================
+
+const walletScore = Number(
+  walletIntel?.score ??
+  walletIntel?.walletScore ??
+  0
+);
+
+const walletEvidence =
+  walletIntel?.evidence || {};
+
+addCanonicalEvidence("wallet", {
+  confidenceContribution:
+    walletEvidence.confidenceContribution ??
+    walletScore,
+
+  confidenceWeight:
+    walletEvidence.confidenceWeight ??
+    5,
+
+  strengths:
+    walletEvidence.strengths || [],
+
+  weaknesses:
+    walletEvidence.weaknesses || [],
+
+  risks:
+    walletEvidence.risks || [],
+
+  assumptions:
+    walletEvidence.assumptions || [],
+
+  convictionDrivers:
+    walletEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    walletEvidence.monitoringPriorities || [
+      "Monitor smart-wallet participation",
+      "Monitor wallet behavior changes",
+    ],
+
+  invalidationCriteria:
+    walletEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// PROFIT WALLET EVIDENCE
+// =====================================================
+//
+// This is intentionally separate from "wallet".
+// walletQualityScore is used by the historical matcher.
+
+const profitWalletScore = Number(
+  profitWalletData?.walletQualityScore || 0
+);
+
+addCanonicalEvidence("profitWallets", {
+  confidenceContribution:
+    profitWalletScore,
+
+  confidenceWeight: 5,
+
+  strengths:
+    profitWalletData?.profitableWalletCount >= 8
+      ? [
+          "Strong profit-wallet presence detected",
+        ]
+      : [],
+
+  weaknesses:
+    profitWalletScore > 0 &&
+    profitWalletScore < 40
+      ? [
+          "Profit-wallet quality is weak",
+        ]
+      : [],
+
+  risks:
+    profitWalletScore < 30
+      ? [
+          "Profit-wallet quality presents elevated risk",
+        ]
+      : [],
+
+  convictionDrivers:
+    profitWalletScore >= 70
+      ? [
+          "Higher-quality wallet participation supports the setup",
+        ]
+      : [],
+
+  monitoringPriorities: [
+    "Monitor profit-wallet participation",
+    "Monitor wallet quality changes",
+  ],
+
+  invalidationCriteria:
+    profitWalletScore < 20
+      ? [
+          "Profit-wallet quality deteriorates materially",
+        ]
+      : [],
+});
+
+
+// =====================================================
+// MARKET INTEGRITY EVIDENCE
+// =====================================================
+
+const integrityScore = Number(
+  integrityData?.score || 0
+);
+
+const integrityEvidence =
+  integrityData?.evidence || {};
+
+addCanonicalEvidence("integrity", {
+  confidenceContribution:
+    integrityEvidence.confidenceContribution ??
+    integrityScore,
+
+  confidenceWeight:
+    integrityEvidence.confidenceWeight ??
+    5,
+
+  strengths:
+    integrityEvidence.strengths ||
+    (
+      integrityScore >= 70 &&
+      !integrityData?.artificialVolumeFlag &&
+      !integrityData?.fakeMomentumFlag
+        ? [
+            "Market activity appears structurally healthy",
+          ]
+        : []
+    ),
+
+  weaknesses:
+    integrityEvidence.weaknesses || [],
+
+  risks:
+    integrityEvidence.risks ||
+    [
+      ...(integrityData?.artificialVolumeFlag
+        ? ["Artificial volume detected"]
+        : []),
+
+      ...(integrityData?.fakeMomentumFlag
+        ? ["Potential fake momentum detected"]
+        : []),
+    ],
+
+  assumptions:
+    integrityEvidence.assumptions || [],
+
+  convictionDrivers:
+    integrityEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    integrityEvidence.monitoringPriorities || [
+      "Monitor market integrity",
+      "Monitor artificial activity signals",
+      "Monitor bundle behavior",
+    ],
+
+  invalidationCriteria:
+    integrityEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// RUG-RISK EVIDENCE
+// =====================================================
+
+const rugRiskScore = Number(
+  rugRiskData?.rugRiskScore || 0
+);
+
+const rugSafetyScore = Math.max(
+  0,
+  Math.min(100, 100 - rugRiskScore)
+);
+
+const rugEvidence =
+  rugRiskData?.evidence || {};
+
+addCanonicalEvidence("rugRisk", {
+  confidenceContribution:
+    rugEvidence.confidenceContribution ??
+    rugSafetyScore,
+
+  confidenceWeight:
+    rugEvidence.confidenceWeight ??
+    6,
+
+  strengths:
+    rugEvidence.strengths ||
+    (
+      rugRiskScore < 30
+        ? [
+            "Rug-risk indicators remain relatively low",
+          ]
+        : []
+    ),
+
+  weaknesses:
+    rugEvidence.weaknesses ||
+    (
+      rugRiskScore >= 50
+        ? [
+            "Rug-risk indicators are elevated",
+          ]
+        : []
+    ),
+
+  risks:
+    rugEvidence.risks ||
+    (
+      rugRiskScore >= 70
+        ? [
+            "High rug-risk conditions",
+          ]
+        : []
+    ),
+
+  assumptions:
+    rugEvidence.assumptions || [],
+
+  convictionDrivers:
+    rugEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    rugEvidence.monitoringPriorities || [
+      "Monitor developer and liquidity behavior",
+      "Monitor rug-risk indicators",
+    ],
+
+  invalidationCriteria:
+    rugEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// RISK STRUCTURE EVIDENCE
+// =====================================================
+
+const structureScore = Number(
+  riskStructureData?.structureConfidence ??
+  0
+);
+
+const structureEvidence =
+  riskStructureData?.evidence || {};
+
+addCanonicalEvidence("riskStructure", {
+  confidenceContribution:
+    structureEvidence.confidenceContribution ??
+    structureScore,
+
+  confidenceWeight:
+    structureEvidence.confidenceWeight ??
+    5,
+
+  strengths:
+    structureEvidence.strengths || [],
+
+  weaknesses:
+    structureEvidence.weaknesses || [],
+
+  risks:
+    structureEvidence.risks || [],
+
+  assumptions:
+    structureEvidence.assumptions || [],
+
+  convictionDrivers:
+    structureEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    structureEvidence.monitoringPriorities || [
+      "Monitor funding clusters",
+      "Monitor bundled-wallet behavior",
+    ],
+
+  invalidationCriteria:
+    structureEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// HOLDER EVIDENCE
+// =====================================================
+
+const holderScore = Number(
+  holderData?.score ??
+  holderData?.decentralizationScore ??
+  0
+);
+
+const holderEvidence =
+  holderData?.evidence || {};
+
+addCanonicalEvidence("holders", {
+  confidenceContribution:
+    holderEvidence.confidenceContribution ??
+    holderScore,
+
+  confidenceWeight:
+    holderEvidence.confidenceWeight ??
+    5,
+
+  strengths:
+    holderEvidence.strengths || [],
+
+  weaknesses:
+    holderEvidence.weaknesses || [],
+
+  risks:
+    holderEvidence.risks || [],
+
+  assumptions:
+    holderEvidence.assumptions || [],
+
+  convictionDrivers:
+    holderEvidence.convictionDrivers || [],
+
+  monitoringPriorities:
+    holderEvidence.monitoringPriorities || [
+      "Monitor holder concentration",
+      "Monitor large-wallet behavior",
+    ],
+
+  invalidationCriteria:
+    holderEvidence.invalidationCriteria || [],
+});
+
+
+// =====================================================
+// CHART EVIDENCE
+// =====================================================
+
+const chartTrendScore = Number(
+  chartEntry?.metrics?.trendStrength || 0
+);
+
+addCanonicalEvidence("chart", {
+  confidenceContribution:
+    chartTrendScore,
+
+  confidenceWeight: 8,
+
+  strengths:
+    chartTrendScore >= 70
+      ? [
+          "Chart structure supports continuation",
+        ]
+      : [],
+
+  weaknesses:
+    chartTrendScore > 0 &&
+    chartTrendScore < 40
+      ? [
+          "Chart structure is weak",
+        ]
+      : [],
+
+  risks:
+    chartTrendScore < 30
+      ? [
+          "Chart structure does not strongly support entry",
+        ]
+      : [],
+
+  convictionDrivers:
+    chartTrendScore >= 70
+      ? [
+          "Technical trend remains supportive",
+        ]
+      : [],
+
+  monitoringPriorities: [
+    "Monitor chart structure",
+    "Monitor breakout and pullback behavior",
+  ],
+
+  invalidationCriteria:
+    chartTrendScore < 25
+      ? [
+          "Chart structure becomes materially bearish",
+        ]
+      : [],
+});
+
+
+// =====================================================
+// CANONICAL EVIDENCE DEBUG
+// =====================================================
+
+console.log(
+  "🧠 CANONICAL AI EVIDENCE",
+  JSON.stringify(
+    Object.fromEntries(
+      Object.entries(aiContext.evidence).map(
+        ([key, value]) => [
+          key,
+          {
+            confidenceContribution:
+              value.confidenceContribution,
+
+            confidenceWeight:
+              value.confidenceWeight,
+
+            strengths:
+              value.strengths?.length || 0,
+
+            weaknesses:
+              value.weaknesses?.length || 0,
+
+            risks:
+              value.risks?.length || 0,
+
+            convictionDrivers:
+              value.convictionDrivers?.length || 0,
+          },
+        ]
+      )
+    ),
+    null,
+    2
+  )
+);
+
+// =====================================================
 // HISTORICAL PATTERN SCORING
 // =====================================================
 
@@ -1415,6 +2190,63 @@ signalScore.moonshotRate =
 
 aiContext.analyses.historicalMemory =
   historicalMemory;
+
+// =====================================================
+// HISTORICAL MEMORY EVIDENCE
+// =====================================================
+
+const historicalConfidence = Number(
+  historicalMemory?.memoryConfidence ??
+  historicalMemory?.sampleConfidence ??
+  0
+);
+
+const historicalWinRate = Number(
+  historicalMemory?.prediction?.winnerProbability ??
+  0
+);
+
+addCanonicalEvidence("historical", {
+  confidenceContribution:
+    historicalConfidence,
+
+  confidenceWeight: 8,
+
+  strengths:
+    historicalWinRate >= 70
+      ? [
+          "Historical pattern outcomes are favorable",
+        ]
+      : [],
+
+  weaknesses:
+    historicalConfidence > 0 &&
+    historicalConfidence < 40
+      ? [
+          "Historical pattern confidence is limited",
+        ]
+      : [],
+
+  risks:
+    historicalWinRate < 40 &&
+    historicalConfidence >= 50
+      ? [
+          "Historical pattern outcomes are unfavorable",
+        ]
+      : [],
+
+  convictionDrivers:
+    historicalWinRate >= 70
+      ? [
+          "Historical pattern memory supports the setup",
+        ]
+      : [],
+
+  monitoringPriorities: [
+    "Monitor historical pattern similarity",
+    "Monitor prediction confidence",
+  ],
+});
 
 // Store signal scoring
 aiContext.analyses.signalScore =
@@ -2659,14 +3491,39 @@ router.post("/manual-buy", async (req, res) => {
       });
     }
 
-    const job = {
-      walletAddress: cleanWalletAddress,
-      mint: cleanTokenMint,
-      channelId: MANUAL_BUY_CHANNEL_ID,
-      createdAt: Date.now(),
-      manual: true,
-      source: cleanSource,
-    };
+   const job = {
+  walletAddress: cleanWalletAddress,
+  mint: cleanTokenMint,
+  channelId: MANUAL_BUY_CHANNEL_ID,
+  createdAt: Date.now(),
+
+  manual: true,
+  source: cleanSource,
+
+  // Preserve the scanner result so the BUY worker
+  // and AI Entry Pipeline receive the actual analysis
+  // that was used when the user approved the buy.
+  scanResult: {
+    ...scanResult,
+  },
+
+  // Explicit AI context extracted from the scanner response.
+  // This is preserved independently so downstream AI
+  // components have direct access to the complete entry context.
+  aiContext: scanResult.ai
+    ? {
+        ...scanResult.ai,
+      }
+    : null,
+
+  metadata: {
+    source: "MANUAL_DASHBOARD",
+    scanProvided: true,
+    aiContextProvided: Boolean(scanResult.ai),
+    queuedAt: new Date(),
+  },
+};
+
 
     await enqueueBuyJob(job);
 

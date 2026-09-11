@@ -78,6 +78,46 @@ function resolveMint(tradeRequest) {
 }
 
 // ==========================================================
+// Normalize Scanner AI Context
+// ==========================================================
+
+function normalizeScannerAIContext(tradeRequest = {}) {
+    const aiContext = tradeRequest?.aiContext;
+
+    if (
+        !aiContext ||
+        typeof aiContext !== "object"
+    ) {
+        return {
+            analyses: {},
+            evidence: {},
+            investmentThesis: null,
+            recommendation: null,
+        };
+    }
+
+    return {
+        analyses:
+            aiContext.analyses &&
+            typeof aiContext.analyses === "object"
+                ? aiContext.analyses
+                : {},
+
+        evidence:
+            aiContext.evidence &&
+            typeof aiContext.evidence === "object"
+                ? aiContext.evidence
+                : {},
+
+        investmentThesis:
+            aiContext.investmentThesis ?? null,
+
+        recommendation:
+            aiContext.recommendation ?? null,
+    };
+}
+
+// ==========================================================
 // Create Pipeline Context
 // ==========================================================
 
@@ -232,10 +272,19 @@ export function createPipelineContext(
     };
 
     // ======================================================
-    // Context
-    // ======================================================
+// Normalized Scanner AI Context
+// ======================================================
 
-    return {
+const scannerAIContext =
+    normalizeScannerAIContext(
+        tradeRequest
+    );
+
+// ======================================================
+// Context
+// ======================================================
+
+return {
 
         // ==================================================
         // Canonical Identity
@@ -387,10 +436,18 @@ export function createPipelineContext(
         },
 
         // ==================================================
-        // Backward-Compatible Action
-        // ==================================================
+// Immutable Entry AI Snapshot
+// ==================================================
 
-        action,
+entrySnapshot:
+    tradeRequest.entrySnapshot ??
+    null,
+
+// ==================================================
+// Backward-Compatible Action
+// ==================================================
+
+action,
 
         // ==================================================
         // Source Metadata
@@ -580,89 +637,119 @@ export function createPipelineContext(
         // Raw AI Analyses
         // ==================================================
 
-        analyses: {
+       analyses: {
 
-            forecast:
-                null,
+    forecast:
+        scannerAIContext.analyses.forecast ??
+        null,
 
-            chart:
-                null,
+    chart:
+        scannerAIContext.analyses.chart ??
+        null,
 
-            momentum:
-                null,
+    momentum:
+        scannerAIContext.analyses.momentum ??
+        null,
 
-            velocity:
-                null,
+    velocity:
+        scannerAIContext.analyses.velocity ??
+        null,
 
-            liquidity:
-                null,
+    liquidity:
+        scannerAIContext.analyses.liquidity ??
+        null,
 
-            volume:
-                null,
+    volume:
+        scannerAIContext.analyses.volume ??
+        null,
 
-            holders:
-                null,
+    holders:
+        scannerAIContext.analyses.holders ??
+        null,
 
-            wallets:
-                null,
+    wallets:
+        scannerAIContext.analyses.wallets ??
+        null,
 
-            integrity:
-                null,
+    integrity:
+        scannerAIContext.analyses.integrity ??
+        null,
 
-            rugRisk:
-                null,
+    rugRisk:
+        scannerAIContext.analyses.rugRisk ??
+        null,
 
-            developer:
-                null,
+    developer:
+        scannerAIContext.analyses.developer ??
+        null,
 
-            historicalPattern:
-                null,
+    historicalPattern:
+        scannerAIContext.analyses.historicalPattern ??
+        null,
 
-        },
+    // Preserve any additional scanner analyses.
+    ...scannerAIContext.analyses,
+
+},
 
         // ==================================================
         // AI Evidence
         // ==================================================
 
-        evidence: {
+      evidence: {
 
-            forecast:
-                null,
+    forecast:
+        scannerAIContext.evidence.forecast ??
+        null,
 
-            chart:
-                null,
+    chart:
+        scannerAIContext.evidence.chart ??
+        null,
 
-            momentum:
-                null,
+    momentum:
+        scannerAIContext.evidence.momentum ??
+        null,
 
-            velocity:
-                null,
+    velocity:
+        scannerAIContext.evidence.velocity ??
+        null,
 
-            liquidity:
-                null,
+    liquidity:
+        scannerAIContext.evidence.liquidity ??
+        null,
 
-            volume:
-                null,
+    volume:
+        scannerAIContext.evidence.volume ??
+        null,
 
-            holders:
-                null,
+    holders:
+        scannerAIContext.evidence.holders ??
+        null,
 
-            wallets:
-                null,
+    wallets:
+        scannerAIContext.evidence.wallets ??
+        null,
 
-            integrity:
-                null,
+    integrity:
+        scannerAIContext.evidence.integrity ??
+        null,
 
-            rugRisk:
-                null,
+    rugRisk:
+        scannerAIContext.evidence.rugRisk ??
+        null,
 
-            developer:
-                null,
+    developer:
+        scannerAIContext.evidence.developer ??
+        null,
 
-            historicalPattern:
-                null,
+    historicalPattern:
+        scannerAIContext.evidence.historicalPattern ??
+        null,
 
-        },
+    // Preserve any additional scanner evidence.
+    ...scannerAIContext.evidence,
+
+},
 
         // ==================================================
         // AI Consensus
@@ -704,10 +791,10 @@ export function createPipelineContext(
         // ==================================================
 
         investmentThesis:
-            null,
+    scannerAIContext.investmentThesis,
 
-        recommendation:
-            null,
+recommendation:
+    scannerAIContext.recommendation,
 
         entryValidation:
             null,

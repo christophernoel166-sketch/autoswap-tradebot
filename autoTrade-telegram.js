@@ -1,5 +1,5 @@
  
-// autotrader-wallet-mode.js
+// autoTrade-telegram.js
 // Rewritten for FULL WALLET MODE (no per-user Telegram identity)
 
 import dotenv from "dotenv";
@@ -50,10 +50,13 @@ import {
 } from "./src/workers/buyWorker.js";
 import { startSellWorker, registerSellExecutor } from "./src/workers/sellWorker.js";
 import { manualSellCommandKey } from "./src/redis/commandKeys.js";
+
 import {
   getDexScreenerPrice,
   getDexScreenerPrices,
+  getDexScreenerMarketSnapshots,
 } from "./src/services/priceFeed.js";
+
 import {
   scanWalletForMissingPositions,
 } from "./src/recovery/scanWalletForMissingPositions.js";
@@ -1796,38 +1799,65 @@ try {
 async function refreshAllMonitoredMintPrices() {
   try {
     const mints = Array.from(monitored.keys());
+
     if (mints.length === 0) return;
 
-    const prices = await getDexScreenerPrices(mints);
+    const marketSnapshots =
+      await getDexScreenerMarketSnapshots(mints);
 
     for (const mint of mints) {
       const state = monitored.get(mint);
+
       if (!state) continue;
 
-      const price = prices.get(mint);
-      if (typeof price !== "number" || Number.isNaN(price)) continue;
+      const snapshot = marketSnapshots.get(mint);
 
-      state.lastPrice = price;
+      if (!snapshot) continue;
+
+      if (
+        typeof snapshot.priceUsd !== "number" ||
+        !Number.isFinite(snapshot.priceUsd) ||
+        snapshot.priceUsd <= 0
+      ) {
+        continue;
+      }
+
+      // Current live market state.
+      state.lastPrice = snapshot.priceUsd;
+      state.currentMarketCap = snapshot.marketCapUsd ?? null;
+      state.currentLiquidity = snapshot.liquidityUsd ?? null;
+      state.lastMarketSnapshot = snapshot;
+      state.lastMarketSnapshotAt = new Date();
     }
   } catch (err) {
-    LOG.error({ err }, "❌ refreshAllMonitoredMintPrices failed");
+    LOG.error(
+      { err },
+      "❌ refreshAllMonitoredMintPrices failed"
+    );
   }
 }
+
 // ENSURE MONITOR USER
 async function ensureMonitor(mint) {
   if (monitored.has(mint)) return monitored.get(mint);
 
-  const state = {
-    mint,
-    users: new Map(),
-    entryPrices: new Map(),
+const state = {
+  mint,
+  users: new Map(),
+  entryPrices: new Map(),
 
-    // ✅ per-wallet highest
-    highestPrices: new Map(), // Map<walletAddress, highestPrice>
+  // ✅ per-wallet highest
+  highestPrices: new Map(), // Map<walletAddress, highestPrice>
 
-    lastPrice: null,
-    intervalId: null,
-  };
+  // 📊 Current live market state
+  lastPrice: null,
+  currentMarketCap: null,
+  currentLiquidity: null,
+  lastMarketSnapshot: null,
+  lastMarketSnapshotAt: null,
+
+  intervalId: null,
+};
 
   const loop = async () => {
     try {
@@ -2163,6 +2193,24 @@ if (
 
 }
 
+// ===================================================
+// 🎯 TP AI REVIEW CHECKPOINT STATE
+// ===================================================
+
+
+if (!info.tpReviewState) {
+
+    info.tpReviewState = {
+
+        tp1: false,
+
+        tp2: false,
+
+        tp3: false,
+
+    };
+
+}
 
 // ===================================================
 // Refresh AI every 10 seconds
@@ -2198,61 +2246,91 @@ if (shouldRefreshAI) {
         // Create a FRESH AI context
         // ==========================================
 
-        const aiContext =
-            createPipelineContext({
+const aiContext =
+    createPipelineContext({
 
-                walletAddress,
+        walletAddress,
 
-                wallet: info.wallet,
+        wallet: info.wallet,
 
-                user: info.user,
+        user: info.user,
 
-                mint,
+        mint,
 
-                entryPrice: entry,
+        // ==========================================
+        // POSITION PRICES
+        // ==========================================
 
-                currentPrice: currentPrice,
+        entryPrice: entry,
 
-                highestPrice:
-                    state.highestPrices?.get(
-                        walletAddress
-                    ),
+        currentPrice: currentPrice,
 
-                changePercent: change,
+        highestPrice:
+            state.highestPrices?.get(
+                walletAddress
+            ),
 
-                solAmount:
-                    info.solAmount,
+        changePercent: change,
 
-                tokenAmount:
-                    info.tokenAmount,
+        // ==========================================
+        // POSITION SIZE
+        // ==========================================
 
-                buyTxid:
-                    info.buyTxid,
+        solAmount:
+            info.solAmount,
 
-                sourceChannel:
-                    info.sourceChannel,
+        tokenAmount:
+            info.tokenAmount,
 
-                slippageBps:
-                    info.slippageBps,
+        buyTxid:
+            info.buyTxid,
 
-                profile,
+        // ==========================================
+        // TRADE SOURCE / SETTINGS
+        // ==========================================
 
-                state,
+        sourceChannel:
+            info.sourceChannel,
 
-                info,
+        slippageBps:
+            info.slippageBps,
 
-                metadata: {
+        profile,
 
-                    source:
-                        "LIVE_MONITOR",
+        // ==========================================
+        // LIVE POSITION STATE
+        // ==========================================
 
-                    monitoredAt:
-                        new Date(),
+        state,
 
-                },
+        info,
 
-            });
+        // ==========================================
+        // ORIGINAL ENTRY AI SNAPSHOT
+        //
+        // This contains the AI thesis and evidence
+        // that existed when the position was opened.
+        // ==========================================
 
+        entrySnapshot:
+            info?.entrySnapshot ??
+            null,
+
+        // ==========================================
+        // METADATA
+        // ==========================================
+
+        metadata: {
+
+            source:
+                "LIVE_MONITOR",
+
+            monitoredAt:
+                new Date(),
+
+        },
+
+    });
 
         // ==========================================
         // RESTORE AI MEMORY
@@ -2733,12 +2811,156 @@ if (!trailingShouldBeActive) {
 
 }
 
+// ===================================================
+// 💾 PERSIST TP AI REVIEW CHECKPOINT STATE
+// ===================================================
+//
+// Persists the TP lifecycle state so that:
+// - AI HOLD decisions survive restart
+// - TP execution state survives restart
+// - TP re-arm state survives restart
+//
+// IMPORTANT:
+// This does NOT execute a trade.
+// It only persists position-management state.
+// ===================================================
+
+async function persistTPReviewState() {
+  try {
+    await redis.hset(
+      positionKey(walletAddress, mint),
+      {
+        tpStage: String(info.tpStage ?? 0),
+
+        tpReviewState: JSON.stringify(
+          info.tpReviewState || {
+            tp1: false,
+            tp2: false,
+            tp3: false,
+          }
+        ),
+
+        dynamicStopLoss:
+          info.dynamicStopLoss == null
+            ? ""
+            : String(info.dynamicStopLoss),
+      }
+    );
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        tpStage: info.tpStage,
+        tpReviewState: info.tpReviewState,
+        dynamicStopLoss: info.dynamicStopLoss,
+      },
+      "💾 TP AI review state persisted"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        walletAddress,
+        mint,
+        error: err?.message,
+      },
+      "❌ Failed to persist TP AI review state"
+    );
+  }
+}
+
+/**
+ * ===================================================
+ * 🎯 RE-ARM TP REVIEW CHECKPOINTS
+ * ===================================================
+ *
+ * A TP checkpoint is re-armed only after price
+ * falls back below that TP threshold.
+ *
+ * This allows:
+ *
+ * TP1 reached
+ * → AI HOLD
+ * → price continues
+ * → no repeated TP1 review
+ *
+ * But if price later falls below TP1 and
+ * crosses TP1 again:
+ *
+ * → TP1 can be reviewed again.
+ * ===================================================
+ */
+
+if (
+  info.tpStage < 1 &&
+  info.tpReviewState.tp1 &&
+  change < profile.tp1Percent
+) {
+
+  info.tpReviewState.tp1 = false;
+
+await persistTPReviewState();
+
+LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp1Percent: profile.tp1Percent,
+    },
+    "🔄 TP1 AI review checkpoint re-armed"
+  );
+}
+
+if (
+  info.tpStage < 2 &&
+  info.tpReviewState.tp2 &&
+  change < profile.tp2Percent
+) {
+
+  info.tpReviewState.tp2 = false;
+await persistTPReviewState();
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp2Percent: profile.tp2Percent,
+    },
+    "🔄 TP2 AI review checkpoint re-armed"
+  );
+}
+
+if (
+  info.tpStage < 3 &&
+  info.tpReviewState.tp3 &&
+  change < profile.tp3Percent
+) {
+
+  info.tpReviewState.tp3 = false;
+await persistTPReviewState();
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp3Percent: profile.tp3Percent,
+    },
+    "🔄 TP3 AI review checkpoint re-armed"
+  );
+}
+
+
 /**
  * ===================================================
  * 🎯 TP1 — AI REVIEW
  * ===================================================
  */
-if (info.tpStage < 1 && change >= profile.tp1Percent) {
+if (
+  info.tpStage < 1 &&
+  !info.tpReviewState.tp1 &&
+  change >= profile.tp1Percent
+) {
 
   LOG.info(
     {
@@ -2813,14 +3035,44 @@ if (info.tpStage < 1 && change >= profile.tp1Percent) {
     )
   ) {
 
-    info.dynamicStopLoss = 0; // Move stop to break-even
+    // Move protection to break-even
+   info.dynamicStopLoss = 0;
+info.tpStage = 1;
+info.tpReviewState.tp1 = false;
+await persistTPReviewState();
 
-    info.tpStage = 1;
-
+    // TP1 execution completed this cycle
+    return;
   }
 
-  return;
+// ==========================================
+// AI rejected TP1 / decided HOLD or CONTINUE
+// ==========================================
+//
+// IMPORTANT:
+// - Do NOT advance tpStage.
+// - Do NOT sell.
+// - Mark the TP1 checkpoint as reviewed.
+// - Continue monitoring the position.
+//
+// TP1 becomes eligible for another review only
+// after price falls back below the TP1 threshold
+// and later crosses it again.
+// ==========================================
 
+info.tpReviewState.tp1 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp1ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP1 — checkpoint reviewed, continuing position monitoring"
+);
 }
 
 /**
@@ -2828,7 +3080,11 @@ if (info.tpStage < 1 && change >= profile.tp1Percent) {
  * 🎯 TP2 — AI REVIEW
  * ===================================================
  */
-if (info.tpStage < 2 && change >= profile.tp2Percent) {
+if (
+  info.tpStage < 2 &&
+  !info.tpReviewState.tp2 &&
+  change >= profile.tp2Percent
+) {
 
   LOG.info(
     {
@@ -2905,13 +3161,35 @@ if (info.tpStage < 2 && change >= profile.tp2Percent) {
 
     // Lock TP1 profit
     info.dynamicStopLoss = profile.tp1Percent;
-
-    info.tpStage = 2;
-
+info.tpStage = 2;
+info.tpReviewState.tp2 = false;
+await persistTPReviewState();
+    // TP2 execution completed this cycle
+    return;
   }
 
-  return;
+// ==========================================
+// AI rejected TP2 / decided HOLD or CONTINUE
+// ==========================================
+//
+// Do NOT advance tpStage.
+// Mark TP2 checkpoint as reviewed.
+// Continue monitoring the open position.
+// ==========================================
 
+info.tpReviewState.tp2 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp2ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP2 — checkpoint reviewed, continuing position monitoring"
+);
 }
 
 /**
@@ -2919,7 +3197,11 @@ if (info.tpStage < 2 && change >= profile.tp2Percent) {
  * 🎯 TP3 — AI REVIEW
  * ===================================================
  */
-if (info.tpStage < 3 && change >= profile.tp3Percent) {
+if (
+  info.tpStage < 3 &&
+  !info.tpReviewState.tp3 &&
+  change >= profile.tp3Percent
+) {
 
   LOG.info(
     {
@@ -2983,7 +3265,7 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
   );
 
   // ==========================================
-  // AI approved full exit
+  // AI approved TP3 full exit
   // ==========================================
 
   if (
@@ -2991,12 +3273,36 @@ if (info.tpStage < 3 && change >= profile.tp3Percent) {
     result.action === "FULL_EXIT"
   ) {
 
-    info.tpStage = 3;
-
+    // TP3 was actually executed
+   info.tpStage = 3;
+info.tpReviewState.tp3 = false;
+await persistTPReviewState();
+    // Position exit completed this cycle
+    return;
   }
 
-  return;
+// ==========================================
+// AI rejected TP3 / decided HOLD or CONTINUE
+// ==========================================
+//
+// Do NOT advance tpStage.
+// Mark TP3 checkpoint as reviewed.
+// Continue monitoring the open position.
+// ==========================================
 
+info.tpReviewState.tp3 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp3ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP3 — checkpoint reviewed, continuing position monitoring"
+);
 }
 
 // ===================================================
@@ -3234,6 +3540,8 @@ const tradeRequest = {
     buyTxid,
     sourceChannel,
     slippageBps,
+entrySnapshot:
+    info?.entrySnapshot ?? null,
 
     // ==========================================
     // Exit Request
@@ -3246,9 +3554,12 @@ const tradeRequest = {
     // Market Snapshot
     // ==========================================
 
-    profile,
-    state,
-    info,
+    // Market Snapshot
+profile,
+state,
+info,
+currentMarketSnapshot:
+    state?.lastMarketSnapshot ?? null,
 
     // ==========================================
     // Metadata
@@ -3549,10 +3860,11 @@ async function executeTradePlan(plan) {
         "🧠 AI approved BUY request."
     );
 
-   return executeUserTrade(
+return executeUserTrade(
     user,
     mint,
-    sourceChannel
+    sourceChannel,
+    approvedPlan.context
 );
 
 }
@@ -4232,7 +4544,7 @@ async function safeSellAll(
 
 
 
-async function executeUserTrade(user, mint, sourceChannel) {
+async function executeUserTrade(user, mint, sourceChannel, entryContext = null) {
     if (!user) {
         LOG.error(
             { mint, sourceChannel },
@@ -4516,6 +4828,80 @@ if (
   );
 }
 
+// ===================================================
+// 🧠 IMMUTABLE AI ENTRY SNAPSHOT
+// ===================================================
+//
+// This captures what the AI believed when the position
+// was originally opened.
+//
+// IMPORTANT:
+// - This is NOT live AI memory.
+// - This is NOT overwritten by future AI cycles.
+// - The actual on-chain entry price remains authoritative.
+// ===================================================
+
+const entrySnapshot = entryContext
+  ? {
+      version: 1,
+
+      createdAt: new Date(),
+
+      // =================================================
+      // ORIGINAL AI ENTRY DECISION
+      // =================================================
+
+      thesis:
+        entryContext.investmentThesis ?? null,
+
+      recommendation:
+        entryContext.recommendation ?? null,
+
+      entryValidation:
+        entryContext.entryValidation ?? null,
+
+      tradeDecision:
+        entryContext.tradeDecision ?? null,
+
+      confidence:
+        entryContext.confidence ?? null,
+
+      // =================================================
+      // ORIGINAL ENTRY EVIDENCE
+      // =================================================
+
+      evidence:
+        entryContext.evidence ?? null,
+
+      analyses:
+        entryContext.analyses ?? null,
+
+      // =================================================
+      // ORIGINAL AI PIPELINE IDENTIFIERS
+      // =================================================
+
+      requestId:
+        entryContext.requestId ?? null,
+
+      pipeline:
+        entryContext.pipeline ?? null,
+
+      metadata:
+        entryContext.metadata ?? null,
+
+      // =================================================
+      // ACTUAL POSITION OPENING DATA
+      // =================================================
+
+      execution: {
+        entryPrice,
+        solAmount: actualSolSpent,
+        tokenAmount: actualTokensReceived,
+        buyTxid,
+      },
+    }
+  : null;
+
     // ===================================================
 // 🧠 Write position to Redis
 // ===================================================
@@ -4579,6 +4965,14 @@ tokenAmount:
   [POSITION_FIELDS.openedAt]:
     String(Date.now()),
 
+// ===================================================
+// 🧠 IMMUTABLE AI ENTRY SNAPSHOT
+// ===================================================
+
+entrySnapshot:
+  entrySnapshot
+    ? JSON.stringify(entrySnapshot)
+    : "",
 
   // ===================================================
   // 🧠 RESET AI MEMORY FOR NEW POSITION
@@ -4705,7 +5099,7 @@ state.users.set(String(user.walletAddress), {
     actualTokensReceived,
 
   entryPrice,
-
+entrySnapshot,
   sourceChannel,
   slippageBps,
 });
@@ -5417,78 +5811,175 @@ LOG.info(
   "🧪 restoreTradingWallet result"
 );
 
-          state.users.set(
-            String(walletAddress),
-            {
-              walletAddress,
-              wallet: restoredWallet,
+// ===================================================
+// 🧠 RESTORE TP AI REVIEW CHECKPOINT STATE
+// ===================================================
 
-              tpStage: Number(
-                info.tpStage || 0
-              ),
+let tpReviewState = {
+  tp1: false,
+  tp2: false,
+  tp3: false,
+};
 
-              buyTxid: info.buyTxid,
+if (info.tpReviewState) {
+  try {
+    const parsed =
+      JSON.parse(info.tpReviewState);
 
-              solAmount: Number(
-                info.solAmount || 0
-              ),
+    tpReviewState = {
+      tp1: parsed?.tp1 === true,
+      tp2: parsed?.tp2 === true,
+      tp3: parsed?.tp3 === true,
+    };
+  } catch (err) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        err,
+      },
+      "⚠️ Failed to restore TP review state — using defaults"
+    );
+  }
+}
 
-              tokenAmount: Number(
-                info.tokenAmount || 0
-              ),
+// ===================================================
+// 📸 RESTORE IMMUTABLE ENTRY AI SNAPSHOT
+// ===================================================
+//
+// This is the original AI decision captured when
+// the position was opened.
+//
+// It is historical context for future AI Exit reviews.
+// It must NOT be regenerated during restoration.
+// ===================================================
 
-              entryPrice: Number(
-                info.entryPrice || 0
-              ),
+let entrySnapshot = null;
 
-              sourceChannel:
-                info.sourceChannel,
+if (info.entrySnapshot) {
+  try {
+    entrySnapshot =
+      JSON.parse(info.entrySnapshot);
+  } catch (err) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        err,
+      },
+      "⚠️ Failed to restore entry AI snapshot — using null"
+    );
+  }
+}
 
-              slippageBps: Number(
-                info.slippageBps || 500
-              ),
+// ===================================================
+// 🛡️ RESTORE DYNAMIC STOP-LOSS STATE
+// ===================================================
+//
+// Dynamic stop-loss is created after TP progression.
+// If Redis has it, restore it exactly.
+// If older positions do not have the field,
+// safely use null rather than inventing a value.
+// ===================================================
 
-              profile: {
-                tp1Percent: Number(
-                  info.tp1Percent || 25
-                ),
+let dynamicStopLoss = null;
 
-                tp1SellPercent: Number(
-                  info.tp1SellPercent || 25
-                ),
+if (
+  info.dynamicStopLoss !== undefined &&
+  info.dynamicStopLoss !== ""
+) {
+  const parsedDynamicStopLoss =
+    Number(info.dynamicStopLoss);
 
-                tp2Percent: Number(
-                  info.tp2Percent || 50
-                ),
+  if (!Number.isNaN(parsedDynamicStopLoss)) {
+    dynamicStopLoss = parsedDynamicStopLoss;
+  }
+}
 
-                tp2SellPercent: Number(
-                  info.tp2SellPercent || 25
-                ),
+// ===================================================
+// 👤 RESTORE USER POSITION INTO MONITOR STATE
+// ===================================================
 
-                tp3Percent: Number(
-                  info.tp3Percent || 100
-                ),
+state.users.set(
+  String(walletAddress),
+  {
+    walletAddress,
+    wallet: restoredWallet,
 
-                tp3SellPercent: Number(
-                  info.tp3SellPercent || 50
-                ),
+    tpStage: Number(
+      info.tpStage || 0
+    ),
 
-                stopLossPercent: Number(
-                  info.stopLossPercent || 20
-                ),
+    // ===================================================
+    // 🧠 RESTORED TP AI REVIEW CHECKPOINT STATE
+    // ===================================================
 
-                trailingDistancePercent:
-                  Number(
-                    info.trailingDistancePercent || 10
-                  ),
+    tpReviewState,
+dynamicStopLoss,
+entrySnapshot,
+    buyTxid: info.buyTxid,
 
-                trailingActivationPercent:
-                  Number(
-                    info.trailingActivationPercent || 5
-                  ),
-              },
-            }
-          );
+    solAmount: Number(
+      info.solAmount || 0
+    ),
+
+    tokenAmount: Number(
+      info.tokenAmount || 0
+    ),
+
+    entryPrice: Number(
+      info.entryPrice || 0
+    ),
+
+    sourceChannel:
+      info.sourceChannel,
+
+    slippageBps: Number(
+      info.slippageBps || 500
+    ),
+
+    profile: {
+      tp1Percent: Number(
+        info.tp1Percent || 25
+      ),
+
+      tp1SellPercent: Number(
+        info.tp1SellPercent || 25
+      ),
+
+      tp2Percent: Number(
+        info.tp2Percent || 50
+      ),
+
+      tp2SellPercent: Number(
+        info.tp2SellPercent || 25
+      ),
+
+      tp3Percent: Number(
+        info.tp3Percent || 100
+      ),
+
+      tp3SellPercent: Number(
+        info.tp3SellPercent || 50
+      ),
+
+      stopLossPercent: Number(
+        info.stopLossPercent || 20
+      ),
+
+      trailingDistancePercent:
+        Number(
+          info.trailingDistancePercent || 10
+        ),
+
+      trailingActivationPercent:
+        Number(
+          info.trailingActivationPercent || 5
+        ),
+    },
+  }
+);
+
 
 LOG.info(
   {
