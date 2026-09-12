@@ -5361,20 +5361,32 @@ entrySnapshot,
 
 sourceChannel,
 slippageBps,
-    
-    // ✅ Step 3A: initialize per-wallet highest immediately
-// Step 3A: initialize per-wallet highest using USD price
+});
+
+// ===================================================
+// 📈 INITIALIZE PER-WALLET HIGHEST PRICE
+// UNIT: USD/token
+// ===================================================
+
 if (state.lastPrice != null) {
   const wa = String(user.walletAddress);
-  const currentUsdPrice = Number(state.lastPrice);
-  const prev = state.highestPrices.get(wa);
+
+  const currentUsdPrice =
+    Number(state.lastPrice);
+
+  const prev =
+    state.highestPrices.get(wa);
 
   if (
     Number.isFinite(currentUsdPrice) &&
     currentUsdPrice > 0 &&
-    (prev == null || currentUsdPrice > prev)
+    (prev == null ||
+      currentUsdPrice > prev)
   ) {
-    state.highestPrices.set(wa, currentUsdPrice);
+    state.highestPrices.set(
+      wa,
+      currentUsdPrice
+    );
   }
 }
 
