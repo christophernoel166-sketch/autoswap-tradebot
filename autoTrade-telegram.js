@@ -2253,44 +2253,103 @@ async function monitorUser(mint, price, walletAddress, info, state) {
 // Resolve position prices
 // ===================================================
 
-// Authoritative execution price.
-// This remains SOL/token.
+// ===================================================
+// 💰 POSITION PRICE BASELINE
+// ===================================================
+
+// Authoritative on-chain execution price.
+// UNIT: SOL/token
 const rawEntrySol =
-    state.entryPrices.get(walletAddress) ??
-    storedEntryPrice;
+  state.entryPrices.get(walletAddress) ??
+  storedEntryPrice;
 
 const entryPriceSol =
-    Number(rawEntrySol);
+  Number(rawEntrySol);
 
-// Live market price from DexScreener.
-// This is USD/token.
+// Current market price.
+// UNIT: USD/token
 const currentPriceUsd =
-    Number(price);
+  Number(price);
 
-// Entry USD price captured when the position opened.
+// ===================================================
+// 📊 ORIGINAL USD ENTRY PRICE
+// ===================================================
+
+// Primary source:
+// in-memory position created immediately after BUY.
 let entryPriceUsd =
-    Number(info.entryPriceUsd);
+  Number(info.entryPriceUsd);
 
-// Legacy-position fallback.
-// Older positions may not have entryPriceUsd.
+// Fallback:
+// immutable AI entry snapshot captured at BUY.
 if (
-    !Number.isFinite(entryPriceUsd) ||
-    entryPriceUsd <= 0
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
 ) {
-    const solPriceUsd =
-        Number(
-            state.solPriceUsd
-        );
+  const snapshotExecution =
+    info?.entrySnapshot?.execution ?? {};
 
-    if (
-        Number.isFinite(solPriceUsd) &&
-        solPriceUsd > 0 &&
-        Number.isFinite(entryPriceSol) &&
-        entryPriceSol > 0
-    ) {
-        entryPriceUsd =
-            entryPriceSol * solPriceUsd;
-    }
+  const snapshotEntryPriceUsd =
+    Number(
+      snapshotExecution.entryPriceUsd
+    );
+
+  if (
+    Number.isFinite(snapshotEntryPriceUsd) &&
+    snapshotEntryPriceUsd > 0
+  ) {
+    entryPriceUsd =
+      snapshotEntryPriceUsd;
+  }
+}
+
+// Final fallback:
+// scanner market price stored in the
+// immutable AI entry snapshot.
+if (
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
+) {
+  const snapshotMarketMetrics =
+    info?.entrySnapshot
+      ?.analyses
+      ?.market
+      ?.metrics ?? {};
+
+  const snapshotMarketPriceUsd =
+    Number(
+      snapshotMarketMetrics.priceUsd
+    );
+
+  if (
+    Number.isFinite(snapshotMarketPriceUsd) &&
+    snapshotMarketPriceUsd > 0
+  ) {
+    entryPriceUsd =
+      snapshotMarketPriceUsd;
+  }
+}
+
+// ===================================================
+// 🚫 DO NOT INVENT USD ENTRY PRICE
+// ===================================================
+
+if (
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
+) {
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      entryPriceSol,
+      entryPriceUsd,
+      currentPriceUsd,
+    },
+    "⚠️ Unable to determine valid USD entry price"
+  );
+
+  return;
 }
 
 
