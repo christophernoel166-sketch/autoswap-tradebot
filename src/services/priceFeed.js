@@ -2,6 +2,21 @@ const DEXSCREENER_BASE = "https://api.dexscreener.com";
 
 /**
  * ===================================================
+ * 🟣 SOLANA CONSTANTS
+ * ===================================================
+ */
+
+/**
+ * Wrapped SOL mint on Solana.
+ *
+ * Used to retrieve the current SOL/USD market price
+ * from DexScreener.
+ */
+const SOL_MINT =
+  "So11111111111111111111111111111111111111112";
+
+/**
+ * ===================================================
  * 📊 SIMPLE IN-MEMORY PRICE CACHE
  * ===================================================
  *
@@ -10,7 +25,12 @@ const DEXSCREENER_BASE = "https://api.dexscreener.com";
  *
  * marketSnapshotCache:
  *   mint -> { value, expiresAt }
+ *
+ * The cache is intentionally short-lived because this
+ * service is used for live trading/position monitoring.
+ * ===================================================
  */
+
 const priceCache = new Map();
 const marketSnapshotCache = new Map();
 
@@ -29,9 +49,13 @@ function now() {
 }
 
 /**
- * ---------------------------------------------------
- * Fresh price cache
- * ---------------------------------------------------
+ * ===================================================
+ * 💰 PRICE CACHE
+ * ===================================================
+ */
+
+/**
+ * Get a fresh cached token price.
  */
 function getCachedPrice(mint) {
   const hit = priceCache.get(mint);
@@ -49,15 +73,18 @@ function getCachedPrice(mint) {
 }
 
 /**
- * ---------------------------------------------------
- * Stale price cache
+ * Get a stale cached token price.
  *
- * Used specifically when DexScreener is temporarily
- * rate limited.
+ * This is intentionally separate from getCachedPrice().
+ *
+ * Why?
+ *
+ * When DexScreener returns 429, we still want to use
+ * the most recently known price rather than returning
+ * nothing.
  *
  * IMPORTANT:
- * We intentionally do NOT delete expired cache here.
- * ---------------------------------------------------
+ * This function does NOT delete expired entries.
  */
 function getStalePrice(mint) {
   const hit = priceCache.get(mint);
@@ -69,7 +96,17 @@ function getStalePrice(mint) {
   return hit.value;
 }
 
+/**
+ * Store token price in cache.
+ */
 function setCachedPrice(mint, value) {
+  if (
+    !Number.isFinite(value) ||
+    value <= 0
+  ) {
+    return;
+  }
+
   priceCache.set(mint, {
     value,
     expiresAt: now() + CACHE_TTL_MS,
@@ -77,9 +114,13 @@ function setCachedPrice(mint, value) {
 }
 
 /**
- * ---------------------------------------------------
- * Fresh market snapshot cache
- * ---------------------------------------------------
+ * ===================================================
+ * 📊 MARKET SNAPSHOT CACHE
+ * ===================================================
+ */
+
+/**
+ * Get a fresh cached market snapshot.
  */
 function getCachedMarketSnapshot(mint) {
   const hit = marketSnapshotCache.get(mint);
@@ -97,15 +138,10 @@ function getCachedMarketSnapshot(mint) {
 }
 
 /**
- * ---------------------------------------------------
- * Stale market snapshot cache
+ * Get stale market snapshot.
  *
- * Used specifically when DexScreener is temporarily
- * rate limited.
- *
- * IMPORTANT:
- * We intentionally do NOT delete expired cache here.
- * ---------------------------------------------------
+ * Used specifically as a fallback during temporary
+ * DexScreener rate limits.
  */
 function getStaleMarketSnapshot(mint) {
   const hit = marketSnapshotCache.get(mint);
@@ -117,7 +153,14 @@ function getStaleMarketSnapshot(mint) {
   return hit.value;
 }
 
+/**
+ * Store market snapshot in cache.
+ */
 function setCachedMarketSnapshot(mint, value) {
+  if (!value) {
+    return;
+  }
+
   marketSnapshotCache.set(mint, {
     value,
     expiresAt: now() + CACHE_TTL_MS,
@@ -126,10 +169,18 @@ function setCachedMarketSnapshot(mint, value) {
 
 /**
  * ===================================================
- * 📊 PAIR VALIDATION
+ * 📊 PRICE VALIDATION
  * ===================================================
  */
 
+/**
+ * Extract a valid USD price from a DexScreener pair.
+ *
+ * Returns:
+ *   number
+ *   OR
+ *   null
+ */
 function getValidPriceUsd(pair) {
   const priceUsd = Number(pair?.priceUsd);
 
@@ -146,6 +197,20 @@ function getValidPriceUsd(pair) {
 /**
  * ===================================================
  * 📊 BUILD MARKET SNAPSHOT
+ * ===================================================
+ *
+ * Returns:
+ *
+ * {
+ *   priceUsd,
+ *   marketCapUsd,
+ *   liquidityUsd
+ * }
+ *
+ * priceUsd is required for a usable snapshot.
+ *
+ * marketCapUsd and liquidityUsd may legitimately be
+ * null when DexScreener does not provide valid values.
  * ===================================================
  */
 
@@ -181,34 +246,39 @@ function buildMarketSnapshot(pair) {
  * 🔎 PICK BEST PAIR
  * ===================================================
  *
- * IMPORTANT FIX:
+ * IMPORTANT:
  *
- * Previously the code selected the highest-liquidity
- * pair FIRST and only afterward checked whether that
- * pair had a valid priceUsd.
+ * The previous implementation selected the pair with
+ * the highest liquidity first.
  *
- * That could produce:
+ * That created a problem when:
  *
- *   Pair A -> highest liquidity, priceUsd = null
- *   Pair B -> lower liquidity, priceUsd = valid
+ *   Pair A:
+ *     highest liquidity
+ *     priceUsd = null
  *
- * Result:
- *   Pair A selected
- *   snapshot rejected
- *   token gets no price
+ *   Pair B:
+ *     lower liquidity
+ *     priceUsd = valid
  *
- * We now:
+ * Pair A would be selected and the entire token could
+ * end up without a usable USD price.
  *
- *   1. Filter out pairs without a valid USD price.
- *   2. Among valid pairs, select the highest liquidity.
+ * NEW BEHAVIOR:
  *
- * This preserves the original "highest liquidity"
- * preference while ensuring the selected pair is usable.
+ *   1. Remove pairs with invalid priceUsd.
+ *   2. Among remaining pairs, select highest liquidity.
+ *
+ * This preserves the liquidity preference while making
+ * sure the selected pair is actually usable.
  * ===================================================
  */
 
 function pickBestPair(pairs) {
-  if (!Array.isArray(pairs) || pairs.length === 0) {
+  if (
+    !Array.isArray(pairs) ||
+    pairs.length === 0
+  ) {
     return null;
   }
 
@@ -223,8 +293,13 @@ function pickBestPair(pairs) {
   }
 
   return validPairs.sort((a, b) => {
-    const liqA = Number(a?.liquidity?.usd || 0);
-    const liqB = Number(b?.liquidity?.usd || 0);
+    const liqA = Number(
+      a?.liquidity?.usd || 0
+    );
+
+    const liqB = Number(
+      b?.liquidity?.usd || 0
+    );
 
     return liqB - liqA;
   })[0];
@@ -235,8 +310,12 @@ function pickBestPair(pairs) {
  * 🧹 NORMALIZE MINTS
  * ===================================================
  *
- * Prevent duplicate addresses from being sent to
- * DexScreener in the same batch.
+ * Removes:
+ *   - empty values
+ *   - whitespace
+ *   - duplicate mint addresses
+ *
+ * This prevents unnecessary DexScreener requests.
  * ===================================================
  */
 
@@ -260,11 +339,17 @@ function normalizeMints(mints) {
  * 📈 GET ONE TOKEN PRICE FROM DEXSCREENER
  * ===================================================
  *
- * Uses:
+ * Endpoint:
+ *
  *   /token-pairs/v1/solana/{mint}
  *
  * Returns:
+ *
  *   number
+ *
+ * Example:
+ *
+ *   0.00005006
  * ===================================================
  */
 
@@ -291,11 +376,8 @@ export async function getDexScreenerPrice(mint) {
    * 429 RATE LIMIT
    * ---------------------------------------------------
    *
-   * IMPORTANT:
-   * Use stale cache if available.
-   *
-   * This prevents a temporary DexScreener rate limit
-   * from completely destroying price availability.
+   * If DexScreener temporarily rate-limits us, use
+   * the most recently known price if available.
    * ---------------------------------------------------
    */
 
@@ -303,6 +385,10 @@ export async function getDexScreenerPrice(mint) {
     const stale = getStalePrice(mint);
 
     if (stale != null) {
+      console.warn(
+        `⚠️ DexScreener 429 for ${mint}; using stale price`
+      );
+
       return stale;
     }
 
@@ -327,7 +413,8 @@ export async function getDexScreenerPrice(mint) {
     );
   }
 
-  const priceUsd = getValidPriceUsd(best);
+  const priceUsd =
+    getValidPriceUsd(best);
 
   if (priceUsd == null) {
     throw new Error(
@@ -335,7 +422,53 @@ export async function getDexScreenerPrice(mint) {
     );
   }
 
-  setCachedPrice(mint, priceUsd);
+  setCachedPrice(
+    mint,
+    priceUsd
+  );
+
+  return priceUsd;
+}
+
+/**
+ * ===================================================
+ * 🟣 GET SOL/USD PRICE
+ * ===================================================
+ *
+ * Uses the wrapped SOL mint on Solana.
+ *
+ * Returns:
+ *
+ *   USD price of 1 SOL
+ *
+ * Example:
+ *
+ *   200.45
+ *
+ * This function is important for converting the
+ * authoritative on-chain entryPriceSol into USD.
+ *
+ * Conversion:
+ *
+ *   entryPriceUsd =
+ *     entryPriceSol * solPriceUsd
+ * ===================================================
+ */
+
+export async function getSolPriceUsd() {
+  const priceUsd =
+    await getDexScreenerPrice(
+      SOL_MINT
+    );
+
+  if (
+    !Number.isFinite(priceUsd) ||
+    priceUsd <= 0
+  ) {
+    throw new Error(
+      `Invalid SOL/USD price from DexScreener: ${priceUsd}`
+    );
+  }
 
   return priceUsd;
 }
@@ -345,6 +478,10 @@ export async function getDexScreenerPrice(mint) {
  * 📊 GET ONE TOKEN MARKET SNAPSHOT
  * ===================================================
  *
+ * Endpoint:
+ *
+ *   /token-pairs/v1/solana/{mint}
+ *
  * Returns:
  *
  * {
@@ -352,20 +489,20 @@ export async function getDexScreenerPrice(mint) {
  *   marketCapUsd,
  *   liquidityUsd
  * }
- *
- * Uses:
- *   /token-pairs/v1/solana/{mint}
  * ===================================================
  */
 
-export async function getDexScreenerMarketSnapshot(mint) {
+export async function getDexScreenerMarketSnapshot(
+  mint
+) {
   if (!mint) {
     throw new Error(
       "Mint address is required for DexScreener market snapshot"
     );
   }
 
-  const cached = getCachedMarketSnapshot(mint);
+  const cached =
+    getCachedMarketSnapshot(mint);
 
   if (cached != null) {
     return cached;
@@ -383,9 +520,14 @@ export async function getDexScreenerMarketSnapshot(mint) {
    */
 
   if (res.status === 429) {
-    const stale = getStaleMarketSnapshot(mint);
+    const stale =
+      getStaleMarketSnapshot(mint);
 
     if (stale != null) {
+      console.warn(
+        `⚠️ DexScreener 429 for market snapshot ${mint}; using stale snapshot`
+      );
+
       return stale;
     }
 
@@ -402,7 +544,8 @@ export async function getDexScreenerMarketSnapshot(mint) {
 
   const pairs = await res.json();
 
-  const best = pickBestPair(pairs);
+  const best =
+    pickBestPair(pairs);
 
   if (!best) {
     throw new Error(
@@ -410,7 +553,8 @@ export async function getDexScreenerMarketSnapshot(mint) {
     );
   }
 
-  const snapshot = buildMarketSnapshot(best);
+  const snapshot =
+    buildMarketSnapshot(best);
 
   if (!snapshot?.priceUsd) {
     throw new Error(
@@ -418,7 +562,10 @@ export async function getDexScreenerMarketSnapshot(mint) {
     );
   }
 
-  setCachedMarketSnapshot(mint, snapshot);
+  setCachedMarketSnapshot(
+    mint,
+    snapshot
+  );
 
   return snapshot;
 }
@@ -428,23 +575,32 @@ export async function getDexScreenerMarketSnapshot(mint) {
  * 📈 GET MANY TOKEN PRICES FROM DEXSCREENER
  * ===================================================
  *
- * Uses:
+ * Endpoint:
+ *
  *   /tokens/v1/solana/{mint1},{mint2},...
  *
  * Maximum:
+ *
  *   30 addresses per request
  *
  * Returns:
+ *
  *   Map<mint, priceUsd>
  * ===================================================
  */
 
-export async function getDexScreenerPrices(mints) {
-  const normalizedMints = normalizeMints(mints);
+export async function getDexScreenerPrices(
+  mints
+) {
+  const normalizedMints =
+    normalizeMints(mints);
 
-  const result = new Map();
+  const result =
+    new Map();
 
-  if (normalizedMints.length === 0) {
+  if (
+    normalizedMints.length === 0
+  ) {
     return result;
   }
 
@@ -452,56 +608,73 @@ export async function getDexScreenerPrices(mints) {
 
   /**
    * ---------------------------------------------------
-   * FIRST: use fresh cache
+   * USE FRESH CACHE FIRST
    * ---------------------------------------------------
    */
 
-  for (const mint of normalizedMints) {
-    const cached = getCachedPrice(mint);
+  for (
+    const mint of normalizedMints
+  ) {
+    const cached =
+      getCachedPrice(mint);
 
     if (cached != null) {
-      result.set(mint, cached);
+      result.set(
+        mint,
+        cached
+      );
     } else {
       uncached.push(mint);
     }
   }
 
-  if (uncached.length === 0) {
+  if (
+    uncached.length === 0
+  ) {
     return result;
   }
 
   /**
    * ---------------------------------------------------
-   * BATCH REQUESTS
+   * PROCESS MAX 30 MINTS PER REQUEST
    * ---------------------------------------------------
    */
 
-  for (let i = 0; i < uncached.length; i += 30) {
-    const batch = uncached.slice(i, i + 30);
-    const joined = batch.join(",");
+  for (
+    let i = 0;
+    i < uncached.length;
+    i += 30
+  ) {
+    const batch =
+      uncached.slice(i, i + 30);
+
+    const joined =
+      batch.join(",");
 
     const url =
       `${DEXSCREENER_BASE}/tokens/v1/solana/${joined}`;
 
-    const res = await fetch(url);
+    const res =
+      await fetch(url);
 
     /**
      * -------------------------------------------------
      * 429 RATE LIMIT
      * -------------------------------------------------
-     *
-     * Do not throw away all price information.
-     *
-     * Try stale cache for each mint in this batch.
-     * -------------------------------------------------
      */
 
     if (res.status === 429) {
-      for (const mint of batch) {
-        const stale = getStalePrice(mint);
+      for (
+        const mint of batch
+      ) {
+        const stale =
+          getStalePrice(mint);
 
         if (stale != null) {
-          result.set(mint, stale);
+          result.set(
+            mint,
+            stale
+          );
         }
       }
 
@@ -514,9 +687,11 @@ export async function getDexScreenerPrices(mints) {
       );
     }
 
-    const rows = await res.json();
+    const rows =
+      await res.json();
 
-    const grouped = new Map();
+    const grouped =
+      new Map();
 
     /**
      * -------------------------------------------------
@@ -524,44 +699,66 @@ export async function getDexScreenerPrices(mints) {
      * -------------------------------------------------
      */
 
-    for (const row of rows || []) {
-      const mint = row?.baseToken?.address;
+    for (
+      const row of rows || []
+    ) {
+      const mint =
+        row?.baseToken?.address;
 
       if (!mint) {
         continue;
       }
 
-      if (!grouped.has(mint)) {
-        grouped.set(mint, []);
+      if (
+        !grouped.has(mint)
+      ) {
+        grouped.set(
+          mint,
+          []
+        );
       }
 
-      grouped.get(mint).push(row);
+      grouped
+        .get(mint)
+        .push(row);
     }
 
     /**
      * -------------------------------------------------
-     * SELECT BEST VALID PAIR FOR EACH TOKEN
+     * SELECT BEST VALID PAIR
      * -------------------------------------------------
      */
 
-    for (const mint of batch) {
-      const best = pickBestPair(
-        grouped.get(mint) || []
-      );
+    for (
+      const mint of batch
+    ) {
+      const best =
+        pickBestPair(
+          grouped.get(mint) || []
+        );
 
       if (!best) {
         continue;
       }
 
-      const priceUsd = getValidPriceUsd(best);
+      const priceUsd =
+        getValidPriceUsd(best);
 
-      if (priceUsd == null) {
+      if (
+        priceUsd == null
+      ) {
         continue;
       }
 
-      setCachedPrice(mint, priceUsd);
+      setCachedPrice(
+        mint,
+        priceUsd
+      );
 
-      result.set(mint, priceUsd);
+      result.set(
+        mint,
+        priceUsd
+      );
     }
   }
 
@@ -573,6 +770,14 @@ export async function getDexScreenerPrices(mints) {
  * 📊 GET MANY TOKEN MARKET SNAPSHOTS
  * ===================================================
  *
+ * Endpoint:
+ *
+ *   /tokens/v1/solana/{mint1},{mint2},...
+ *
+ * Maximum:
+ *
+ *   30 addresses per request
+ *
  * Returns:
  *
  * Map<
@@ -583,21 +788,21 @@ export async function getDexScreenerPrices(mints) {
  *     liquidityUsd
  *   }
  * >
- *
- * Uses:
- *   /tokens/v1/solana/{mint1},{mint2},...
- *
- * Maximum:
- *   30 addresses per request
  * ===================================================
  */
 
-export async function getDexScreenerMarketSnapshots(mints) {
-  const normalizedMints = normalizeMints(mints);
+export async function getDexScreenerMarketSnapshots(
+  mints
+) {
+  const normalizedMints =
+    normalizeMints(mints);
 
-  const result = new Map();
+  const result =
+    new Map();
 
-  if (normalizedMints.length === 0) {
+  if (
+    normalizedMints.length === 0
+  ) {
     return result;
   }
 
@@ -605,69 +810,81 @@ export async function getDexScreenerMarketSnapshots(mints) {
 
   /**
    * ---------------------------------------------------
-   * FIRST: use fresh cache
+   * USE FRESH CACHE FIRST
    * ---------------------------------------------------
    */
 
-  for (const mint of normalizedMints) {
-    const cached = getCachedMarketSnapshot(mint);
+  for (
+    const mint of normalizedMints
+  ) {
+    const cached =
+      getCachedMarketSnapshot(mint);
 
     if (cached != null) {
-      result.set(mint, cached);
+      result.set(
+        mint,
+        cached
+      );
     } else {
       uncached.push(mint);
     }
   }
 
-  if (uncached.length === 0) {
+  if (
+    uncached.length === 0
+  ) {
     return result;
   }
 
   /**
    * ---------------------------------------------------
-   * BATCH REQUESTS
+   * PROCESS MAX 30 MINTS PER REQUEST
    * ---------------------------------------------------
    */
 
-  for (let i = 0; i < uncached.length; i += 30) {
-    const batch = uncached.slice(i, i + 30);
-    const joined = batch.join(",");
+  for (
+    let i = 0;
+    i < uncached.length;
+    i += 30
+  ) {
+    const batch =
+      uncached.slice(i, i + 30);
+
+    const joined =
+      batch.join(",");
 
     const url =
       `${DEXSCREENER_BASE}/tokens/v1/solana/${joined}`;
 
-    const res = await fetch(url);
+    const res =
+      await fetch(url);
 
     /**
      * -------------------------------------------------
      * 429 RATE LIMIT
      * -------------------------------------------------
      *
-     * IMPORTANT FIX:
-     *
-     * Previously:
-     *
-     *   getCachedMarketSnapshot()
-     *       ↓
-     *   expired entry deleted
-     *       ↓
-     *   request gets 429
-     *       ↓
-     *   marketSnapshotCache.get()
-     *       ↓
-     *   nothing available
-     *
-     * Now we explicitly retrieve stale cache without
-     * deleting it.
+     * Use stale snapshots where available instead of
+     * returning an empty Map for those tokens.
      * -------------------------------------------------
      */
 
     if (res.status === 429) {
-      for (const mint of batch) {
-        const stale = getStaleMarketSnapshot(mint);
+      console.warn(
+        `⚠️ DexScreener market snapshot batch rate limited (429)`
+      );
+
+      for (
+        const mint of batch
+      ) {
+        const stale =
+          getStaleMarketSnapshot(mint);
 
         if (stale != null) {
-          result.set(mint, stale);
+          result.set(
+            mint,
+            stale
+          );
         }
       }
 
@@ -680,9 +897,11 @@ export async function getDexScreenerMarketSnapshots(mints) {
       );
     }
 
-    const rows = await res.json();
+    const rows =
+      await res.json();
 
-    const grouped = new Map();
+    const grouped =
+      new Map();
 
     /**
      * -------------------------------------------------
@@ -690,54 +909,77 @@ export async function getDexScreenerMarketSnapshots(mints) {
      * -------------------------------------------------
      */
 
-    for (const row of rows || []) {
-      const mint = row?.baseToken?.address;
+    for (
+      const row of rows || []
+    ) {
+      const mint =
+        row?.baseToken?.address;
 
       if (!mint) {
         continue;
       }
 
-      if (!grouped.has(mint)) {
-        grouped.set(mint, []);
+      if (
+        !grouped.has(mint)
+      ) {
+        grouped.set(
+          mint,
+          []
+        );
       }
 
-      grouped.get(mint).push(row);
+      grouped
+        .get(mint)
+        .push(row);
     }
 
     /**
      * -------------------------------------------------
-     * BUILD SNAPSHOT FOR EACH TOKEN
+     * BUILD MARKET SNAPSHOT FOR EACH TOKEN
      * -------------------------------------------------
      */
 
-    for (const mint of batch) {
-      const best = pickBestPair(
-        grouped.get(mint) || []
-      );
+    for (
+      const mint of batch
+    ) {
+      const best =
+        pickBestPair(
+          grouped.get(mint) || []
+        );
 
       /**
-       * No usable pair.
+       * No valid pair.
        *
-       * Do not create a fake snapshot.
+       * Do not manufacture a price.
        */
       if (!best) {
         continue;
       }
 
-      const snapshot = buildMarketSnapshot(best);
+      const snapshot =
+        buildMarketSnapshot(best);
 
       /**
-       * Price is mandatory for a usable market snapshot.
+       * A market snapshot without a valid price is
+       * not useful for entry/current USD calculations.
        *
-       * marketCap and liquidity are allowed to be null.
+       * market cap and liquidity can still be null.
        */
-      if (!snapshot?.priceUsd) {
+      if (
+        !snapshot?.priceUsd
+      ) {
         continue;
       }
 
-      setCachedMarketSnapshot(mint, snapshot);
+      setCachedMarketSnapshot(
+        mint,
+        snapshot
+      );
 
-      result.set(mint, snapshot);
+      result.set(
+        mint,
+        snapshot
+      );
     }
   }
 
