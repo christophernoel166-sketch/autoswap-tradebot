@@ -1904,120 +1904,268 @@ const state = {
       const snapshotsByWallet = new Map();
 
       for (const [walletAddress, info] of state.users.entries()) {
-        const entry = state.entryPrices.get(walletAddress) ?? info.entryPrice;
-        if (!entry) continue;
+  // ===================================================
+  // 💰 ENTRY PRICE
+  // ===================================================
 
-        const currentPrice = price;
-        const changePercent = ((currentPrice - entry) / entry) * 100;
+  // Authoritative execution price.
+  // UNIT: SOL/token
+  const entryPriceSol =
+    state.entryPrices.get(walletAddress) ??
+    info.entryPrice;
 
-        const solAmount = info.solAmount || 0;
-        const pnlSol = (changePercent / 100) * solAmount;
+  // Market entry baseline.
+  // UNIT: USD/token
+  const entryPriceUsd =
+    Number(info.entryPriceUsd);
 
-// ADD HERE
-await redis.hset(
-  positionKey(walletAddress, mint),
-  {
-    currentPrice: String(currentPrice),
-    changePercent: String(changePercent),
-    pnlSol: String(pnlSol),
+  // Current market price.
+  // UNIT: USD/token
+  const currentPriceUsd =
+    Number(price);
 
-    highestPrice: String(
-      state.highestPrices?.get(walletAddress) ||
-      currentPrice
-    ),
+  if (
+    !Number.isFinite(entryPriceUsd) ||
+    entryPriceUsd <= 0
+  ) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        entryPriceSol,
+        entryPriceUsd,
+        currentPriceUsd,
+      },
+      "⚠️ Missing valid USD entry price for position snapshot"
+    );
+
+    continue;
   }
-);
 
-LOG.info(
-  {
-    walletAddress,
-    mint,
-    currentPrice,
-    changePercent,
-    pnlSol,
-  },
-  "🧪 POSITION PRICE UPDATED"
-);
+  if (
+    !Number.isFinite(currentPriceUsd) ||
+    currentPriceUsd <= 0
+  ) {
+    continue;
+  }
 
-const tradingWalletAddress =
-  info.wallet?.publicKey?.toBase58?.();
+  // ===================================================
+  // 📊 USD-TO-USD PRICE CHANGE
+  // ===================================================
 
-if (!tradingWalletAddress) {
-  continue;
-}
+  const changePercent =
+    ((currentPriceUsd - entryPriceUsd) /
+      entryPriceUsd) *
+    100;
 
-const realTokenBalance =
-  await getWalletTokenBalance(
-    tradingWalletAddress,
-    mint
+  // ===================================================
+  // 💰 POSITION VALUE / PNL
+  // ===================================================
+
+  const tokenAmount =
+    Number(info.tokenAmount || 0);
+
+  const entryValueUsd =
+    entryPriceUsd * tokenAmount;
+
+  const currentValueUsd =
+    currentPriceUsd * tokenAmount;
+
+  const pnlUsd =
+    currentValueUsd - entryValueUsd;
+
+  // Existing SOL-denominated PNL estimate.
+  const solAmount =
+    Number(info.solAmount || 0);
+
+  const pnlSol =
+    (changePercent / 100) * solAmount;
+
+  // ===================================================
+  // 📈 HIGHEST PRICE
+  // UNIT: USD/token
+  // ===================================================
+
+  const highestPriceUsd =
+    state.highestPrices?.get(walletAddress) ??
+    currentPriceUsd;
+
+  // ===================================================
+  // 💾 LIVE REDIS POSITION UPDATE
+  // ===================================================
+
+  await redis.hset(
+    positionKey(walletAddress, mint),
+    {
+      currentPrice:
+        String(currentPriceUsd),
+
+      entryPriceUsd:
+        String(entryPriceUsd),
+
+      changePercent:
+        String(changePercent),
+
+      pnlSol:
+        String(pnlSol),
+
+      pnlUsd:
+        String(pnlUsd),
+
+      entryValueUsd:
+        String(entryValueUsd),
+
+      currentValueUsd:
+        String(currentValueUsd),
+
+      highestPrice:
+        String(highestPriceUsd),
+    }
   );
 
-LOG.info(
-  {
-    walletAddress: tradingWalletAddress,
-    mint,
-    realTokenBalance,
-  },
-  "🧪 BALANCE CHECK"
-);
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      entryPriceUsd,
+      currentPriceUsd,
+      changePercent,
+      pnlSol,
+      pnlUsd,
+    },
+    "🧪 POSITION PRICE UPDATED"
+  );
 
-// ✅ auto-remove dead positions
-if (realTokenBalance <= 0) {
-  LOG.warn(
-  {
+  // ===================================================
+  // 👛 RESOLVE TRADING WALLET
+  // ===================================================
+
+  const tradingWalletAddress =
+    info.wallet?.publicKey?.toBase58?.();
+
+  if (!tradingWalletAddress) {
+    continue;
+  }
+
+  // ===================================================
+  // 🪙 GET REAL TOKEN BALANCE
+  // ===================================================
+
+  const realTokenBalance =
+    await getWalletTokenBalance(
+      tradingWalletAddress,
+      mint
+    );
+
+  LOG.info(
+    {
+      walletAddress: tradingWalletAddress,
+      mint,
+      realTokenBalance,
+    },
+    "🧪 BALANCE CHECK"
+  );
+
+  // ===================================================
+  // 🧹 AUTO-REMOVE DEAD POSITIONS
+  // ===================================================
+
+  if (realTokenBalance <= 0) {
+    LOG.warn(
+      {
+        walletAddress:
+          tradingWalletAddress,
+        mint,
+      },
+      "🧹 Removing dead position (0 token balance)"
+    );
+
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+    state.highestPrices.delete(walletAddress);
+
+    await redis.del(
+      positionKey(walletAddress, mint)
+    );
+
+    await redis.srem(
+      walletPositionsKey(walletAddress),
+      mint
+    );
+
+    continue;
+  }
+
+  // ===================================================
+  // 📸 BUILD DASHBOARD SNAPSHOT
+  // ===================================================
+
+  const snapshotItem = {
+    mint,
+
     walletAddress:
       tradingWalletAddress,
-    mint,
-  },
-    "🧹 Removing dead position (0 token balance)"
-  );
 
-  state.users.delete(walletAddress);
-  state.entryPrices.delete(walletAddress);
-  state.highestPrices.delete(walletAddress);
+    // Dashboard/display price.
+    // UNIT: USD/token
+    entryPrice:
+      entryPriceUsd,
 
-  await redis.del(
-    positionKey(walletAddress, mint)
-  );
+    currentPrice:
+      currentPriceUsd,
 
-  await redis.srem(
-    walletPositionsKey(walletAddress),
-    mint
-  );
+    // Preserve authoritative execution price.
+    // UNIT: SOL/token
+    entryPriceSol:
+      Number(entryPriceSol),
 
-  continue;
+    // Market entry baseline.
+    // UNIT: USD/token
+    entryPriceUsd,
+
+    changePercent,
+
+    pnlSol,
+    pnlUsd,
+
+    entryValueUsd,
+    currentValueUsd,
+
+    // Position info
+    solAmount:
+      info.solAmount || 0,
+
+    tokenAmount:
+      realTokenBalance,
+
+    tpStage:
+      info.tpStage || 0,
+
+    highestPrice:
+      highestPriceUsd,
+
+    // Metadata
+    buyTxid:
+      info.buyTxid || null,
+
+    sourceChannel:
+      info.sourceChannel || null,
+
+    openedAt:
+      info.openedAt || 0,
+  };
+
+  if (!snapshotsByWallet.has(walletAddress)) {
+    snapshotsByWallet.set(
+      walletAddress,
+      []
+    );
+  }
+
+  snapshotsByWallet
+    .get(walletAddress)
+    .push(snapshotItem);
 }
-
-        const snapshotItem = {
-  mint,
-
-  walletAddress:
-    tradingWalletAddress,
-
-          // core trade data
-          entryPrice: entry,
-          currentPrice,
-          changePercent,
-          pnlSol,
-
-          // position info
-          solAmount: info.solAmount || 0,
-         tokenAmount: realTokenBalance,
-          tpStage: info.tpStage || 0,
-          highestPrice: state.highestPrices?.get(walletAddress) || entry,
-
-          // metadata
-          buyTxid: info.buyTxid || null,
-          sourceChannel: info.sourceChannel || null,
-          openedAt: info.openedAt || 0,
-        };
-
-        if (!snapshotsByWallet.has(walletAddress)) {
-          snapshotsByWallet.set(walletAddress, []);
-        }
-
-        snapshotsByWallet.get(walletAddress).push(snapshotItem);
-      }
 
       // Write snapshots to Redis (MERGE per wallet)
       for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
@@ -4772,16 +4920,7 @@ const buyTxid = buyResult?.txid;
 // ===================================================
 // 💰 AUTHORITATIVE ON-CHAIN BUY EXECUTION
 // ===================================================
-//
-// IMPORTANT:
-// Do NOT use buyResult.tokenAmount here.
-// That field is retained for backward compatibility
-// and represents the Jupiter quote output.
-//
-// The authoritative values come from the confirmed
-// Solana transaction metadata.
-//
-// ===================================================
+
 
 const actualSolSpent =
   Number(buyResult?.actualSolSpent || 0);
@@ -4844,15 +4983,7 @@ await chargeBuyFee(
 // ===================================================
 // 📈 ACTUAL BUY EXECUTION PRICE
 // ===================================================
-//
-// Entry price is based exclusively on confirmed
-// on-chain execution values.
-//
-// SOL spent / actual tokens received
-//
-// Do NOT use DexScreener.
-// Do NOT use Jupiter quoted output.
-// ===================================================
+
 
 let entryPrice = null;
 
@@ -4880,17 +5011,57 @@ if (
 }
 
 // ===================================================
+// 📊 CAPTURE USD ENTRY MARKET BASELINE
+// ===================================================
+
+
+let entryMarketSnapshot = null;
+
+try {
+  const snapshots =
+    await getDexScreenerMarketSnapshots([mint]);
+
+  entryMarketSnapshot =
+    snapshots.get(mint) ?? null;
+
+  LOG.info(
+    {
+      wallet: user.walletAddress,
+      mint,
+      entryPriceSol: entryPrice,
+      entryPriceUsd:
+        entryMarketSnapshot?.priceUsd ?? null,
+      entryMarketCapUsd:
+        entryMarketSnapshot?.marketCapUsd ?? null,
+      entryLiquidityUsd:
+        entryMarketSnapshot?.liquidityUsd ?? null,
+    },
+    "📊 Captured USD entry market baseline"
+  );
+} catch (err) {
+  LOG.warn(
+    {
+      wallet: user.walletAddress,
+      mint,
+      err,
+    },
+    "⚠️ Unable to capture USD entry market baseline"
+  );
+}
+
+const entryPriceUsd =
+  Number(entryMarketSnapshot?.priceUsd);
+
+const entryMarketCapUsd =
+  Number(entryMarketSnapshot?.marketCapUsd);
+
+const entryLiquidityUsd =
+  Number(entryMarketSnapshot?.liquidityUsd);
+
+// ===================================================
 // 🧠 IMMUTABLE AI ENTRY SNAPSHOT
 // ===================================================
-//
-// This captures what the AI believed when the position
-// was originally opened.
-//
-// IMPORTANT:
-// - This is NOT live AI memory.
-// - This is NOT overwritten by future AI cycles.
-// - The actual on-chain entry price remains authoritative.
-// ===================================================
+
 
 const entrySnapshot = entryContext
   ? {
@@ -4941,15 +5112,38 @@ const entrySnapshot = entryContext
         entryContext.metadata ?? null,
 
       // =================================================
-      // ACTUAL POSITION OPENING DATA
-      // =================================================
+// ACTUAL POSITION OPENING DATA
+// =================================================
 
-      execution: {
-        entryPrice,
-        solAmount: actualSolSpent,
-        tokenAmount: actualTokensReceived,
-        buyTxid,
-      },
+execution: {
+  // Authoritative on-chain execution price
+  // SOL per token
+  entryPrice,
+
+  // USD market baseline captured at entry
+  entryPriceUsd:
+    Number.isFinite(entryPriceUsd) &&
+    entryPriceUsd > 0
+      ? entryPriceUsd
+      : null,
+
+  // Market baseline captured at entry
+  marketCapUsd:
+    Number.isFinite(entryMarketCapUsd) &&
+    entryMarketCapUsd > 0
+      ? entryMarketCapUsd
+      : null,
+
+  liquidityUsd:
+    Number.isFinite(entryLiquidityUsd) &&
+    entryLiquidityUsd > 0
+      ? entryLiquidityUsd
+      : null,
+
+  solAmount: actualSolSpent,
+  tokenAmount: actualTokensReceived,
+  buyTxid,
+},
     }
   : null;
 
@@ -4994,10 +5188,18 @@ tokenAmount:
   // ===================================================
 
   [POSITION_FIELDS.entryPrice]:
-    String(entryPrice ?? 0),
+  String(entryPrice ?? 0),
 
-  [POSITION_FIELDS.buyTxid]:
-    String(buyTxid),
+// Market entry baseline.
+// UNIT: USD/token
+entryPriceUsd:
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? String(entryPriceUsd)
+    : "",
+
+[POSITION_FIELDS.buyTxid]:
+  String(buyTxid),
 
 
   // ===================================================
@@ -5008,7 +5210,10 @@ tokenAmount:
     "0",
 
   [POSITION_FIELDS.highestPrice]:
-    String(entryPrice ?? 0),
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? String(entryPriceUsd)
+    : "",
 
   status:
     "open",
@@ -5027,13 +5232,7 @@ entrySnapshot:
 
   // ===================================================
   // 🧠 RESET AI MEMORY FOR NEW POSITION
-  //
-  // IMPORTANT:
-  // This is a BRAND-NEW position.
-  //
-  // Do not inherit the previous position's
-  // AI timeline.
-  // ===================================================
+   // ===================================================
 
   aiMemory:
     JSON.stringify({
@@ -5143,17 +5342,25 @@ state.users.set(String(user.walletAddress), {
   // 💰 AUTHORITATIVE ON-CHAIN POSITION AMOUNTS
   // ===================================================
 
-  solAmount:
-    actualSolSpent,
+solAmount: actualSolSpent,
+tokenAmount: actualTokensReceived,
 
-  tokenAmount:
-    actualTokensReceived,
+// Authoritative execution price.
+// UNIT: SOL/token
+entryPrice,
 
-  entryPrice,
+// Market entry baseline.
+// UNIT: USD/token
+entryPriceUsd:
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? entryPriceUsd
+    : null,
+
 entrySnapshot,
-  sourceChannel,
-  slippageBps,
-});
+
+sourceChannel,
+slippageBps,
     
     // ✅ Step 3A: initialize per-wallet highest immediately
 // Step 3A: initialize per-wallet highest using USD price
