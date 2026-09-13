@@ -67,13 +67,14 @@ export async function rebuildPositionsFromBlockchain() {
       "⚠️ Redis positions empty — rebuilding from blockchain"
     );
 
-    const users = await User.find(
-    { tradingEnabled: true },
-    {
-        walletAddress: 1,
-        tradingWalletPublicKey: 1,
-        tradingWalletEncryptedSecret: 1,
-    }
+ const users = await User.find(
+  { tradingEnabled: true },
+  {
+    walletAddress: 1,
+    tradingWalletPublicKey: 1,
+    tradingWalletEncryptedPrivateKey: 1,
+    tradingWalletIv: 1,
+  }
 ).lean();
 
     let rebuilt = 0;
