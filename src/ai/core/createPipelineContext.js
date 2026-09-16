@@ -93,6 +93,7 @@ function normalizeScannerAIContext(tradeRequest = {}) {
             evidence: {},
             investmentThesis: null,
             recommendation: null,
+            confidence: null,
         };
     }
 
@@ -114,6 +115,12 @@ function normalizeScannerAIContext(tradeRequest = {}) {
 
         recommendation:
             aiContext.recommendation ?? null,
+
+        confidence:
+            aiContext.confidence &&
+            typeof aiContext.confidence === "object"
+                ? aiContext.confidence
+                : null,
     };
 }
 
@@ -271,7 +278,7 @@ export function createPipelineContext(
 
     };
 
-    // ======================================================
+// ======================================================
 // Normalized Scanner AI Context
 // ======================================================
 
@@ -279,6 +286,22 @@ const scannerAIContext =
     normalizeScannerAIContext(
         tradeRequest
     );
+
+// ======================================================
+// Initial Confidence Hydration
+// ======================================================
+
+
+const initialConfidence =
+    scannerAIContext.confidence &&
+    typeof scannerAIContext.confidence === "object"
+        ? scannerAIContext.confidence
+        : tradeRequest.entrySnapshot?.confidence &&
+          typeof tradeRequest.entrySnapshot.confidence === "object"
+            ? tradeRequest.entrySnapshot.confidence
+            : null;
+
+
 
 // ======================================================
 // Context
@@ -1132,33 +1155,41 @@ recommendation:
         // Confidence
         // ==================================================
 
-        confidence: {
+       confidence: {
 
-            overall:
-                null,
+    overall:
+        initialConfidence?.overall ??
+        null,
 
-            entry:
-                null,
+    entry:
+        initialConfidence?.entry ??
+        null,
 
-            exit:
-                null,
+    exit:
+        initialConfidence?.exit ??
+        null,
 
-            conviction:
-                null,
+    conviction:
+        initialConfidence?.conviction ??
+        null,
 
-            grade:
-                null,
+    grade:
+        initialConfidence?.grade ??
+        null,
 
-            breakdown:
-                {},
+    breakdown:
+        initialConfidence?.breakdown ??
+        {},
 
-            methodologyVersion:
-                null,
+    methodologyVersion:
+        initialConfidence?.methodologyVersion ??
+        null,
 
-            degraded:
-                false,
+    degraded:
+        initialConfidence?.degraded ??
+        false,
 
-        },
+},
 
         // ==================================================
         // Confidence Gaps
