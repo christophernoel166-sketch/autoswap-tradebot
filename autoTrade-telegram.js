@@ -2413,8 +2413,9 @@ if (!Number.isFinite(change)) {
         {
             walletAddress,
             mint,
-            entry,
-            currentPrice,
+            entryPriceSol,
+            entryPriceUsd,
+            currentPriceUsd,
             change,
         },
         "⚠️ monitorUser skipped — invalid PNL calculation"
