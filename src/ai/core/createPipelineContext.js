@@ -78,11 +78,89 @@ function resolveMint(tradeRequest) {
 }
 
 // ==========================================================
+// Normalize Confidence Value
+// ==========================================================
+
+function normalizeConfidenceValue(value) {
+
+    // Scanner may provide confidence as a number
+    // Example: confidence: 67
+    if (
+        typeof value === "number" &&
+        Number.isFinite(value)
+    ) {
+        return {
+            overall: value,
+            entry: value,
+            exit: null,
+            conviction: null,
+            grade: null,
+            breakdown: {},
+            methodologyVersion: null,
+            degraded: false,
+        };
+    }
+
+    // Some pipeline stages may provide a full
+    // confidence object.
+    if (
+        value &&
+        typeof value === "object"
+    ) {
+        return {
+            overall:
+                value.overall ??
+                null,
+
+            entry:
+                value.entry ??
+                null,
+
+            exit:
+                value.exit ??
+                null,
+
+            conviction:
+                value.conviction ??
+                null,
+
+            grade:
+                value.grade ??
+                null,
+
+            breakdown:
+                value.breakdown &&
+                typeof value.breakdown === "object"
+                    ? {
+                        ...value.breakdown,
+                    }
+                    : {},
+
+            methodologyVersion:
+                value.methodologyVersion ??
+                null,
+
+            degraded:
+                Boolean(
+                    value.degraded
+                ),
+        };
+    }
+
+    return null;
+}
+
+
+// ==========================================================
 // Normalize Scanner AI Context
 // ==========================================================
 
-function normalizeScannerAIContext(tradeRequest = {}) {
-    const aiContext = tradeRequest?.aiContext;
+function normalizeScannerAIContext(
+    tradeRequest = {}
+) {
+
+    const aiContext =
+        tradeRequest?.aiContext;
 
     if (
         !aiContext ||
@@ -98,6 +176,7 @@ function normalizeScannerAIContext(tradeRequest = {}) {
     }
 
     return {
+
         analyses:
             aiContext.analyses &&
             typeof aiContext.analyses === "object"
@@ -111,19 +190,19 @@ function normalizeScannerAIContext(tradeRequest = {}) {
                 : {},
 
         investmentThesis:
-            aiContext.investmentThesis ?? null,
+            aiContext.investmentThesis ??
+            null,
 
         recommendation:
-            aiContext.recommendation ?? null,
+            aiContext.recommendation ??
+            null,
 
         confidence:
-            aiContext.confidence &&
-            typeof aiContext.confidence === "object"
-                ? aiContext.confidence
-                : null,
+            normalizeConfidenceValue(
+                aiContext.confidence
+            ),
     };
 }
-
 // ==========================================================
 // Create Pipeline Context
 // ==========================================================
@@ -287,19 +366,19 @@ const scannerAIContext =
         tradeRequest
     );
 
-// ======================================================
+// ==========================================================
 // Initial Confidence Hydration
-// ======================================================
+// ==========================================================
 
+const snapshotConfidence =
+    normalizeConfidenceValue(
+        tradeRequest.entrySnapshot?.confidence
+    );
 
 const initialConfidence =
-    scannerAIContext.confidence &&
-    typeof scannerAIContext.confidence === "object"
-        ? scannerAIContext.confidence
-        : tradeRequest.entrySnapshot?.confidence &&
-          typeof tradeRequest.entrySnapshot.confidence === "object"
-            ? tradeRequest.entrySnapshot.confidence
-            : null;
+    scannerAIContext.confidence ??
+    snapshotConfidence ??
+    null;
 
 
 
