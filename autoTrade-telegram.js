@@ -28,6 +28,7 @@ import {
 } from "./src/queue/tradeQueue.js";
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
+import TokenOutcome from "./models/TokenOutcome.js";
 import bot from "./src/telegram/bot.js";
 import { restoreTradingWallet } from "./src/services/walletService.js";
 import ChannelSettings from "./models/ChannelSettings.js";
@@ -4268,6 +4269,148 @@ async function executeTradePlan(plan) {
     // ==========================================
 
    case "BUY": {
+
+// ==========================================================
+// 🔗 SCANNER → AUTOTRADE AI BRIDGE
+//
+// The API scanner stores the authoritative scanner result in
+// TokenOutcome. The BUY queue does not carry that result, so
+// retrieve the latest scan here before the AI Entry Pipeline
+// creates its context.
+//
+// This keeps the AI engines unchanged.
+// ==========================================================
+
+try {
+    const latestScannerResult =
+        await TokenOutcome.findOne({
+            mintAddress: plan.mint,
+        })
+        .sort({ scannedAt: -1 })
+        .lean();
+
+    if (latestScannerResult) {
+
+        const entryAnalysis =
+            latestScannerResult.entryAnalysis || {};
+
+        plan.aiContext = {
+
+            analyses: {
+                ...(entryAnalysis || {}),
+
+                forecast:
+                    entryAnalysis.forecast ?? {
+                        score:
+                            latestScannerResult.forecastScore ?? 0,
+
+                        verdict:
+                            latestScannerResult.forecastVerdict ?? null,
+                    },
+
+                momentum:
+                    entryAnalysis.momentum ?? {
+                        score:
+                            latestScannerResult.momentumScore ?? 0,
+                    },
+
+                liquidity:
+                    entryAnalysis.liquidity ?? {},
+
+                volume:
+                    entryAnalysis.volume ?? {},
+            },
+
+            evidence: {
+                forecast:
+                    entryAnalysis.forecast ??
+                    {
+                        score:
+                            latestScannerResult.forecastScore ?? 0,
+
+                        verdict:
+                            latestScannerResult.forecastVerdict ?? null,
+                    },
+
+                momentum:
+                    entryAnalysis.momentum ?? {},
+
+                liquidity:
+                    entryAnalysis.liquidity ?? {},
+
+                volume:
+                    entryAnalysis.volume ?? {},
+            },
+
+            investmentThesis:
+                latestScannerResult.aiSnapshot?.investmentThesis ??
+                null,
+
+            recommendation:
+                latestScannerResult.aiSnapshot?.recommendation ??
+                latestScannerResult.recommendation ??
+                null,
+
+            confidence: {
+                recommendation:
+                    latestScannerResult.recommendationConfidence ??
+                    0,
+
+                overall:
+                    latestScannerResult.overallConfidence ??
+                    0,
+            },
+        };
+
+        LOG.info(
+            {
+                mint: plan.mint,
+                scannedAt: latestScannerResult.scannedAt,
+
+                forecastScore:
+                    latestScannerResult.forecastScore,
+
+                forecastVerdict:
+                    latestScannerResult.forecastVerdict,
+
+                momentumScore:
+                    latestScannerResult.momentumScore,
+
+                hasLiquidity:
+                    Boolean(entryAnalysis.liquidity),
+
+                hasVolume:
+                    Boolean(entryAnalysis.volume),
+
+                hasAIContext:
+                    Boolean(plan.aiContext),
+            },
+            "🔗 Scanner result injected into AutoTrade AI context"
+        );
+
+    } else {
+
+        LOG.warn(
+            {
+                mint: plan.mint,
+            },
+            "⚠️ No TokenOutcome found — AI will run without scanner context"
+        );
+    }
+
+} catch (scannerContextError) {
+
+    LOG.error(
+        {
+            mint: plan.mint,
+            error:
+                scannerContextError?.message ||
+                scannerContextError,
+        },
+        "❌ Failed to load scanner result for AutoTrade AI"
+    );
+}
+
 
     // ==========================================
     // AI Entry Pipeline
