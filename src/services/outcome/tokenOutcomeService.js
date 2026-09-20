@@ -299,58 +299,71 @@ scannerVotes:
 entryAnalysis: {
 
     chart:
-        aiContext?.chartAnalysis ?? {},
+        aiContext?.analyses?.chart ??
+        aiContext?.chartAnalysis ??
+        {},
 
     forecast:
-        forecast ?? {},
+        aiContext?.analyses?.forecast ??
+        forecast ??
+        {},
 
     momentum:
-        momentumData ?? {},
+        aiContext?.analyses?.momentum ??
+        momentumData ??
+        {},
 
     liquidity:
-        aiContext?.liquidityAnalysis ?? {},
+        aiContext?.analyses?.liquidity ??
+        aiContext?.liquidityAnalysis ??
+        {},
 
     volume:
-        aiContext?.volumeAnalysis ?? {},
+        aiContext?.analyses?.volume ??
+        aiContext?.volumeAnalysis ??
+        {},
 
     walletIntelligence:
-        walletIntel ?? {},
+        aiContext?.analyses?.walletIntelligence ??
+        walletIntel ??
+        {},
 
     holders:
         holderData ?? {},
 
     rugRisk:
-        rugRiskData ?? {},
+        aiContext?.analyses?.rugRisk ??
+        rugRiskData ??
+        {},
 
     integrity:
-        integrityData ?? {},
+        aiContext?.analyses?.integrity ??
+        integrityData ??
+        {},
 
-   developer: {
+    developer: {
+        wallet:
+            developerProfile?.wallet ??
+            rugRiskData?.developerWallet ??
+            null,
 
-    wallet:
-        developerProfile?.wallet ??
-        rugRiskData?.developerWallet ??
-        null,
+        trustScore:
+            developerProfile?.trustScore ?? 50,
 
-    trustScore:
-        developerProfile?.trustScore ?? 50,
+        winRate:
+            developerProfile?.winRate ?? 0,
 
-    winRate:
-        developerProfile?.winRate ?? 0,
+        rugRate:
+            developerProfile?.rugRate ?? 0,
 
-    rugRate:
-        developerProfile?.rugRate ?? 0,
+        moonshots:
+            developerProfile?.moonshots ?? 0,
 
-    moonshots:
-        developerProfile?.moonshots ?? 0,
-
-    tokensCreated:
-        developerProfile?.tokensCreated ?? 0,
-
-},
+        tokensCreated:
+            developerProfile?.tokensCreated ?? 0,
+    },
 
     consensus: {
-
         percentage:
             aiRecommendation?.consensus ?? 0,
 
@@ -364,7 +377,7 @@ entryAnalysis: {
             aiRecommendation?.scannerVotes
                 ? Object.keys(
                     aiRecommendation.scannerVotes
-                  ).length
+                ).length
                 : 0,
 
         scannerVotes:
@@ -372,11 +385,9 @@ entryAnalysis: {
 
         contradictions:
             aiRecommendation?.contradictions ?? [],
-
     },
 
     ai: {
-
         recommendation:
             aiRecommendation?.action ?? null,
 
@@ -397,16 +408,12 @@ entryAnalysis: {
 
         blockers:
             aiRecommendation?.blockers ?? [],
-
     },
 
     metadata: {
-
         scannerVersion:
             "AI_PIPELINE_V3",
-
     },
-
 },
 
 
