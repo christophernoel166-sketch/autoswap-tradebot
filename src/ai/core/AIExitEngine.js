@@ -282,8 +282,12 @@ function getEntrySnapshot(
 // Extracts the immutable market state captured when the
 // position was opened.
 //
-// This is measurement only.
-// It does NOT make an exit decision.
+// IMPORTANT:
+// Price is ALWAYS normalized to USD/token here because the
+// current market baseline is also USD/token.
+//
+// execution.entryPrice may represent SOL/token, so it must
+// NOT be used for the trajectory price comparison.
 //
 // ==========================================================
 
@@ -306,12 +310,21 @@ function getEntryBaseline(context) {
 
     return {
 
+        // ======================================================
+        // ENTRY PRICE — USD/TOKEN
+        // ======================================================
+
         price:
             Number(
-                execution.entryPrice ??
-                snapshot.entryPrice ??
+                execution.entryPriceUsd ??
+                snapshot.entryPriceUsd ??
+                context.entryPriceUsd ??
                 0
             ),
+
+        // ======================================================
+        // ENTRY MARKET CAP — USD
+        // ======================================================
 
         marketCap:
             Number(
@@ -319,6 +332,10 @@ function getEntryBaseline(context) {
                 metrics.marketCap ??
                 0
             ),
+
+        // ======================================================
+        // ENTRY LIQUIDITY — USD
+        // ======================================================
 
         liquidity:
             Number(
@@ -330,7 +347,6 @@ function getEntryBaseline(context) {
     };
 
 }
-
 
 // ==========================================================
 // Current Market Baseline
