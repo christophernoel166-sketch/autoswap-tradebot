@@ -1131,38 +1131,62 @@ async function extractActualExecution({
 
   }
 
-  // ===================================================
-  // ACTUAL SOL SPENT
-  // ===================================================
-
-  let actualSolSpentLamports =
-    0n;
-
-  if (
-    inputIsSol
-  ) {
-
-   // Wallet decrease = swap input + transaction fee.
-// Therefore, subtract the transaction fee from the
-// wallet decrease to recover the actual SOL used
-// by the swap itself.
+// ===================================================
+// ACTUAL SOL SPENT
+// ===================================================
+//
+// For a SOL -> TOKEN BUY, the exact swap input is the
+// Jupiter quote input amount.
 //
 // IMPORTANT:
-// Do NOT add feeLamports here.
-// The transaction fee is already included in
-// nativePre - nativePost.
+// Do NOT derive BUY swap input from:
+//
+//     nativePre - nativePost
+//
+// because the wallet's native SOL balance can also change
+// because of rent/account creation and other transaction
+// movements.
+//
+// quote.inAmount is the exact-input SOL amount supplied to
+// the Jupiter swap.
+//
+// Therefore:
+//
+//     actual SOL spent by swap = quote.inAmount
+//
+// This keeps the BUY execution price:
+//
+//     SOL used by swap / actual tokens received
+//
+// in the same unit as the live market price.
+//
 
-const netSwapSpent =
-  nativePre -
-  nativePost -
-  feeLamports;
+let actualSolSpentLamports =
+  0n;
 
-actualSolSpentLamports =
-  netSwapSpent > 0n
-    ? netSwapSpent
-    : 0n;
+if (
+  inputIsSol
+) {
+
+  const actualSwapInputLamports =
+    toBigInt(
+      quote?.inAmount
+    );
+
+  if (
+    actualSwapInputLamports <= 0n
+  ) {
+
+    throw new Error(
+      "BUY execution input is unavailable: Jupiter quote.inAmount is invalid."
+    );
 
   }
+
+  actualSolSpentLamports =
+    actualSwapInputLamports;
+
+}
 
   // ===================================================
   // ACTUAL SOL RECEIVED
