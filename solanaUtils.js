@@ -1142,21 +1142,25 @@ async function extractActualExecution({
     inputIsSol
   ) {
 
-    // Wallet decrease = swap input + transaction fee.
-    // Add fee back to obtain the gross SOL used by
-    // the swap itself.
+// Wallet decrease = swap input + transaction fee.
+// Therefore, subtract the transaction fee from the
+// wallet decrease to recover the actual SOL used
+// by the swap itself.
+//
+// IMPORTANT:
+// Do NOT add feeLamports here.
+// The transaction fee is already included in
+// nativePre - nativePost.
 
-    const grossSpent =
-      nativePre -
-      nativePost +
-      feeLamports;
+const netSwapSpent =
+  nativePre -
+  nativePost -
+  feeLamports;
 
-    actualSolSpentLamports =
-      grossSpent > 0n
-        ? grossSpent
-        : 0n;
-
-  }
+actualSolSpentLamports =
+  netSwapSpent > 0n
+    ? netSwapSpent
+    : 0n;
 
   // ===================================================
   // ACTUAL SOL RECEIVED
