@@ -626,141 +626,87 @@ const developerProfile =
 aiContext.analyses.developer =
   developerProfile;
 
-    // ================= RAW METRICS =================
-    const rawMetrics = {
-      ageMinutes:
-        market.metrics.ageMinutes,
+ // ================= METRICS =================
+const rawMetrics = {
+  ageMinutes: market.metrics.ageMinutes,
+  liquidityUsd: market.metrics.liquidityUsd,
+  liquidityLocked: liquidityLock.liquidityLocked,
+  liquidityLockSource: liquidityLock.liquidityLockSource,
+  liquidityLockReason: liquidityLock.liquidityLockReason,
+  marketCapUsd: market.metrics.marketCapUsd,
+  volume5mUsd: market.metrics.volume5mUsd,
+  buys5m: market.metrics.buys5m,
+  sells5m: market.metrics.sells5m,
+  boosted: market.metrics.boosted,
 
-      liquidityUsd:
-        market.metrics.liquidityUsd,
+      holderCount: null,
+      largestHolderPercent: holderData.largestHolderPercent,
+      top10HoldingPercent: holderData.top10HoldingPercent,
 
-      liquidityLocked:
-        liquidityLock.liquidityLocked,
+   
 
-      liquidityLockSource:
-        liquidityLock.liquidityLockSource,
+smartDegenCount: walletIntel.smartDegenCount,
+botDegenCount: walletIntel.botDegenCount,
+ratTraderCount: walletIntel.ratTraderCount,
+sniperWalletCount: walletIntel.sniperWalletCount,
 
-      liquidityLockReason:
-        liquidityLock.liquidityLockReason,
+profitableWalletCount: profitWalletData.profitableWalletCount,
+walletQualityScore: profitWalletData.walletQualityScore,
+profitWalletConfidence: profitWalletData.profitWalletConfidence,
 
-      marketCapUsd:
-        market.metrics.marketCapUsd,
+bundleScore: riskStructureData.bundleScore,
+bundledWalletCount: riskStructureData.bundledWalletCount,
+fundingClusterScore: riskStructureData.fundingClusterScore,
+largestFundingCluster: riskStructureData.largestFundingCluster,
 
-      volume5mUsd:
-        market.metrics.volume5mUsd,
+      momentumScore: momentumData.momentumScore,
+velocityBreakoutScore: momentumData.velocityBreakoutScore,
 
-      buys5m:
-        market.metrics.buys5m,
+      // market integrity / anti-fake-pump metrics
+      walletParticipationScore: integrityData.walletParticipationScore,
+      velocitySanityScore: integrityData.velocitySanityScore,
+      washTradingRiskScore: integrityData.washTradingRiskScore,
+      bundleSuspicionScore: integrityData.bundleSuspicionScore,
+      artificialVolumeFlag: integrityData.artificialVolumeFlag,
+      fakeMomentumFlag: integrityData.fakeMomentumFlag,
 
-      sells5m:
-        market.metrics.sells5m,
-
-      holderCount:
-        holderData.holderCount,
-
-      largestHolderPercent:
-        holderData.largestHolderPercent,
-
-      top10HoldingPercent:
-        holderData.top10HoldingPercent,
-
-      smartDegenCount:
-        walletIntel.smartDegenCount,
-
-      botDegenCount:
-        walletIntel.botDegenCount,
-
-      ratTraderCount:
-        walletIntel.ratTraderCount,
-
-      alphaCallerCount:
-        activityData.alphaCallerCount,
-
-      sniperWalletCount:
-        walletIntel.sniperWalletCount,
-
-      bundleScore:
-        integrityData.bundleScore,
-
-      bundledWalletCount:
-        integrityData.bundledWalletCount,
-
-      fundingClusterScore:
-        integrityData.fundingClusterScore,
-
-      largestFundingCluster:
-        integrityData.largestFundingCluster,
-
-      momentumScore:
-        momentumData.momentumScore,
-
-      velocityBreakoutScore:
-        momentumData.velocityBreakoutScore,
-
-      walletParticipationScore:
-        momentumData.walletParticipationScore,
-
-      velocitySanityScore:
-        momentumData.velocitySanityScore,
-
-      washTradingRiskScore:
-        integrityData.washTradingRiskScore,
-
-      bundleSuspicionScore:
-        integrityData.bundleSuspicionScore,
-
-      artificialVolumeFlag:
-        integrityData.artificialVolumeFlag,
-
-      fakeMomentumFlag:
-        integrityData.fakeMomentumFlag,
-
-      devDumpRiskScore:
-        rugRiskData.devDumpRiskScore,
-
-      liquidityPullRiskScore:
-        rugRiskData.liquidityPullRiskScore,
-
-      insiderRiskScore:
-        rugRiskData.insiderRiskScore,
-
-      rugRiskScore:
-        rugRiskData.rugRiskScore,
-
-      boosted:
-        market.token?.boosted || false,
+      // rug risk metrics
+      devDumpRiskScore: rugRiskData.devDumpRiskScore,
+      liquidityPullRiskScore: rugRiskData.liquidityPullRiskScore,
+      insiderRiskScore: rugRiskData.insiderRiskScore,
+      rugRiskScore: rugRiskData.rugRiskScore,
     };
 
 
-    // ================= FORMAT SCAN RESPONSE =================
-    const response =
-      formatScanResponse({
-        token: market.token,
+    const response = formatScanResponse({
+      token: market.token,
+      rawMetrics,
+      options: { scannedAt: new Date() },
+    });
 
-        rawMetrics,
-
-        options: {
-          scannedAt: new Date(),
-        },
-      });
-
-
-    // ================= WARNINGS =================
     const mergedWarnings = [
-      market.warning,
-      holderData.holderWarning,
-      enrichedSocialData.socialWarning,
-      activityData.activityWarning,
-      integrityData.integrityWarning,
-      walletIntel.walletWarning,
-      rugRiskData.rugWarning,
-      riskStructureData.riskWarning,
-      profitWalletData.profitWalletWarning,
-    ].filter(Boolean);
+      ...(response.evaluation?.warnings || []),
+      ...(holderData.holderWarning ? [holderData.holderWarning] : []),
+      ...(enrichedSocialData.socialWarning
+        ? [enrichedSocialData.socialWarning]
+        : []),
+      ...(activityData.activityWarning ? [activityData.activityWarning] : []),
+      ...(integrityData.integrityWarning ? [integrityData.integrityWarning] : []),
+      ...(rugRiskData.rugWarning ? [rugRiskData.rugWarning] : []),
+...(walletIntel.walletIntelligenceWarning
+  ? [walletIntel.walletIntelligenceWarning]
+  : []),
+...(momentumData.momentumWarning ? [momentumData.momentumWarning] : []),
+...(riskStructureData.riskStructureWarning
+  ? [riskStructureData.riskStructureWarning]
+  : []),
+...(profitWalletData.profitWalletWarning
+  ? [profitWalletData.profitWalletWarning]
+  : []),
 
-    response.warnings =
-      mergedWarnings;
-
+    ]
+      .filter(Boolean)
+      .filter((warning, index, arr) => arr.indexOf(warning) === index);
 
     // ================= CHART ENTRY =================
 let chartEntry = null;
