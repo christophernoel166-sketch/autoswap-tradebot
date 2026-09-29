@@ -71,39 +71,45 @@ async function discoverHotNewPairsOnce() {
       .filter((t) => Number(t.txns5m || 0) >= 50)
       .slice(0, 50);
 
-    await Promise.all(
-      hotPairs.map((token) =>
-        DiscoveredToken.findOneAndUpdate(
-          { mintAddress: token.mintAddress },
-          {
-            $set: {
-              chainId: token.chainId,
-              pairAddress: token.pairAddress,
-              dexId: token.dexId,
-              pairCreatedAt: token.pairCreatedAt,
-              name: token.name,
-              symbol: token.symbol,
-              icon: token.icon,
-              url: token.url,
-              links: token.links,
-              ageMinutes: token.ageMinutes,
-              liquidityUsd: token.liquidityUsd,
-              marketCapUsd: token.marketCapUsd,
-              volume5mUsd: token.volume5mUsd,
-              buys5m: token.buys5m,
-              sells5m: token.sells5m,
-              boosted: token.boosted,
-              lastSeenAt: new Date(),
-            },
-          },
-          {
-            upsert: true,
-            new: true,
-            setDefaultsOnInsert: true,
-          }
-        )
-      )
-    );
+await Promise.all(
+  hotPairs.map((token) =>
+    DiscoveredToken.findOneAndUpdate(
+      { mintAddress: token.mintAddress },
+      {
+        $set: {
+          chainId: token.chainId,
+          pairAddress: token.pairAddress,
+          dexId: token.dexId,
+          pairCreatedAt: token.pairCreatedAt,
+          name: token.name,
+          symbol: token.symbol,
+          icon: token.icon,
+          url: token.url,
+          links: token.links,
+          ageMinutes: token.ageMinutes,
+          liquidityUsd: token.liquidityUsd,
+          marketCapUsd: token.marketCapUsd,
+          volume5mUsd: token.volume5mUsd,
+          buys5m: token.buys5m,
+          sells5m: token.sells5m,
+          boosted: token.boosted,
+          lastSeenAt: new Date(),
+        },
+
+        $setOnInsert: {
+          autoScanStatus: "PENDING",
+          lastAutoScanAt: null,
+          autoScanRecommendation: null,
+        },
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+      }
+    )
+  )
+);
 
     if (hotPairs.length > 0) {
       console.log(`🔥 Hot new pairs discovered: ${hotPairs.length}`);
