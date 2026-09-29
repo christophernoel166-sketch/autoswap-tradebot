@@ -72,7 +72,35 @@ const discoveredTokenSchema = new mongoose.Schema(
       default: 0,
     },
 
-    boosted: Boolean,
+        boosted: Boolean,
+
+    // =====================================================
+    // AUTOMATIC SCAN STATE
+    // =====================================================
+
+    autoScanStatus: {
+      type: String,
+      enum: [
+        "PENDING",
+        "SCANNING",
+        "SCANNED",
+        "FAILED",
+      ],
+      default: "PENDING",
+      index: true,
+    },
+
+    lastAutoScanAt: {
+      type: Date,
+      default: null,
+    },
+
+    autoScanRecommendation: {
+      type: String,
+      default: null,
+    },
+
+ 
 
     lastSeenAt: {
       type: Date,

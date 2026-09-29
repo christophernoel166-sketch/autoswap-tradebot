@@ -1,3 +1,4 @@
+//DiscoverNewHotPairs.js
 import axios from "axios";
 import DiscoveredToken from "../api/models/DiscoveredToken.js";
 

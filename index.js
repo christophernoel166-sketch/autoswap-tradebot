@@ -4,6 +4,9 @@ import pino from "pino";
 import { createApiServer } from "./src/api/server.js";
 import { processTokenOutcomes } from "./src/services/tokenOutcomeTracker.js";
 import { runPatternStatsRebuild } from "./src/services/patternStatsScheduler.js";
+import {
+  startAutomaticScanWorker,
+} from "./src/services/automaticScanWorker.js";
 
 dotenv.config();
 
@@ -75,6 +78,11 @@ async function main() {
     // Start HTTP server (Railway expects this)
     listen();
     log.info(`🌐 API Server listening on port ${PORT}`);
+// --------------------------------------------------
+// AUTOMATIC TOKEN SCAN WORKER
+// --------------------------------------------------
+
+startAutomaticScanWorker();
 
 // --------------------------------------------------
 // TOKEN OUTCOME TRACKER
