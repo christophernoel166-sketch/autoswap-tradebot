@@ -417,60 +417,55 @@ export async function scanToken({
     aiContext.analyses.activity =
       activityData;
 
-    // ================= HOLDERS =================
-    let holderData = {
-      largestHolderPercent: null,
-      top10HoldingPercent: null,
-      topHolders: [],
-      excludedAccounts: [],
-      holderWarning: null,
-    };
+      // ================= HOLDERS =================
+let holderData = {
+  largestHolderPercent: null,
+  top10HoldingPercent: null,
+  topHolders: [],
+  excludedAccounts: [],
+  holderWarning: null,
+};
 
-    try {
-      console.log(
-        "🔍 HOLDER SCAN REQUEST",
-        tokenMint
-      );
+try {
+console.log(
+  "🔍 HOLDER SCAN REQUEST",
+  tokenMint
+);
+ holderData = await fetchTokenHolderData(
+  tokenMint.trim(),
+  {
+    excludeAddresses:
+      getExcludedHolderAddressesForMint(tokenMint),
 
-      holderData = await fetchTokenHolderData(
-        tokenMint.trim(),
-        {
-          excludeAddresses:
-            getExcludedHolderAddressesForMint(tokenMint),
+    marketContext: {
+      dexId:
+        market?.token?.dexId ||
+        market?.rawPair?.dexId ||
+        "",
 
-          marketContext: {
-            dexId:
-              market?.token?.dexId ||
-              market?.rawPair?.dexId ||
-              "",
+      labels:
+        market?.rawPair?.labels || [],
+    },
 
-            labels:
-              market?.rawPair?.labels || [],
-          },
+    market,
+  },
+  aiContext
+);
 
-          market,
-        },
-        aiContext
-      );
+aiContext.analyses.holders =
+  holderData;
 
-      aiContext.analyses.holders =
-        holderData;
+scanStage(
+    cleanWalletAddress,
+    "HOLDER_ANALYSIS",
+    20
+);
 
-      scanStage(
-        cleanWalletAddress,
-        "HOLDER_ANALYSIS",
-        20
-      );
+} catch (err) {
+  console.warn("Holder scan failed:", err?.message);
+  holderData.holderWarning = "Holder scan temporarily unavailable";
+}
 
-    } catch (err) {
-      console.warn(
-        "Holder scan failed:",
-        err?.message
-      );
-
-      holderData.holderWarning =
-        "Holder scan temporarily unavailable";
-    }
 
     // ================= INTEGRITY =================
     const integrityData =
@@ -1659,6 +1654,8 @@ addCanonicalEvidence("holders", {
   invalidationCriteria:
     holderEvidence.invalidationCriteria || [],
 });
+
+
 
 
 // =====================================================
