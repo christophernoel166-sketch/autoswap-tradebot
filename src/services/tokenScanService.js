@@ -766,35 +766,26 @@ aiContext.analyses.developer =
     response.warnings =
       mergedWarnings;
 
-// ================= CHART ENTRY =================
+
+    // ================= CHART ENTRY =================
 let chartEntry = null;
 
 try {
-  chartEntry =
-    await analyzeChartEntry({
-      tokenMint: cleanTokenMint,
-      market,
-      context: aiContext,
-    });
-
-} catch (err) {
-  console.warn(
-    "Chart analysis failed:",
-    err?.message
+  chartEntry = await analyzeChartEntry(
+    tokenMint.trim()
   );
+} catch (err) {
+  console.warn("Chart analysis failed:", err?.message);
 }
-
 aiContext.analyses.chart =
   chartEntry;
 
 scanStage(
-  cleanWalletAddress,
-  "CHART_ANALYSIS",
-  75
+    cleanWalletAddress,
+    "CHART_ANALYSIS",
+    75
 );
 
-
-// ================= FORECAST =================
 let forecast = null;
 
 function getForecastVerdict(score) {
@@ -957,10 +948,11 @@ aiContext.analyses.forecast =
   forecast;
 
 scanStage(
-  cleanWalletAddress,
-  "FORECAST",
-  85
+    cleanWalletAddress,
+    "FORECAST",
+    85
 );
+
 
 
 // =====================================================
