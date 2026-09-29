@@ -92,8 +92,7 @@ import { fetchVolumeAnalysisData }
 import { fetchLiquidityAnalysisData }
   from "../scanner/fetchLiquidityAnalysisData.js";
 
-import TokenOutcome
-  from "../models/TokenOutcome.js";
+import TokenOutcome from "../../models/TokenOutcome.js";
 
 import { scoreSignal }
   from "./signalScoringService.js";
