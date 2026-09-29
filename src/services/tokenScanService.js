@@ -467,164 +467,158 @@ scanStage(
 }
 
 
-    // ================= INTEGRITY =================
+     // ================= INTEGRITY =================
     const integrityData =
-      await fetchMarketIntegrityData({
-        tokenMint: tokenMint.trim(),
-        market,
-        context: {
-          ...aiContext,
-          recentTrades: [],
-        },
-      });
+await fetchMarketIntegrityData({
+  tokenMint: tokenMint.trim(),
+  market,
+  context: {
+    ...aiContext,
+    recentTrades: [],
+  },
+});
 
-    aiContext.analyses.integrity =
-      integrityData;
+aiContext.analyses.integrity =
+  integrityData;
 
-    scanStage(
-      cleanWalletAddress,
-      "MARKET_INTEGRITY",
-      35
-    );
+scanStage(
+    cleanWalletAddress,
+    "MARKET_INTEGRITY",
+    35
+);
 
-    // ================= WALLET INTELLIGENCE =================
-    const walletIntel =
-      await fetchWalletIntelligenceData({
-        tokenMint: tokenMint.trim(),
-        holderData,
-        market,
-        context: aiContext,
-      });
-
-    aiContext.analyses.wallets =
-      walletIntel;
-
-    scanStage(
-      cleanWalletAddress,
-      "WALLET_INTELLIGENCE",
-      45
-    );
-
-    // ================= RUG RISK =================
-    const rugRiskData =
-      await fetchRugRiskData({
-        tokenMint: tokenMint.trim(),
-        market,
-        holderData,
-        context: aiContext,
-      });
-
-    aiContext.analyses.rugRisk =
-      rugRiskData;
-
-    scanStage(
-      cleanWalletAddress,
-      "RUG_RISK",
-      55
-    );
-
-// ================= MOMENTUM =================
-const momentumData = await fetchMomentumData({
-  tokenMint: cleanTokenMint,
+// ================= WALLET INTELLIGENCE =================
+const walletIntel = await fetchWalletIntelligenceData({
+  tokenMint: tokenMint.trim(),
+  holderData,
   market,
   context: aiContext,
 });
+aiContext.analyses.wallets =
+  walletIntel;
 
+scanStage(
+    cleanWalletAddress,
+    "WALLET_INTELLIGENCE",
+    45
+);
+
+    // ================= RUG RISK =================
+    const rugRiskData = await fetchRugRiskData({
+  tokenMint: tokenMint.trim(),
+  market,
+  holderData,
+  context: aiContext,
+});
+aiContext.analyses.rugRisk =
+  rugRiskData;
+
+scanStage(
+    cleanWalletAddress,
+    "RUG_RISK",
+    55
+);
+
+const momentumData = await fetchMomentumData({
+  tokenMint: tokenMint.trim(),
+  market,
+  context: aiContext,
+});
 aiContext.analyses.momentum =
   momentumData;
 
 scanStage(
-  cleanWalletAddress,
-  "MOMENTUM",
-  65
+    cleanWalletAddress,
+    "MOMENTUM",
+    65
 );
 
-// ================= VOLUME ANALYSIS =================
+// VOLUME ANALYSIS
 const discoveredToken =
   await DiscoveredToken.findOne({
-    mintAddress: cleanTokenMint,
+    mintAddress: tokenMint.trim(),
   }).lean();
 
 const volumeAnalysis =
-  await fetchVolumeAnalysisData({
-    volume5mUsd:
-      market.metrics.volume5mUsd,
+await fetchVolumeAnalysisData({
+  volume5mUsd:
+    market.metrics.volume5mUsd,
 
-    buys5m:
-      market.metrics.buys5m,
+  buys5m:
+    market.metrics.buys5m,
 
-    sells5m:
-      market.metrics.sells5m,
+  sells5m:
+    market.metrics.sells5m,
 
-    previousVolume5mUsd:
-      discoveredToken?.previousVolume5mUsd || 0,
+  previousVolume5mUsd:
+    discoveredToken
+      ?.previousVolume5mUsd || 0,
 
-    previousBuys5m:
-      discoveredToken?.previousBuys5m || 0,
+  previousBuys5m:
+    discoveredToken
+      ?.previousBuys5m || 0,
 
-    previousSells5m:
-      discoveredToken?.previousSells5m || 0,
-
-    context: aiContext,
-  });
+  previousSells5m:
+    discoveredToken
+      ?.previousSells5m || 0,
+ context: aiContext
+});
 
 aiContext.analyses.volume =
-  volumeAnalysis;
+    volumeAnalysis;
 
-
-// ================= LIQUIDITY ANALYSIS =================
 const liquidityAnalysis =
-  await fetchLiquidityAnalysisData({
-    liquidityUsd:
-      market.metrics.liquidityUsd,
+await fetchLiquidityAnalysisData({
+  liquidityUsd:
+    market.metrics.liquidityUsd,
 
-    previousLiquidityUsd:
-      discoveredToken?.previousLiquidityUsd || 0,
-
-    context: aiContext,
-  });
-
+  previousLiquidityUsd:
+    discoveredToken
+      ?.previousLiquidityUsd || 0,
+ context: aiContext
+});
+// Store full analysis
 aiContext.analyses.liquidity =
   liquidityAnalysis;
 
-// ================= RISK STRUCTURE =================
-const riskStructureData =
-  await fetchRiskStructureData({
-    tokenMint: cleanTokenMint,
-    market,
-    holderData,
-    context: aiContext,
-  });
-
+const riskStructureData = await fetchRiskStructureData({
+  tokenMint: tokenMint.trim(),
+  market,
+  holderData,
+  context: aiContext,
+});
 aiContext.analyses.riskStructure =
   riskStructureData;
 
-// ================= PROFIT WALLET ANALYSIS =================
+
 const profitWalletData =
-  await fetchProfitWalletData({
-    tokenMint: cleanTokenMint,
-    holderData,
-    walletIntel,
-    market,
-    context: aiContext,
-  });
+await fetchProfitWalletData({
+  tokenMint: tokenMint.trim(),
+  holderData,
+  walletIntel,
+  market,
+  context: aiContext,
+});
 
 aiContext.analyses.profitWallets =
   profitWalletData;
 
-// ================= DEVELOPER INTELLIGENCE =================
+// =====================================================
+// DEVELOPER INTELLIGENCE
+// =====================================================
+
 const developerWallet =
-  liquidityLock?.developerWallet || null;
+    liquidityLock.developerWallet || null;
 
 const developerProfile =
-  developerWallet
-    ? await fetchDeveloperProfile(
-        developerWallet
-      )
-    : null;
+    developerWallet
+        ? await fetchDeveloperProfile(
+              developerWallet
+          )
+        : null;
 
 aiContext.analyses.developer =
-  developerProfile;
+    developerProfile;
 
  // ================= METRICS =================
 const rawMetrics = {
