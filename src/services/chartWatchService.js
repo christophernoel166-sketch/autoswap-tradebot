@@ -5,33 +5,57 @@ import ChartWatch from "../../models/ChartWatch.js";
 // =====================================================
 
 export async function createChartWatch({
-  walletAddress,
+  walletAddress = null,
+  watchType = "USER",
   token,
   chartEntry,
   forecast,
   autoTrade = false,
 }) {
-  if (!walletAddress) {
-    throw new Error("walletAddress is required");
+
+  // =====================================================
+  // WATCH TYPE VALIDATION
+  // =====================================================
+
+  if (!["USER", "SYSTEM"].includes(watchType)) {
+    throw new Error(
+      `Invalid chart watch type: ${watchType}`
+    );
+  }
+
+  // USER watches must belong to a wallet.
+  if (watchType === "USER" && !walletAddress) {
+    throw new Error(
+      "walletAddress is required for USER chart watches"
+    );
+  }
+
+  // SYSTEM watches are global and must not use a wallet.
+  if (watchType === "SYSTEM") {
+    walletAddress = null;
+    autoTrade = false;
   }
 
   if (!token?.mintAddress) {
     throw new Error("token.mintAddress is required");
   }
-
-  if (!chartEntry?.action) {
-    throw new Error("chartEntry.action is required");
-  }
-
   // ===================================================
   // CHECK FOR EXISTING ACTIVE WATCH
   // ===================================================
 
-  const existing = await ChartWatch.findOne({
-    walletAddress,
-    mintAddress: token.mintAddress,
-    status: "ACTIVE",
-  });
+  const existingQuery = {
+  watchType,
+  mintAddress: token.mintAddress,
+  status: "ACTIVE",
+};
+
+if (watchType === "USER") {
+  existingQuery.walletAddress = walletAddress;
+}
+
+const existing = await ChartWatch.findOne(
+  existingQuery
+);
 
   if (existing) {
     return existing;
@@ -126,11 +150,13 @@ export async function createChartWatch({
     name:
       token.name ?? null,
 
-    // =================================================
-    // USER
-    // =================================================
+   // =================================================
+// WATCH OWNERSHIP
+// =================================================
 
-    walletAddress,
+watchType,
+
+walletAddress,
 
     // =================================================
     // SETUP
@@ -292,6 +318,22 @@ export async function refreshAnalysis(
 
   watch.currentAction =
     chartEntry.action;
+
+// ===================================================
+// SETUP TYPE
+// ===================================================
+
+if (
+  chartEntry.action === "wait_breakout" ||
+  chartEntry.setupType === "breakout_long"
+) {
+  watch.setupType = "BREAKOUT_SETUP";
+} else if (
+  chartEntry.action === "wait_pullback" ||
+  chartEntry.setupType === "pullback_long"
+) {
+  watch.setupType = "PULLBACK_SETUP";
+}
 
   // ===================================================
   // TREND

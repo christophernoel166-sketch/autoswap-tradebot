@@ -18,6 +18,7 @@
 
 import DiscoveredToken from "../api/models/DiscoveredToken.js";
 import { scanToken } from "./tokenScanService.js";
+import { createChartWatch } from "./chartWatchService.js";
 
 const AUTO_SCAN_INTERVAL_MS = 60 * 1000;
 const AUTO_SCAN_BATCH_SIZE = 5;
@@ -119,11 +120,100 @@ async function runAutomaticScanOnce() {
         // ----------------------------------------------------
 
         const recommendation =
-          result?.ai?.recommendation?.recommendation ??
-          result?.ai?.recommendation?.action ??
-          result?.ai?.recommendation?.decision ??
-          result?.ai?.recommendation ??
-          null;
+  result?.ai?.recommendation?.recommendation ??
+  result?.ai?.recommendation?.action ??
+  result?.ai?.recommendation?.decision ??
+  result?.ai?.recommendation ??
+  null;
+
+const confidence =
+  Number(
+    result?.ai?.confidence ??
+    result?.ai?.recommendation?.confidence ??
+    0
+  );
+
+const chartEntry =
+  result?.ai?.analyses?.chart ??
+  result?.ai?.chartEntry ??
+  null;
+
+
+// ----------------------------------------------------
+// AUTOMATIC BUY → SYSTEM CHART WATCH
+// ----------------------------------------------------
+
+const normalizedRecommendation =
+  typeof recommendation === "string"
+    ? recommendation.trim().toUpperCase()
+    : null;
+
+if (
+  normalizedRecommendation === "BUY" &&
+  chartEntry
+) {
+  try {
+    console.log(
+      `📈 Automatic BUY detected — creating SYSTEM chart watch: ${
+        token.symbol || mintAddress
+      }`
+    );
+
+    const systemChartWatch =
+      await createChartWatch({
+        walletAddress: null,
+        watchType: "SYSTEM",
+
+        token: {
+          mintAddress,
+          pairAddress:
+            token.pairAddress ?? null,
+          symbol:
+            token.symbol ?? null,
+          name:
+            token.name ?? null,
+        },
+
+        chartEntry,
+
+        forecast:
+          result?.ai?.analyses?.forecast ??
+          result?.ai?.forecast ??
+          null,
+
+        autoTrade: false,
+      });
+
+    console.log(
+      `✅ SYSTEM chart watch created: ${
+        token.symbol || mintAddress
+      }`,
+      {
+        watchId:
+          systemChartWatch?._id ??
+          systemChartWatch?.id ??
+          null,
+
+        mintAddress,
+
+        watchType:
+          systemChartWatch?.watchType ??
+          "SYSTEM",
+      }
+    );
+
+  } catch (chartWatchError) {
+
+    console.error(
+      `❌ Failed to create SYSTEM chart watch: ${
+        token.symbol || mintAddress
+      }`,
+      chartWatchError?.message ||
+        chartWatchError
+    );
+
+  }
+}
 
 
         // ----------------------------------------------------
@@ -136,24 +226,39 @@ async function runAutomaticScanOnce() {
           },
           {
             $set: {
-              autoScanStatus: "SCANNED",
-              lastAutoScanAt: new Date(),
-              autoScanRecommendation:
-                typeof recommendation === "string"
-                  ? recommendation
-                  : null,
-            },
+  autoScanStatus: "SCANNED",
+  lastAutoScanAt: new Date(),
+
+  autoScanRecommendation:
+    typeof recommendation === "string"
+      ? recommendation
+      : null,
+
+  autoScanConfidence:
+    Number.isFinite(confidence)
+      ? confidence
+      : null,
+
+  autoScanChartEntry:
+    chartEntry || null,
+},
           }
         );
 
         console.log(
-          `✅ Automatic scan completed: ${
-            token.symbol || mintAddress
-          }`,
-          {
-            recommendation,
-          }
-        );
+  `✅ Automatic scan completed: ${
+    token.symbol || mintAddress
+  }`,
+  {
+    recommendation,
+    confidence,
+    chartEntryOk: Boolean(chartEntry?.ok),
+    chartAction:
+      chartEntry?.action ??
+      chartEntry?.signal ??
+      null,
+  }
+);
 
       } catch (err) {
 

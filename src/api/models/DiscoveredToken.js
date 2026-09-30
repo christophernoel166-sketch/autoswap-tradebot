@@ -100,7 +100,15 @@ const discoveredTokenSchema = new mongoose.Schema(
       default: null,
     },
 
- 
+    autoScanConfidence: {
+      type: Number,
+      default: null,
+    },
+
+    autoScanChartEntry: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
 
     lastSeenAt: {
       type: Date,

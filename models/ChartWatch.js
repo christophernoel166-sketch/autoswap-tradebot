@@ -33,11 +33,21 @@ const ChartWatchSchema = new mongoose.Schema(
     // =====================================================
 
     walletAddress: {
-      type: String,
-      required: true,
-      trim: true,
-      index: true,
-    },
+  type: String,
+  default: null,
+  trim: true,
+  index: true,
+},
+
+watchType: {
+  type: String,
+  enum: [
+    "USER",
+    "SYSTEM",
+  ],
+  default: "USER",
+  index: true,
+},
 
     // =====================================================
     // CHART SETUP
