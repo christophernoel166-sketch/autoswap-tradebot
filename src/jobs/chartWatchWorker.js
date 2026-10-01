@@ -1,3 +1,5 @@
+// chartWatchWorker.js
+
 import ChartWatch from "../../models/ChartWatch.js";
 
 import {
@@ -27,6 +29,7 @@ const LOG = console;
 // =====================================================
 
 const CHECK_INTERVAL_MS = 30000;
+const AVOID_RECHECK_INTERVAL_MS = 4 * 60 * 1000;
 
 let workerRunning = false;
 let cycleRunning = false;
@@ -178,10 +181,32 @@ async function processCycle() {
     // LOAD ACTIVE WATCHES
     // =================================================
 
-    const watches =
-      await ChartWatch.find({
-        status: "ACTIVE",
-      }).lean(false);
+    const now = new Date();
+
+const watches =
+  await ChartWatch.find({
+    status: "ACTIVE",
+    $or: [
+      {
+        currentAction: {
+          $ne: "avoid",
+        },
+      },
+      {
+        currentAction: "avoid",
+        $or: [
+          {
+            nextRecheckAt: null,
+          },
+          {
+            nextRecheckAt: {
+              $lte: now,
+            },
+          },
+        ],
+      },
+    ],
+  }).lean(false);
 
     LOG.info(
       `📊 Monitoring ${watches.length} active chart watches`
@@ -297,10 +322,67 @@ async function processCycle() {
         try {
 
           const result =
-            await monitorExistingAnalysis(
-              watch,
-              latestAnalysis
-            );
+  await monitorExistingAnalysis(
+    watch,
+    latestAnalysis
+  );
+
+// =================================================
+// AVOID → SCHEDULE FUTURE RECHECK
+// =================================================
+
+if (
+  result?.currentAction === "avoid"
+) {
+  const nextRecheckAt =
+    new Date(
+      Date.now() +
+        AVOID_RECHECK_INTERVAL_MS
+    );
+
+  await ChartWatch.updateOne(
+    {
+      _id: watch._id,
+    },
+    {
+      $set: {
+        nextRecheckAt,
+      },
+    }
+  );
+
+  LOG.info(
+    `😴 Chart watch sleeping after AVOID: ${
+      watch.symbol || watch.mintAddress
+    }`,
+    {
+      watchId:
+        watch._id?.toString?.() ||
+        watch._id,
+
+      nextRecheckAt,
+    }
+  );
+}
+
+// =================================================
+// ACTIONABLE AGAIN → RESUME NORMAL MONITORING
+// =================================================
+
+if (
+  result?.currentAction !== "avoid"
+) {
+  await ChartWatch.updateOne(
+    {
+      _id: watch._id,
+    },
+    {
+      $set: {
+        nextRecheckAt: null,
+      },
+    }
+  );
+}
 
           // =========================================
           // SEND LIVE UPDATE EVERY CYCLE

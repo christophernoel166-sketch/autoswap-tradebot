@@ -1,3 +1,5 @@
+// chartMonitorService.js
+
 import ChartWatch from "../../models/ChartWatch.js";
 import { analyzeChartEntry } from "./chartEntryService.js";
 
@@ -503,28 +505,24 @@ export async function monitorExistingAnalysis(
         : "Chart analysis currently confirms an entry opportunity.";
   }
 
-  // ===================================================
-  // INVALIDATED
-  //
-  // Only invalidate when the setup changes into avoid.
-  // ===================================================
+ // ===================================================
+// AVOID
+//
+// AVOID is a temporary chart state.
+// The watch remains ACTIVE so the chart worker
+// can sleep and recheck it later.
+//
+// The chartWatchWorker controls the recheck timing
+// through nextRecheckAt.
+// ===================================================
 
-  else if (
-    changed &&
-    currentAction === "avoid"
-  ) {
-    watch.status =
-      "INVALIDATED";
-
-    watch.finalResult =
-      "INVALIDATED";
-
-    watch.completedAt =
-      new Date();
-
-    watch.lastReason =
-      "Chart analysis invalidated the setup.";
-  }
+else if (
+  changed &&
+  currentAction === "avoid"
+) {
+  watch.lastReason =
+    "Chart conditions are currently unsuitable. Watch will be rechecked later.";
+}
 
   // ===================================================
   // SAVE WATCH

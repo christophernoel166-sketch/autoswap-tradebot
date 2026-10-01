@@ -181,10 +181,17 @@ watchType: {
       default: 0,
     },
 
-    lastCheckedAt: {
-      type: Date,
-      default: null,
-    },
+   lastCheckedAt: {
+  type: Date,
+  default: null,
+},
+
+nextRecheckAt: {
+  type: Date,
+  default: null,
+  index: true,
+},
+
 
     startedMonitoringAt: {
       type: Date,
