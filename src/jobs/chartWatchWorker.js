@@ -183,6 +183,57 @@ async function processCycle() {
 
     const now = new Date();
 
+
+
+// ===================================================
+// AUTO CHART DIAGNOSTIC — AVOID WATCH RECHECK DUE
+// ===================================================
+
+const dueAvoidWatches =
+  await ChartWatch.find({
+    status: "ACTIVE",
+    currentAction: "avoid",
+    nextRecheckAt: {
+      $lte: now,
+    },
+  }).lean(false);
+
+for (const watch of dueAvoidWatches) {
+  LOG.info(
+    `⏰ AUTO CHART DIAGNOSTIC — AVOID WATCH RECHECK DUE`,
+    {
+      watchId:
+        watch._id?.toString?.() ||
+        watch._id,
+
+      symbol:
+        watch.symbol ||
+        watch.mintAddress,
+
+      mintAddress:
+        watch.mintAddress,
+
+      watchType:
+        watch.watchType,
+
+      previousAction:
+        watch.currentAction,
+
+      scheduledFor:
+        watch.nextRecheckAt
+          ? new Date(
+              watch.nextRecheckAt
+            ).toISOString()
+          : null,
+
+      recheckAt:
+        now.toISOString(),
+    }
+  );
+}
+
+
+
 const watches =
   await ChartWatch.find({
     status: "ACTIVE",
@@ -207,6 +258,58 @@ const watches =
       },
     ],
   }).lean(false);
+
+
+
+// ===================================================
+// AUTO CHART DIAGNOSTIC — ACTIVE SYSTEM WATCHES
+// ===================================================
+
+const systemWatches =
+  watches.filter(
+    (watch) =>
+      watch.watchType === "SYSTEM"
+  );
+
+if (systemWatches.length) {
+  LOG.info(
+    `🧪 AUTO CHART DIAGNOSTIC — SYSTEM WATCHES READY`,
+    {
+      count:
+        systemWatches.length,
+
+      watches:
+        systemWatches.map((watch) => ({
+          watchId:
+            watch._id?.toString?.() ||
+            watch._id,
+
+          symbol:
+            watch.symbol ||
+            watch.mintAddress,
+
+          mintAddress:
+            watch.mintAddress,
+
+          status:
+            watch.status,
+
+          currentAction:
+            watch.currentAction,
+
+          nextRecheckAt:
+            watch.nextRecheckAt
+              ? new Date(
+                  watch.nextRecheckAt
+                ).toISOString()
+              : null,
+        })),
+    }
+  );
+}
+
+
+
 
     LOG.info(
       `📊 Monitoring ${watches.length} active chart watches`
@@ -285,6 +388,58 @@ const watches =
             tokenMint
           );
 
+
+
+// ===================================================
+// AUTO CHART DIAGNOSTIC — FRESH ANALYSIS
+// ===================================================
+
+const systemTokenWatches =
+  tokenWatches.filter(
+    (watch) =>
+      watch.watchType === "SYSTEM"
+  );
+
+if (systemTokenWatches.length) {
+  LOG.info(
+    `🧪 AUTO CHART DIAGNOSTIC — FRESH ANALYSIS`,
+    {
+      token:
+        systemTokenWatches[0]?.symbol ||
+        tokenMint,
+
+      mintAddress:
+        tokenMint,
+
+      watchCount:
+        systemTokenWatches.length,
+
+      chartOk:
+        Boolean(
+          latestAnalysis?.ok
+        ),
+
+      action:
+        latestAnalysis?.action ??
+        null,
+
+      setupType:
+        latestAnalysis?.setupType ??
+        null,
+
+      confidence:
+        latestAnalysis?.confidence ??
+        null,
+
+      timestamp:
+        new Date().toISOString(),
+    }
+  );
+}
+
+
+
+
       } catch (err) {
 
         LOG.error(
@@ -351,19 +506,48 @@ if (
     }
   );
 
-  LOG.info(
-    `😴 Chart watch sleeping after AVOID: ${
-      watch.symbol || watch.mintAddress
-    }`,
-    {
-      watchId:
-        watch._id?.toString?.() ||
-        watch._id,
+LOG.info(
+  `😴 AUTO CHART DIAGNOSTIC — SYSTEM WATCH SLEEPING AFTER AVOID`,
+  {
+    watchId:
+      watch._id?.toString?.() ||
+      watch._id,
 
-      nextRecheckAt,
-    }
-  );
-}
+    symbol:
+      watch.symbol ||
+      watch.mintAddress,
+
+    mintAddress:
+      watch.mintAddress,
+
+    watchType:
+      watch.watchType,
+
+    previousAction:
+      result.previousAction ??
+      null,
+
+    currentAction:
+      result.currentAction,
+
+    nextRecheckAt:
+      nextRecheckAt.toISOString(),
+
+    sleepMinutes:
+      AVOID_RECHECK_INTERVAL_MS /
+      60000,
+
+    timestamp:
+      new Date().toISOString(),
+  }
+);
+
+
+
+
+
+
+
 
 // =================================================
 // ACTIONABLE AGAIN → RESUME NORMAL MONITORING

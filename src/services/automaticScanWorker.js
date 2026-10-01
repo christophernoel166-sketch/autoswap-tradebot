@@ -159,6 +159,37 @@ if (
       }`
     );
 
+
+console.log(
+  `🔎 AUTO CHART DIAGNOSTIC — BUY → SYSTEM WATCH`,
+  {
+    symbol:
+      token.symbol ||
+      mintAddress,
+
+    mintAddress,
+
+    recommendation:
+      normalizedRecommendation,
+
+    chartAction:
+      chartEntry?.action ??
+      chartEntry?.signal ??
+      null,
+
+    chartOk:
+      Boolean(chartEntry?.ok),
+
+    chartConfidence:
+      chartEntry?.confidence ?? null,
+
+    timestamp:
+      new Date().toISOString(),
+  }
+);
+
+
+
     const systemChartWatch =
       await createChartWatch({
         walletAddress: null,
@@ -183,6 +214,42 @@ if (
 
         autoTrade: false,
       });
+
+
+
+console.log(
+  `🧪 AUTO CHART DIAGNOSTIC — SYSTEM WATCH CREATED`,
+  {
+    watchId:
+      systemChartWatch?._id ??
+      systemChartWatch?.id ??
+      null,
+
+    symbol:
+      token.symbol ||
+      mintAddress,
+
+    mintAddress,
+
+    watchType:
+      systemChartWatch?.watchType ??
+      "SYSTEM",
+
+    status:
+      systemChartWatch?.status ??
+      "ACTIVE",
+
+    currentAction:
+      systemChartWatch?.currentAction ??
+      chartEntry?.action ??
+      null,
+
+    timestamp:
+      new Date().toISOString(),
+  }
+);
+
+
 
     console.log(
       `✅ SYSTEM chart watch created: ${
