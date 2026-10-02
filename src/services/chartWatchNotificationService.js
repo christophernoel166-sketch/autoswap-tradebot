@@ -64,6 +64,8 @@ ${payload.title}
 
 🪙 <b>Token:</b> ${watch.symbol || "Unknown"}
 
+📍 <b>Contract:</b> <code>${watch.mintAddress || "Unknown"}</code>
+
 📊 <b>Event:</b> ${result.event}
 
 ⏮ <b>Previous:</b> ${result.previousAction ?? "-"}
@@ -83,15 +85,23 @@ ${payload.message}
 export async function notifyChartWatch(watch, result) {
   if (!watch || !result) return;
 
-  const payload = buildNotification(result, watch);
-
-  if (!payload) return;
+const payload = buildNotification(result, watch);
+if (!payload) return;
 
   // ===================================================
   // SYSTEM WATCH
   // ===================================================
 
   if (watch.watchType === "SYSTEM") {
+
+const ENTRY_EVENTS = new Set([
+  "BREAKOUT_CONFIRMED",
+  "PULLBACK_COMPLETED",
+]);
+
+if (!ENTRY_EVENTS.has(result.event)) {
+  return;
+}
 
     if (!SYSTEM_CHANNEL_ID) {
       console.error(
