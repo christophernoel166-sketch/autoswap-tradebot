@@ -23,18 +23,32 @@ async function processQueue(bot) {
 
   try {
 
-    await bot.telegram.sendMessage(
-      job.telegramUserId,
-      job.message,
-      {
-        parse_mode:
-          job.parseMode || "HTML",
-      }
-    );
+   const destination =
+  job.telegramChannelId ||
+  job.telegramUserId;
+
+if (!destination) {
+  LOG.error(
+    "Telegram notification skipped: no destination"
+  );
+  return;
+}
+
+await bot.telegram.sendMessage(
+  destination,
+  job.message,
+  {
+    parse_mode:
+      job.parseMode || "HTML",
+  }
+);
 
     LOG.info(
-      `📨 Telegram notification sent to ${job.telegramUserId}`
-    );
+  `📨 Telegram notification sent to ${
+    job.telegramChannelId ||
+    job.telegramUserId
+  }`
+);
 
   } catch (err) {
 
