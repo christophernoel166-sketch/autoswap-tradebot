@@ -1,6 +1,6 @@
 import { createNotification } from "./notificationService.js";
 import User from "../../models/User.js";
-import bot from "../telegram/bot.js";
+
 
 // =====================================================
 // BUILD NOTIFICATION
