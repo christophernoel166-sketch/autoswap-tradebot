@@ -7,12 +7,19 @@ const QUEUE_NAME = "telegram:notifications";
 // =====================================================
 
 export async function enqueueTelegramNotification({
-  telegramUserId,
+  telegramUserId = null,
+  telegramChannelId = null,
   message,
   parseMode = "HTML",
 }) {
+  // -----------------------------------------------
+  // Require a destination
+  // -----------------------------------------------
 
-  if (!telegramUserId || !message) {
+  if (
+    (!telegramUserId && !telegramChannelId) ||
+    !message
+  ) {
     return;
   }
 
@@ -20,12 +27,12 @@ export async function enqueueTelegramNotification({
     QUEUE_NAME,
     JSON.stringify({
       telegramUserId,
+      telegramChannelId,
       message,
       parseMode,
       createdAt: Date.now(),
     })
   );
-
 }
 
 // =====================================================
@@ -35,7 +42,6 @@ export async function enqueueTelegramNotification({
 const telegramQueueRedis = redis.duplicate();
 
 export async function dequeueTelegramNotification() {
-
   const res = await telegramQueueRedis.brpop(
     QUEUE_NAME,
     0
@@ -54,5 +60,4 @@ export async function dequeueTelegramNotification() {
   }
 
   return JSON.parse(payload);
-
 }
