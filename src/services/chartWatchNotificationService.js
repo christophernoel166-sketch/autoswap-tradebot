@@ -1,5 +1,11 @@
 import { createNotification } from "./notificationService.js";
 import User from "../../models/User.js";
+import {
+  enqueueTelegramNotification,
+} from "./telegramQueueService.js";
+
+const SYSTEM_CHANNEL_ID =
+  process.env.SYSTEM_TELEGRAM_CHANNEL_ID;
 
 
 // =====================================================
@@ -86,7 +92,14 @@ export async function notifyChartWatch(watch, result) {
   // ===================================================
 
   if (watch.watchType === "SYSTEM") {
-    const SYSTEM_CHANNEL_ID = "-1002749359178";
+
+    if (!SYSTEM_CHANNEL_ID) {
+      console.error(
+        "❌ SYSTEM CHART NOTIFICATION — SYSTEM_TELEGRAM_CHANNEL_ID is missing"
+      );
+      return;
+    }
+  
 
     // -----------------------------------------------
     // DASHBOARD — APPROVED SUBSCRIBERS
@@ -147,16 +160,14 @@ export async function notifyChartWatch(watch, result) {
           payload
         );
 
-      await bot.telegram.sendMessage(
-        SYSTEM_CHANNEL_ID,
-        telegramMessage,
-        {
-          parse_mode: "HTML",
-        }
-      );
+      await enqueueTelegramNotification({
+        telegramChannelId: SYSTEM_CHANNEL_ID,
+        message: telegramMessage,
+        parseMode: "HTML",
+      });
 
       console.log(
-        "📨 SYSTEM CHART NOTIFICATION — Telegram channel sent",
+        "📨 SYSTEM CHART NOTIFICATION — Telegram channel queued",
         {
           channelId: SYSTEM_CHANNEL_ID,
           watchId: watch._id,
@@ -166,7 +177,7 @@ export async function notifyChartWatch(watch, result) {
       );
     } catch (telegramError) {
       console.error(
-        "❌ SYSTEM CHART NOTIFICATION — Telegram channel failed:",
+        "❌ SYSTEM CHART NOTIFICATION — Telegram channel queue failed:",
         telegramError?.message || telegramError
       );
     }
