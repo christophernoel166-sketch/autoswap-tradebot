@@ -66,7 +66,42 @@ const [scanError, setScanError] = useState("");
 const [chartEntry, setChartEntry] = useState(null);
 const [chartLoading, setChartLoading] = useState(false);
 const [chartError, setChartError] = useState("");
-const [liveChartWatch, setLiveChartWatch] = useState(null);
+// ===================================================
+// LIVE CHART WATCHES
+// ===================================================
+// All active USER chart watches continue monitoring
+// in the background.
+//
+// selectedChartWatchId controls which one is currently
+// displayed in the Live Chart Monitor card.
+// ===================================================
+
+const [
+  activeChartWatches,
+  setActiveChartWatches,
+] = useState([]);
+
+const [
+  selectedChartWatchId,
+  setSelectedChartWatchId,
+] = useState(null);
+
+const liveChartWatch = useMemo(() => {
+  if (!selectedChartWatchId) {
+    return null;
+  }
+
+  return (
+    activeChartWatches.find(
+      (watch) =>
+        String(watch.id) ===
+        String(selectedChartWatchId)
+    ) || null
+  );
+}, [
+  activeChartWatches,
+  selectedChartWatchId,
+]);
 // ===================================================
 // SCAN / ACTIVE POSITION DISPLAY MODE
 // ===================================================
@@ -361,19 +396,79 @@ setOnChainBalanceUsd(
   return () => clearInterval(interval);
 }, [user?.tradingWalletPublicKey]);
 
+
+async function fetchActiveChartWatches() {
+  if (!walletAddress) return;
+
+  try {
+    const r = await fetch(
+      `${API_BASE}/api/chart-watch?wallet=${encodeURIComponent(
+        walletAddress
+      )}`
+    );
+
+    if (!r.ok) {
+      throw new Error(
+        `Failed to fetch active chart watches: ${r.status}`
+      );
+    }
+
+    const data = await r.json();
+
+    if (!data?.ok) {
+      throw new Error(
+        data?.error || "Failed to load active chart watches"
+      );
+    }
+
+    const watches = Array.isArray(data.watches)
+      ? data.watches
+      : [];
+
+    setActiveChartWatches(watches);
+
+    if (watches.length > 0) {
+      setSelectedChartWatchId((currentId) => {
+        const stillExists = watches.some(
+          (watch) =>
+            String(watch.id) === String(currentId)
+        );
+
+        return stillExists
+          ? currentId
+          : watches[0].id;
+      });
+    } else {
+      setSelectedChartWatchId(null);
+    }
+
+  } catch (err) {
+    console.warn(
+      "fetchActiveChartWatches error:",
+      err
+    );
+
+    setActiveChartWatches([]);
+    setSelectedChartWatchId(null);
+  }
+}
+
+
 /* --- LOAD USER DATA WHEN WALLET CHANGES --- */
 useEffect(() => {
   if (!walletAddress) return;
 
   fetchUserSettings();
   refreshUser();
-fetchWalletHistory();
+  fetchWalletHistory();
   ensureUserExists();
   fetchUserChannels();
   fetchPositions();
   fetchNotifications();
   fetchHistory();
+  fetchActiveChartWatches();
 }, [walletAddress]);
+
 
 useEffect(() => {
   if (!user?.walletAddress) return;
@@ -485,196 +580,237 @@ useEffect(() => {
     return;
   }
 
-  const onChartWatchUpdate = (payload) => {
+const onChartWatchUpdate = (payload) => {
 
-    if (!payload) {
-      return;
-    }
+  if (!payload) {
+    return;
+  }
 
-    // ================================================
-    // BACKEND PAYLOAD STRUCTURE
-    //
-    // payload.watch  = serialized ChartWatch
-    // payload.analysis = latest chart analysis
-    // ================================================
+  // ================================================
+  // BACKEND PAYLOAD STRUCTURE
+  // ================================================
 
-    const incomingWatch =
-      payload.watch || null;
+  const incomingWatch =
+    payload.watch || null;
 
-    const incomingWatchId =
-      incomingWatch?.id ||
-      incomingWatch?._id ||
-      payload.watchId ||
-      null;
+  const incomingWatchId =
+    incomingWatch?.id ||
+    incomingWatch?._id ||
+    payload.watchId ||
+    null;
 
-    const incomingWallet =
-      incomingWatch?.walletAddress ||
-      payload.walletAddress ||
-      null;
+  if (!incomingWatchId) {
+    return;
+  }
 
-    // ================================================
-    // IGNORE OTHER WALLETS
-    // ================================================
+  const incomingWallet =
+    incomingWatch?.walletAddress ||
+    payload.walletAddress ||
+    null;
 
-    if (
-      incomingWallet &&
-      incomingWallet !== walletAddress
-    ) {
-      return;
-    }
+  // ================================================
+  // IGNORE OTHER WALLETS
+  // ================================================
 
-    // ================================================
-    // IGNORE OTHER WATCHES
-    // ================================================
+  if (
+    incomingWallet &&
+    incomingWallet !== walletAddress
+  ) {
+    return;
+  }
 
-    if (
-      liveChartWatch?.watchId &&
-      incomingWatchId &&
-      String(incomingWatchId) !==
-        String(liveChartWatch.watchId)
-    ) {
-      return;
-    }
-
-    console.log(
-      "📡 LIVE CHART WATCH UPDATE:",
-      payload
-    );
-
-    // ================================================
-    // DETERMINE WATCH STATUS
-    // ================================================
-
-    const incomingStatus =
-      incomingWatch?.status ||
-      payload.status ||
-      null;
-
-    // ================================================
-    // BUILD UPDATED WATCH
-    // ================================================
-
-    const updatedWatch = {
-
-      // Keep previous frontend state
-      ...(liveChartWatch || {}),
-
-      // Apply latest backend watch data
-      ...(incomingWatch || {}),
-
-      // ==============================================
-      // NORMALIZED WATCH ID
-      // ==============================================
-
-      watchId:
-        incomingWatchId ||
-        liveChartWatch?.watchId ||
+  console.log(
+    "📡 LIVE CHART WATCH UPDATE:",
+    {
+      watchId: incomingWatchId,
+      symbol:
+        incomingWatch?.symbol ||
+        incomingWatch?.mintAddress,
+      status:
+        incomingWatch?.status ||
+        payload.status ||
         null,
-
-      // ==============================================
-      // LATEST CHART ANALYSIS
-      // ==============================================
-
-      chartEntry:
-        payload.analysis ||
-        incomingWatch?.chartEntry ||
-        liveChartWatch?.chartEntry ||
-        null,
-
-      // ==============================================
-      // ACTION STATE
-      // ==============================================
-
       currentAction:
         payload.currentAction ||
         incomingWatch?.currentAction ||
-        liveChartWatch?.currentAction ||
         null,
+    }
+  );
 
-      previousAction:
-        payload.previousAction ||
-        incomingWatch?.previousAction ||
-        liveChartWatch?.previousAction ||
-        null,
+  // ================================================
+  // DETERMINE WATCH STATUS
+  // ================================================
 
-      // ==============================================
-      // EVENT
-      // ==============================================
+  const incomingStatus =
+    incomingWatch?.status ||
+    payload.status ||
+    "ACTIVE";
 
-      event:
-        payload.event ||
-        null,
+  // ================================================
+  // BUILD UPDATED WATCH
+  // ================================================
 
-      // ==============================================
-      // ACTION CHANGE FLAG
-      // ==============================================
+  const updatedWatch = {
 
-      changed:
-        Boolean(
-          payload.changed
-        ),
+    ...(incomingWatch || {}),
 
-      // ==============================================
-      // WATCH STATUS
-      // ==============================================
+    // ==============================================
+    // NORMALIZED WATCH ID
+    // ==============================================
 
-      status:
-        incomingStatus ||
-        liveChartWatch?.status ||
-        "ACTIVE",
+id:
+  incomingWatchId,
 
-      // ==============================================
-      // ACTIVE STATE
-      // ==============================================
+    // ==============================================
+    // LATEST CHART ANALYSIS
+    // ==============================================
 
-      active:
-        incomingStatus
-          ? incomingStatus === "ACTIVE"
-          : liveChartWatch?.active ?? true,
+    chartEntry:
+      payload.analysis ||
+      incomingWatch?.chartEntry ||
+      null,
 
-      // ==============================================
-      // LAST UPDATE
-      // ==============================================
+    // ==============================================
+    // ACTION STATE
+    // ==============================================
 
-      updatedAt:
-        payload.updatedAt ||
-        new Date(),
-    };
+    currentAction:
+      payload.currentAction ||
+      incomingWatch?.currentAction ||
+      null,
 
-    // ================================================
-    // UPDATE CARD
-    // ================================================
+    previousAction:
+      payload.previousAction ||
+      incomingWatch?.previousAction ||
+      null,
 
-    setLiveChartWatch(
-      updatedWatch
-    );
+    // ==============================================
+    // EVENT
+    // ==============================================
 
+    event:
+      payload.event ||
+      null,
+
+    // ==============================================
+    // ACTION CHANGE FLAG
+    // ==============================================
+
+    changed:
+      Boolean(
+        payload.changed
+      ),
+
+    // ==============================================
+    // WATCH STATUS
+    // ==============================================
+
+    status:
+      incomingStatus,
+
+    // ==============================================
+    // ACTIVE STATE
+    // ==============================================
+
+    active:
+      incomingStatus === "ACTIVE",
+
+    // ==============================================
+    // LAST UPDATE
+    // ==============================================
+
+    updatedAt:
+      payload.updatedAt ||
+      new Date(),
   };
 
   // ================================================
-  // LISTEN FOR BACKEND WATCH UPDATES
+  // UPDATE ONLY THIS WATCH
+  //
+  // Other active watches remain untouched.
   // ================================================
 
-  socket.on(
+  setActiveChartWatches(
+    (previous) => {
+
+      const index =
+  previous.findIndex(
+    (watch) =>
+      String(watch.id) ===
+      String(incomingWatchId)
+  );
+      // ----------------------------------------------
+      // WATCH ALREADY EXISTS
+      // ----------------------------------------------
+
+      if (index !== -1) {
+
+        // Watch is no longer active.
+        // Remove it from active background watches.
+
+        if (
+          incomingStatus !== "ACTIVE"
+        ) {
+          return previous.filter(
+            (_, i) => i !== index
+          );
+        }
+
+        const updated =
+          [...previous];
+
+        updated[index] = {
+          ...updated[index],
+          ...updatedWatch,
+        };
+
+        return updated;
+      }
+
+      // ----------------------------------------------
+      // NEW ACTIVE WATCH
+      // ----------------------------------------------
+
+      if (
+        incomingStatus === "ACTIVE"
+      ) {
+        return [
+          ...previous,
+          updatedWatch,
+        ];
+      }
+
+      return previous;
+    }
+  );
+};
+
+// ================================================
+// LISTEN FOR BACKEND WATCH UPDATES
+// ================================================
+
+socket.on(
+  "chart_watch_update",
+  onChartWatchUpdate
+);
+
+// ================================================
+// CLEANUP
+// ================================================
+
+return () => {
+
+  socket.off(
     "chart_watch_update",
     onChartWatchUpdate
   );
 
-  // ================================================
-  // CLEANUP
-  // ================================================
-
-  return () => {
-
-    socket.off(
-      "chart_watch_update",
-      onChartWatchUpdate
-    );
-
-  };
+};
 
 }, [walletAddress]);
 
+
+// FETCH NEW TOKENS
 
 // FETCH NEW TOKENS
 useEffect(() => {
@@ -1031,12 +1167,78 @@ setAiMode("thinking");
 setChartEntry(data.chartEntry || null);
 
 if (data.monitoring?.active) {
-  setLiveChartWatch({
+
+  const newWatch = {
     ...data.monitoring,
-    chartEntry: data.chartEntry || null,
-  });
+    chartEntry:
+      data.chartEntry || null,
+  };
+
+  const newWatchId =
+  newWatch.id ||
+  newWatch._id;
+
+if (newWatchId) {
+
+  setActiveChartWatches(
+    (previous) => {
+
+      const index =
+        previous.findIndex(
+          (watch) =>
+            String(watch.id) ===
+            String(newWatchId)
+        );
+
+      // ==========================================
+      // NEW WATCH
+      // ==========================================
+
+      if (index === -1) {
+
+        return [
+          ...previous,
+          {
+            ...newWatch,
+            id: newWatchId,
+          },
+        ];
+      }
+
+      // ==========================================
+      // EXISTING WATCH
+      // ==========================================
+
+      const updated =
+        [...previous];
+
+      updated[index] = {
+        ...updated[index],
+        ...newWatch,
+        id: newWatchId,
+      };
+
+      return updated;
+    }
+  );
+
+  // ==========================================
+  // DISPLAY THE NEWLY ANALYZED WATCH
+  // ==========================================
+
+  setSelectedChartWatchId(
+    newWatchId
+  );
+}
+
 } else {
-  setLiveChartWatch(null);
+
+  // Do NOT clear existing background watches.
+  //
+  // Existing watches must continue monitoring
+  // even if this analysis does not create a
+  // new active watch.
+
 }
 
 if (data.chartEntry) {
@@ -2077,13 +2279,102 @@ console.log(
           Immediately BELOW AI RECOMMENDATION
           =================================================== */}
 
-      {liveChartWatch?.active && (
-        <div className="mt-4">
-          <LiveChartMonitorCard
-            watch={liveChartWatch}
-          />
-        </div>
-      )}
+      {/* ===================================================
+    MONITORED CHARTS
+    =================================================== */}
+
+{activeChartWatches.length > 0 && (
+  <div className="mt-4 bg-gray-800 rounded-xl p-4">
+
+    <div className="flex items-center justify-between mb-3">
+
+      <h3 className="text-sm font-semibold text-white">
+        Monitored Charts
+      </h3>
+
+      <span className="text-xs text-gray-400">
+        {activeChartWatches.length} active
+      </span>
+
+    </div>
+
+    <div className="flex flex-wrap gap-2">
+
+      {activeChartWatches.map((watch) => {
+
+        const isSelected =
+          String(watch.id) ===
+          String(selectedChartWatchId);
+
+        return (
+          <button
+            key={watch.id}
+            type="button"
+            onClick={() =>
+              setSelectedChartWatchId(
+                watch.id
+              )
+            }
+            className={`
+              px-3
+              py-2
+              rounded-lg
+              text-sm
+              font-medium
+              transition
+              border
+              ${
+                isSelected
+                  ? "bg-purple-600 border-purple-500 text-white"
+                  : "bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600"
+              }
+            `}
+          >
+
+            <div className="flex items-center gap-2">
+
+              <span>
+                {watch.symbol ||
+                  watch.name ||
+                  watch.mintAddress ||
+                  "Unknown Token"}
+              </span>
+
+              <span
+                className={`
+                  w-2
+                  h-2
+                  rounded-full
+                  ${
+                    watch.active
+                      ? "bg-green-400"
+                      : "bg-gray-500"
+                  }
+                `}
+              />
+
+            </div>
+
+          </button>
+        );
+      })}
+
+    </div>
+
+  </div>
+)}
+
+{/* ===================================================
+    SELECTED LIVE CHART MONITOR
+    =================================================== */}
+
+{liveChartWatch?.active && (
+  <div className="mt-4">
+    <LiveChartMonitorCard
+      watch={liveChartWatch}
+    />
+  </div>
+)}
 
     </>
 
