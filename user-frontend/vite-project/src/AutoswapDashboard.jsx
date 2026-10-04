@@ -421,9 +421,12 @@ async function fetchActiveChartWatches() {
       );
     }
 
-    const watches = Array.isArray(data.watches)
-      ? data.watches
-      : [];
+   const watches = Array.isArray(data.watches)
+  ? data.watches.map((watch) => ({
+      ...watch,
+      active: watch.status === "ACTIVE",
+    }))
+  : [];
 
     setActiveChartWatches(watches);
 
