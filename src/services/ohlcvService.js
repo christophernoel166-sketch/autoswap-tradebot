@@ -6,6 +6,16 @@ const BIRDEYE_BASE_URL = "https://public-api.birdeye.so/defi/ohlcv";
 const GECKO_BASE = "https://api.geckoterminal.com/api/v2";
 const NETWORK = "solana";
 
+// ------------------------------------------------------------
+// SHORT-LIVED OHLCV CACHE
+// Prevents the chart worker from repeatedly hitting
+// GeckoTerminal/Birdeye every 30 seconds for the same token.
+// ------------------------------------------------------------
+const candleCache = new Map();
+
+const CANDLE_CACHE_TTL_MS = 2 * 60 * 1000; // 2 minutes
+
+
 function mapTimeframe(timeframe = "5m") {
   const tf = String(timeframe).toLowerCase();
 
@@ -146,7 +156,31 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
     throw new Error("tokenMint is required");
   }
 
+  const cacheKey = `${cleanTokenMint}:${String(timeframe).toLowerCase()}:${limit}`;
+  const cached = candleCache.get(cacheKey);
+
+  if (cached) {
+    const cacheAge = Date.now() - cached.timestamp;
+
+    if (cacheAge < CANDLE_CACHE_TTL_MS) {
+      console.log(
+        "📦 Using cached candles:",
+        cleanTokenMint,
+        "timeframe:",
+        timeframe,
+        "age:",
+        `${Math.round(cacheAge / 1000)}s`
+      );
+
+      return cached.candles;
+    }
+
+    candleCache.delete(cacheKey);
+  }
+
   try {
+
+
     const { timeframe: gtTimeframe, aggregate } = mapTimeframe(timeframe);
 
     const poolsRes = await axios.get(
@@ -231,6 +265,11 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
       timeframe
     );
 
+    candleCache.set(cacheKey, {
+      timestamp: Date.now(),
+      candles,
+    });
+
     return candles;
   } catch (geckoError) {
     console.warn(
@@ -240,12 +279,19 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
     );
 
     try {
-      return await fetchCandlesFromBirdeye(
-        cleanTokenMint,
-        timeframe,
-        limit
-      );
-    } catch (birdeyeError) {
+  const candles = await fetchCandlesFromBirdeye(
+    cleanTokenMint,
+    timeframe,
+    limit
+  );
+
+  candleCache.set(cacheKey, {
+    timestamp: Date.now(),
+    candles,
+  });
+
+  return candles;
+} catch (birdeyeError) {
       console.error(
         "fetchCandles error: both GeckoTerminal and Birdeye failed:",
         {
