@@ -2866,160 +2866,38 @@ const liveAIAction =
     aiContext.exitDecision?.action ??
     null;
 
+// INDEPENDENT AI REVIEW BLOCK
+
+// ===================================================
+// 🚫 LIVE AI EXIT EXECUTION DISABLED
+//
+// The 10-second AI refresh may analyze the position
+// and produce an exit recommendation, but it must
+// NOT execute an exit by itself.
+//
+// Actual exit execution must come through the
+// trigger-based exit system:
+//
+// - STOP LOSS
+// - TRAILING STOP
+// - TP1
+// - TP2
+// - TP3
+//
+// Those triggers call processExitDecision(), which
+// runs the proper AI review pipeline before execution.
+// ===================================================
+
 if (liveAIAction === "FULL_EXIT") {
 
-    const executionKey =
-        `${walletAddress}:${mint}:FULL_EXIT`;
-
-    if (liveAIExitExecutions.has(executionKey)) {
-
-        LOG.info(
-            {
-                walletAddress,
-                mint,
-                action: liveAIAction,
-            },
-            "⏭️ AI FULL_EXIT already submitted — one-shot guard active"
-        );
-
-    } else {
-
-        liveAIExitExecutions.add(executionKey);
-
-        const aiExecutionPlan = {
-
-            // Existing AI-generated plan
-            ...liveAITradePlan,
-
-            // Authoritative execution identity
-            requestId:
-                aiContext.requestId ??
-                `${walletAddress}:${mint}:AI_FULL_EXIT:${Date.now()}`,
-
-            action: "FULL_EXIT",
-
+    LOG.info(
+        {
             walletAddress,
-
             mint,
-
-            // FULL_EXIT must always sell 100%
-            percent: 100,
-
-            // Preserve the wallet already held by monitor state
-            wallet:
-                info?.wallet ??
-                aiContext.wallet ??
-                null,
-
-            // Preserve user/source information where available
-            user:
-                info?.user ??
-                aiContext.user ??
-                null,
-
-            sourceChannel:
-                info?.sourceChannel ??
-                aiContext.sourceChannel ??
-                null,
-
-            slippageBps:
-                info?.slippageBps ??
-                aiContext.slippageBps ??
-                null,
-
-            reason:
-                "AI_FULL_EXIT",
-
-            metadata: {
-                ...(aiContext.metadata || {}),
-
-                source: "LIVE_AI_MONITOR",
-                aiExecution: true,
-                aiAction: "FULL_EXIT",
-                executionRequestedAt: new Date(),
-            },
-        };
-
-        LOG.warn(
-            {
-                walletAddress,
-                mint,
-                action: aiExecutionPlan.action,
-                percent: aiExecutionPlan.percent,
-                reason: aiExecutionPlan.reason,
-                requestId: aiExecutionPlan.requestId,
-            },
-            "🚨 AI FULL_EXIT → EXECUTING TRADE"
-        );
-
-        try {
-
-            await executeTradePlan(
-                aiExecutionPlan
-            );
-
-            // Check the authoritative Redis position state.
-            // Successful FULL_EXIT changes it to "closed".
-            const finalStatus =
-                await redis.hget(
-                    positionKey(
-                        walletAddress,
-                        mint
-                    ),
-                    "status"
-                );
-
-            if (finalStatus === "closed") {
-
-                LOG.warn(
-                    {
-                        walletAddress,
-                        mint,
-                        action: "FULL_EXIT",
-                        status: finalStatus,
-                    },
-                    "✅ AI FULL_EXIT EXECUTED — POSITION CLOSED"
-                );
-
-            } else {
-
-                // The executor returned without closing the
-                // position. Allow the next AI cycle to retry.
-                liveAIExitExecutions.delete(
-                    executionKey
-                );
-
-                LOG.error(
-                    {
-                        walletAddress,
-                        mint,
-                        action: "FULL_EXIT",
-                        status: finalStatus,
-                    },
-                    "⚠️ AI FULL_EXIT did not close position — retry guard released"
-                );
-            }
-
-        } catch (executionError) {
-
-            // Allow retry on the next AI cycle if execution failed.
-            liveAIExitExecutions.delete(
-                executionKey
-            );
-
-            LOG.error(
-                {
-                    walletAddress,
-                    mint,
-                    action: "FULL_EXIT",
-                    error:
-                        executionError?.message ||
-                        executionError,
-                },
-                "❌ AI FULL_EXIT execution failed — retry guard released"
-            );
-        }
-    }
+            action: liveAIAction,
+        },
+        "🧠 AI FULL_EXIT detected during 10-second analysis — execution blocked; waiting for an authorized exit trigger"
+    );
 }
 
 // ==========================================
