@@ -184,6 +184,35 @@ async function processCycle() {
     const now = new Date();
 
 
+// ===================================================
+// EXPIRE ALL ACTIVE CHART WATCHES
+// ===================================================
+
+const expiredWatches =
+  await ChartWatch.updateMany(
+    {
+      status: "ACTIVE",
+      expiresAt: {
+        $lte: now,
+      },
+    },
+    {
+      $set: {
+        status: "EXPIRED",
+        finalResult: "EXPIRED",
+        completedAt: now,
+        lastReason:
+          "Chart watch expired.",
+      },
+    }
+  );
+
+if (expiredWatches.modifiedCount > 0) {
+  LOG.info(
+    `⏰ Expired ${expiredWatches.modifiedCount} chart watch(es)`
+  );
+}
+
 
 // ===================================================
 // AUTO CHART DIAGNOSTIC — AVOID WATCH RECHECK DUE
