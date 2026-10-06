@@ -50,6 +50,44 @@ console.log(
 
 const telegramQueueRedis = redis.duplicate();
 
+
+telegramQueueRedis.on("connect", () => {
+  console.log(
+    "🔎 [TelegramQueueRedis] duplicate connection established"
+  );
+});
+
+telegramQueueRedis.on("ready", () => {
+  console.log(
+    "🔎 [TelegramQueueRedis] duplicate connection ready"
+  );
+});
+
+telegramQueueRedis.on("error", (err) => {
+  console.error(
+    "❌ [TelegramQueueRedis] duplicate connection error:",
+    err?.message || err
+  );
+});
+
+telegramQueueRedis.on("close", () => {
+  console.warn(
+    "⚠️ [TelegramQueueRedis] duplicate connection closed"
+  );
+});
+
+telegramQueueRedis.on("reconnecting", () => {
+  console.warn(
+    "🔄 [TelegramQueueRedis] duplicate connection reconnecting"
+  );
+});
+
+console.log(
+  "🔎 [TelegramQueueRedis] initial status:",
+  telegramQueueRedis.status
+);
+
+
 export async function dequeueTelegramNotification() {
   const res = await telegramQueueRedis.brpop(
     QUEUE_NAME,
