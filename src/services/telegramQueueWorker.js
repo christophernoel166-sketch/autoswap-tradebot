@@ -14,8 +14,23 @@ let running = false;
 
 async function processQueue(bot) {
 
+  console.log(
+    "🔎 [TelegramQueue] processQueue() checking for job..."
+  );
+
   const job =
     await dequeueTelegramNotification();
+
+  console.log(
+    "🔎 [TelegramQueue] dequeue result:",
+    job
+      ? {
+          telegramUserId: job.telegramUserId,
+          telegramChannelId: job.telegramChannelId,
+          hasMessage: Boolean(job.message),
+        }
+      : "NO JOB"
+  );
 
   if (!job) {
     return;
@@ -23,32 +38,37 @@ async function processQueue(bot) {
 
   try {
 
-   const destination =
-  job.telegramChannelId ||
-  job.telegramUserId;
+    const destination =
+      job.telegramChannelId ||
+      job.telegramUserId;
 
-if (!destination) {
-  LOG.error(
-    "Telegram notification skipped: no destination"
-  );
-  return;
-}
+    console.log(
+      "🔎 [TelegramQueue] Preparing Telegram send:",
+      {
+        destination,
+        hasMessage: Boolean(job.message),
+      }
+    );
 
-await bot.telegram.sendMessage(
-  destination,
-  job.message,
-  {
-    parse_mode:
-      job.parseMode || "HTML",
-  }
-);
+    if (!destination) {
+      LOG.error(
+        "Telegram notification skipped: no destination"
+      );
+      return;
+    }
+
+    await bot.telegram.sendMessage(
+      destination,
+      job.message,
+      {
+        parse_mode:
+          job.parseMode || "HTML",
+      }
+    );
 
     LOG.info(
-  `📨 Telegram notification sent to ${
-    job.telegramChannelId ||
-    job.telegramUserId
-  }`
-);
+      `📨 Telegram notification sent to ${destination}`
+    );
 
   } catch (err) {
 
@@ -56,9 +76,6 @@ await bot.telegram.sendMessage(
       "Telegram notification failed:",
       err.message
     );
-
-    // Future:
-    // Retry / Dead-letter queue
 
   }
 
