@@ -89,9 +89,24 @@ console.log(
 
 
 export async function dequeueTelegramNotification() {
+
+  console.log(
+    "🔎 [TelegramQueueRedis] Queue length before BRPOP:",
+    await telegramQueueRedis.llen(QUEUE_NAME)
+  );
+
+  console.log(
+    "🔎 [TelegramQueueRedis] Starting BRPOP..."
+  );
+
   const res = await telegramQueueRedis.brpop(
     QUEUE_NAME,
     0
+  );
+
+  console.log(
+    "🔎 [TelegramQueueRedis] BRPOP completed:",
+    res
   );
 
   if (!res) {
