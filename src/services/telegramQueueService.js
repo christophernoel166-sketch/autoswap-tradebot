@@ -23,18 +23,27 @@ export async function enqueueTelegramNotification({
     return;
   }
 
-  await redis.rpush(
-    QUEUE_NAME,
-    JSON.stringify({
-      telegramUserId,
-      telegramChannelId,
-      message,
-      parseMode,
-      createdAt: Date.now(),
-    })
-  );
-}
+ const queueLength = await redis.rpush(
+  QUEUE_NAME,
+  JSON.stringify({
+    telegramUserId,
+    telegramChannelId,
+    message,
+    parseMode,
+    createdAt: Date.now(),
+  })
+);
 
+console.log(
+  "🔎 [TelegramQueue] Job enqueued:",
+  {
+    queue: QUEUE_NAME,
+    telegramUserId,
+    telegramChannelId,
+    queueLength,
+  }
+);
+}
 // =====================================================
 // POP TELEGRAM JOB
 // =====================================================
@@ -42,18 +51,9 @@ export async function enqueueTelegramNotification({
 const telegramQueueRedis = redis.duplicate();
 
 export async function dequeueTelegramNotification() {
-  console.log(
-    "🔎 [TelegramQueue] Waiting for notification job..."
-  );
-
   const res = await telegramQueueRedis.brpop(
     QUEUE_NAME,
     0
-  );
-
-  console.log(
-    "🔎 [TelegramQueue] BRPOP returned:",
-    res ? "JOB RECEIVED" : "NO JOB"
   );
 
   if (!res) {
@@ -65,27 +65,8 @@ export async function dequeueTelegramNotification() {
     : res;
 
   if (!payload) {
-    console.log(
-      "⚠️ [TelegramQueue] Job received but payload is empty."
-    );
     return null;
   }
 
-  console.log(
-    "🔎 [TelegramQueue] Payload received from Redis."
-  );
-
-  const job = JSON.parse(payload);
-
-  console.log(
-    "🔎 [TelegramQueue] Job parsed:",
-    {
-      telegramUserId: job.telegramUserId,
-      telegramChannelId: job.telegramChannelId,
-      hasMessage: Boolean(job.message),
-      parseMode: job.parseMode,
-    }
-  );
-
-  return job;
+  return JSON.parse(payload);
 }
