@@ -137,7 +137,7 @@ export async function dequeueTelegramNotification() {
 
   const res = await telegramQueueRedis.brpop(
     QUEUE_NAME,
-    0
+    10
   );
 
   console.log(
