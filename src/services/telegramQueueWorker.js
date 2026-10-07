@@ -21,10 +21,16 @@ async function processQueue(bot) {
     await dequeueTelegramNotification();
 
 
-console.log(
+console.error(
   "🚨 [TelegramQueueWorker] JOB RECEIVED:",
-  job
+  {
+    pid: process.pid,
+    hostname: process.env.RAILWAY_REPLICA_ID || "unknown",
+    job,
+  }
 );
+
+
 
 
   console.log(
