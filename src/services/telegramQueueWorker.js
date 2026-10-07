@@ -4,7 +4,6 @@ import {
 
 const LOG = console;
 
-const POLL_INTERVAL_MS = 1000;
 
 let running = false;
 
@@ -105,20 +104,25 @@ export function startTelegramQueueWorker(
     "🚀 Telegram Queue Worker started."
   );
 
-  processQueue(bot).catch(console.error);
+  (async () => {
 
-  setInterval(async () => {
+    while (running) {
 
-    try {
+      try {
 
-      await processQueue(bot);
+        await processQueue(bot);
 
-    } catch (err) {
+      } catch (err) {
 
-      LOG.error(err);
+        LOG.error(
+          "❌ Telegram Queue Worker error:",
+          err
+        );
+
+      }
 
     }
 
-  }, POLL_INTERVAL_MS);
+  })();
 
 }
