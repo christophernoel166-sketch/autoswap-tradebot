@@ -7,6 +7,36 @@ const QUEUE_NAME = "telegram:notifications";
 const telegramQueueRedis = redis.duplicate();
 const telegramQueueProbeRedis = redis.duplicate();
 
+
+
+
+
+async function logRedisQueueIdentity() {
+  console.log(
+    "🔎 [TelegramQueueRedis] Redis DB:",
+    telegramQueueRedis.options.db
+  );
+
+  console.log(
+    "🔎 [TelegramQueueProbeRedis] Redis DB:",
+    telegramQueueProbeRedis.options.db
+  );
+
+  console.log(
+    "🔎 [Main Redis] Redis DB:",
+    redis.options.db
+  );
+}
+
+logRedisQueueIdentity().catch((err) => {
+  console.error(
+    "❌ Redis identity diagnostic failed:",
+    err?.message || err
+  );
+});
+
+
+
 // =====================================================
 // PUSH TELEGRAM JOB
 // =====================================================
