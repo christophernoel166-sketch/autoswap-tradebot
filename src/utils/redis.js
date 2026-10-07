@@ -7,6 +7,22 @@ dotenv.config();
 
 const { REDIS_URL } = process.env;
 
+
+
+
+console.log(
+  "🔎 Redis endpoint:",
+  REDIS_URL
+    ? REDIS_URL.replace(
+        /:\/\/([^:]+):([^@]+)@/,
+        "://$1:****@"
+      )
+    : "MISSING"
+);
+
+
+
+
 if (!REDIS_URL) {
   throw new Error("REDIS_URL is not set");
 }
