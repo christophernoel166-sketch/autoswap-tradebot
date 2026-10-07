@@ -20,6 +20,13 @@ async function processQueue(bot) {
   const job =
     await dequeueTelegramNotification();
 
+
+console.log(
+  "🚨 [TelegramQueueWorker] JOB RECEIVED:",
+  job
+);
+
+
   console.log(
     "🔎 [TelegramQueue] dequeue result:",
     job
