@@ -43,6 +43,8 @@ console.log(
     telegramUserId,
     telegramChannelId,
     queueLength,
+    message,
+    parseMode,
   }
 );
 }
