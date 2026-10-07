@@ -55,6 +55,29 @@ console.log(
 const telegramQueueRedis = redis.duplicate();
 const telegramQueueProbeRedis = redis.duplicate();
 
+
+
+telegramQueueProbeRedis.on("connect", () => {
+  console.log(
+    "🔎 [TelegramQueueProbeRedis] probe connection established"
+  );
+});
+
+telegramQueueProbeRedis.on("ready", () => {
+  console.log(
+    "🔎 [TelegramQueueProbeRedis] probe connection ready"
+  );
+});
+
+telegramQueueProbeRedis.on("error", (err) => {
+  console.error(
+    "❌ [TelegramQueueProbeRedis] probe connection error:",
+    err?.message || err
+  );
+});
+
+
+
 telegramQueueRedis.on("connect", () => {
   console.log(
     "🔎 [TelegramQueueRedis] duplicate connection established"
