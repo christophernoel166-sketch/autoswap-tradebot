@@ -53,7 +53,7 @@ console.log(
 // =====================================================
 
 const telegramQueueRedis = redis.duplicate();
-
+const telegramQueueProbeRedis = redis.duplicate();
 
 telegramQueueRedis.on("connect", () => {
   console.log(
