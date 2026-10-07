@@ -8,7 +8,19 @@ dotenv.config();
 const { REDIS_URL } = process.env;
 
 
-
+console.log(
+  "🔎 Redis configuration:",
+  {
+    endpoint: REDIS_URL
+      ? REDIS_URL.replace(
+          /:\/\/([^:]+):([^@]+)@/,
+          "://$1:****@"
+        )
+      : "MISSING",
+    urlDatabase:
+      REDIS_URL?.match(/\/(\d+)(?:\?|$)/)?.[1] || "default",
+  }
+);
 
 
 
