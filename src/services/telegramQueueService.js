@@ -4,6 +4,9 @@ import { redis } from "../utils/redis.js";
 
 const QUEUE_NAME = "telegram:notifications";
 
+const telegramQueueRedis = redis.duplicate();
+const telegramQueueProbeRedis = redis.duplicate();
+
 // =====================================================
 // PUSH TELEGRAM JOB
 // =====================================================
@@ -47,13 +50,19 @@ console.log(
     parseMode,
   }
 );
+
+
+console.log(
+  "🔎 [TelegramQueueProbeRedis] Queue length seen after enqueue:",
+  await telegramQueueProbeRedis.llen(QUEUE_NAME)
+);
 }
+
 // =====================================================
 // POP TELEGRAM JOB
 // =====================================================
 
-const telegramQueueRedis = redis.duplicate();
-const telegramQueueProbeRedis = redis.duplicate();
+
 
 
 

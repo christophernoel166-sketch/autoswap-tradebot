@@ -1,5 +1,4 @@
 // src/utils/redis.js
-
 import dotenv from "dotenv";
 import Redis from "ioredis";
 
@@ -11,15 +10,6 @@ const { REDIS_URL } = process.env;
 
 
 
-console.log(
-  "🔎 Redis endpoint:",
-  REDIS_URL
-    ? REDIS_URL.replace(
-        /:\/\/([^:]+):([^@]+)@/,
-        "://$1:****@"
-      )
-    : "MISSING"
-);
 
 
 
