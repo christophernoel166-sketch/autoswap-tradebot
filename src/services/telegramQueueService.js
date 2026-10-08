@@ -74,6 +74,7 @@ export async function enqueueTelegramNotification({
     return;
   }
 
+
  const queueLength = await redis.rpush(
   QUEUE_NAME,
   JSON.stringify({
@@ -86,6 +87,32 @@ export async function enqueueTelegramNotification({
 );
 
 
+// =====================================================
+// TEMPORARY REDIS DEBUG QUEUE TEST
+// =====================================================
+
+const debugQueueKey = "telegram:queue:debug:test";
+
+await redis.rpush(
+  debugQueueKey,
+  "QUEUE-BRIDGE-TEST"
+);
+
+console.log(
+  "🔎 [TelegramQueue] Debug queue length after RPUSH:",
+  await redis.llen(debugQueueKey)
+);
+
+console.log(
+  "🔎 [TelegramQueue] Debug queue contents:",
+  await redis.lrange(debugQueueKey, 0, -1)
+);
+
+
+// =====================================================
+// EXISTING QUEUE DIAGNOSTICS
+// =====================================================
+
 console.log(
   "🔎 [TelegramQueue] API queue length immediately after RPUSH:",
   await redis.llen(QUEUE_NAME)
@@ -95,6 +122,9 @@ console.log(
   "🔎 [TelegramQueue] API queue contents immediately after RPUSH:",
   await redis.lrange(QUEUE_NAME, 0, -1)
 );
+
+
+
 
 
 
