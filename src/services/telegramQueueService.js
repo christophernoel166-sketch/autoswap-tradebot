@@ -2,7 +2,7 @@
 
 import { redis } from "../utils/redis.js";
 
-const QUEUE_NAME = "telegram:notifications";
+const QUEUE_NAME = "telegram:notifications:test";
 
 const telegramQueueRedis = redis.duplicate();
 const telegramQueueProbeRedis = redis.duplicate();
