@@ -87,6 +87,42 @@ export async function enqueueTelegramNotification({
 );
 
 
+
+
+const debugReceiptKey =
+  `telegram:receipt:${Date.now()}`;
+
+const debugReceiptPayload = {
+  telegramUserId,
+  telegramChannelId,
+  message,
+  parseMode,
+  createdAt: Date.now(),
+  queueName: QUEUE_NAME,
+};
+
+await redis.set(
+  debugReceiptKey,
+  JSON.stringify(debugReceiptPayload),
+  "EX",
+  300
+);
+
+console.log(
+  "🔎 [TelegramQueue] Redis receipt written:",
+  {
+    key: debugReceiptKey,
+    payload: debugReceiptPayload,
+  }
+);
+
+console.log(
+  "🔎 [TelegramQueue] Redis receipt read-back:",
+  await redis.get(debugReceiptKey)
+);
+
+
+
 // =====================================================
 // TEMPORARY REDIS DEBUG QUEUE TEST
 // =====================================================
