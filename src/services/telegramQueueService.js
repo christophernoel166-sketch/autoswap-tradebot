@@ -181,6 +181,16 @@ console.log(
 
 export async function dequeueTelegramNotification() {
 
+  const bridgeTestValue =
+    await telegramQueueRedis.get(
+      "telegram:queue:bridge:test"
+    );
+
+  console.log(
+    "🔎 [TelegramQueueRedis] Live bridge test value:",
+    bridgeTestValue
+  );
+
   console.log(
     "🔎 [TelegramQueueRedis] Queue length before BRPOP:",
     await telegramQueueRedis.llen(QUEUE_NAME)
