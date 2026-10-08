@@ -86,6 +86,19 @@ export async function enqueueTelegramNotification({
 );
 
 
+console.log(
+  "🔎 [TelegramQueue] API queue length immediately after RPUSH:",
+  await redis.llen(QUEUE_NAME)
+);
+
+console.log(
+  "🔎 [TelegramQueue] API queue contents immediately after RPUSH:",
+  await redis.lrange(QUEUE_NAME, 0, -1)
+);
+
+
+
+
 await redis.set(
   "telegram:queue:bridge:test",
   "API-WROTE-THIS",
