@@ -14,9 +14,16 @@ let running = false;
 
 async function processQueue(bot) {
 
-  console.log(
-    "🔎 [TelegramQueue] processQueue() checking for job..."
-  );
+ console.log(
+  "🔎 [TelegramQueue] WAITING FOR TELEGRAM JOB:",
+  {
+    pid: process.pid,
+    hostname:
+      process.env.RAILWAY_REPLICA_ID || "unknown",
+    service:
+      process.env.RAILWAY_SERVICE_NAME || "unknown",
+  }
+);
 
   const job =
     await dequeueTelegramNotification();
@@ -26,13 +33,10 @@ console.error(
   "🚨 [TelegramQueueWorker] JOB RECEIVED:",
   {
     pid: process.pid,
-    hostname: process.env.RAILWAY_REPLICA_ID || "unknown",
-    redisUrl: process.env.REDIS_URL
-      ? process.env.REDIS_URL.replace(
-          /:\/\/([^:]+):([^@]+)@/,
-          "://$1:****@"
-        )
-      : "MISSING",
+    hostname:
+      process.env.RAILWAY_REPLICA_ID || "unknown",
+    service:
+      process.env.RAILWAY_SERVICE_NAME || "unknown",
     job,
   }
 );
