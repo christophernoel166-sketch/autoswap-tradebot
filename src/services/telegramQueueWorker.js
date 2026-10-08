@@ -26,6 +26,12 @@ console.error(
   {
     pid: process.pid,
     hostname: process.env.RAILWAY_REPLICA_ID || "unknown",
+    redisUrl: process.env.REDIS_URL
+      ? process.env.REDIS_URL.replace(
+          /:\/\/([^:]+):([^@]+)@/,
+          "://$1:****@"
+        )
+      : "MISSING",
     job,
   }
 );
