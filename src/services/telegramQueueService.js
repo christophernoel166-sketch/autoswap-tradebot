@@ -17,6 +17,22 @@ async function logRedisQueueIdentity() {
     telegramQueueRedis.options.db
   );
 
+
+
+
+const bridgeTestValue =
+  await telegramQueueRedis.get(
+    "telegram:queue:bridge:test"
+  );
+
+console.log(
+  "🔎 [TelegramQueueRedis] Bridge test value:",
+  bridgeTestValue
+);
+
+
+
+
   console.log(
     "🔎 [TelegramQueueProbeRedis] Redis DB:",
     telegramQueueProbeRedis.options.db
@@ -68,6 +84,15 @@ export async function enqueueTelegramNotification({
     createdAt: Date.now(),
   })
 );
+
+
+await redis.set(
+  "telegram:queue:bridge:test",
+  "API-WROTE-THIS",
+  "EX",
+  60
+);
+
 
 console.log(
   "🔎 [TelegramQueue] Job enqueued:",
