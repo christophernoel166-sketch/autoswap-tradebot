@@ -86,6 +86,17 @@ export async function enqueueTelegramNotification({
 );
 
 
+console.log(
+  "🔎 [TelegramQueue] RPUSH returned:",
+  queueLength
+);
+
+console.log(
+  "🔎 [TelegramQueue] Same-connection LLEN:",
+  await redis.llen(QUEUE_NAME)
+);
+
+
 
 
 const debugReceiptKey =
