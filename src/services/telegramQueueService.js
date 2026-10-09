@@ -74,15 +74,60 @@ export async function enqueueTelegramNotification({
   }
 
 
- const queueLength = await redis.rpush(
+const notificationPayload = JSON.stringify({
+  telegramUserId,
+  telegramChannelId,
+  message,
+  parseMode,
+  createdAt: Date.now(),
+});
+
+const atomicQueueResult = await redis.eval(
+  `
+    local queue = KEYS[1]
+    local payload = ARGV[1]
+
+    local pushedLength = redis.call(
+      "RPUSH",
+      queue,
+      payload
+    )
+
+    local currentLength = redis.call(
+      "LLEN",
+      queue
+    )
+
+    local currentContents = redis.call(
+      "LRANGE",
+      queue,
+      0,
+      -1
+    )
+
+    return {
+      pushedLength,
+      currentLength,
+      currentContents
+    }
+  `,
+  1,
   QUEUE_NAME,
-  JSON.stringify({
-    telegramUserId,
-    telegramChannelId,
-    message,
-    parseMode,
-    createdAt: Date.now(),
-  })
+  notificationPayload
+);
+
+const queueLength = Number(atomicQueueResult[0]);
+const atomicLength = Number(atomicQueueResult[1]);
+const atomicContents = atomicQueueResult[2];
+
+console.log(
+  "🔬 [TelegramQueue] ATOMIC REDIS RESULT:",
+  {
+    queue: QUEUE_NAME,
+    pushedLength: queueLength,
+    lengthInsideScript: atomicLength,
+    contentsInsideScript: atomicContents,
+  }
 );
 
 
