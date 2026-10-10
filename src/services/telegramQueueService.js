@@ -57,11 +57,14 @@ logRedisQueueIdentity().catch((err) => {
 // =====================================================
 
 export async function enqueueTelegramNotification({
+  notificationId = null,
   telegramUserId = null,
   telegramChannelId = null,
   message,
   parseMode = "HTML",
 }) {
+
+
   // -----------------------------------------------
   // Require a destination
   // -----------------------------------------------
@@ -75,6 +78,7 @@ export async function enqueueTelegramNotification({
 
 
 const notificationPayload = JSON.stringify({
+  notificationId,
   telegramUserId,
   telegramChannelId,
   message,
@@ -148,6 +152,7 @@ const debugReceiptKey =
   `telegram:receipt:${Date.now()}`;
 
 const debugReceiptPayload = {
+  notificationId,
   telegramUserId,
   telegramChannelId,
   message,

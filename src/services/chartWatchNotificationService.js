@@ -4,8 +4,19 @@ import {
   enqueueTelegramNotification,
 } from "./telegramQueueService.js";
 
+import SignalChannel from "../../models/SignalChannel.js";
+
 const SYSTEM_CHANNEL_ID =
   process.env.SYSTEM_TELEGRAM_CHANNEL_ID;
+
+
+function generateNotificationId() {
+  return `NTF-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 8)
+    .toUpperCase()}`;
+}
+
 
 
 // =====================================================
@@ -58,9 +69,16 @@ function buildNotification(result, watch) {
 // BUILD TELEGRAM CHANNEL MESSAGE
 // =====================================================
 
-function buildTelegramChannelMessage(watch, result, payload) {
+function buildTelegramChannelMessage(
+  watch,
+  result,
+  payload,
+  notificationId
+) {
   return `
 ${payload.title}
+
+🆔 <b>Notification ID:</b> <code>${notificationId}</code>
 
 🪙 <b>Token:</b> ${watch.symbol || "Unknown"}
 
@@ -87,6 +105,16 @@ export async function notifyChartWatch(watch, result) {
 
 const payload = buildNotification(result, watch);
 if (!payload) return;
+
+const notificationId = generateNotificationId();
+
+console.log("🆔 Chart notification created:", {
+  notificationId,
+  watchId: watch._id,
+  symbol: watch.symbol,
+  event: result.event,
+  watchType: watch.watchType,
+});
 
   // ===================================================
   // SYSTEM WATCH
@@ -164,11 +192,12 @@ if (!ENTRY_EVENTS.has(result.event)) {
 
     try {
       const telegramMessage =
-        buildTelegramChannelMessage(
-          watch,
-          result,
-          payload
-        );
+  buildTelegramChannelMessage(
+    watch,
+    result,
+    payload,
+    notificationId
+  );
 
       await enqueueTelegramNotification({
         telegramChannelId: SYSTEM_CHANNEL_ID,
@@ -177,14 +206,15 @@ if (!ENTRY_EVENTS.has(result.event)) {
       });
 
       console.log(
-        "📨 SYSTEM CHART NOTIFICATION — Telegram channel queued",
-        {
-          channelId: SYSTEM_CHANNEL_ID,
-          watchId: watch._id,
-          symbol: watch.symbol,
-          event: result.event,
-        }
-      );
+  "📨 SYSTEM CHART NOTIFICATION — Telegram channel queued",
+  {
+    notificationId,
+    channelId: SYSTEM_CHANNEL_ID,
+    watchId: watch._id,
+    symbol: watch.symbol,
+    event: result.event,
+  }
+);
     } catch (telegramError) {
       console.error(
         "❌ SYSTEM CHART NOTIFICATION — Telegram channel queue failed:",
@@ -194,6 +224,7 @@ if (!ENTRY_EVENTS.has(result.event)) {
 
     return;
   }
+
 
   // ===================================================
   // USER WATCH
@@ -212,6 +243,10 @@ if (!ENTRY_EVENTS.has(result.event)) {
     return;
   }
 
+  // -----------------------------------------------
+  // DASHBOARD — preserve existing behavior
+  // -----------------------------------------------
+
   await createNotification({
     walletAddress: watch.walletAddress,
     type: payload.type,
@@ -226,4 +261,67 @@ if (!ENTRY_EVENTS.has(result.event)) {
       event: result.event,
     },
   });
+
+  // -----------------------------------------------
+  // TELEGRAM — only this user's claimed channel
+  // -----------------------------------------------
+
+  const ENTRY_EVENTS = new Set([
+    "BREAKOUT_CONFIRMED",
+    "PULLBACK_COMPLETED",
+  ]);
+
+  if (!ENTRY_EVENTS.has(result.event)) {
+    return;
+  }
+
+  try {
+    const channel = await SignalChannel.findOne({
+      ownerWallet: watch.walletAddress,
+      status: "active",
+    }).lean();
+
+    if (!channel?.channelId) {
+      console.warn(
+        "⚠️ USER CHART NOTIFICATION — no active owned channel found",
+        {
+          watchId: watch._id,
+          walletAddress: watch.walletAddress,
+          event: result.event,
+        }
+      );
+
+      return;
+    }
+
+    const telegramMessage = buildTelegramChannelMessage(
+      watch,
+      result,
+      payload,
+      notificationId
+    );
+
+    await enqueueTelegramNotification({
+      notificationId,
+      telegramChannelId: channel.channelId,
+      message: telegramMessage,
+      parseMode: "HTML",
+    });
+
+    console.log(
+      "📨 USER CHART NOTIFICATION — Telegram channel queued",
+      {
+        notificationId,
+        channelId: channel.channelId,
+        watchId: watch._id,
+        symbol: watch.symbol,
+        event: result.event,
+      }
+    );
+  } catch (telegramError) {
+    console.error(
+      "❌ USER CHART NOTIFICATION — Telegram channel queue failed:",
+      telegramError?.message || telegramError
+    );
+  }
 }

@@ -37,6 +37,7 @@ console.error(
       process.env.RAILWAY_REPLICA_ID || "unknown",
     service:
       process.env.RAILWAY_SERVICE_NAME || "unknown",
+     notificationId: job?.notificationId ?? null,
     job,
   }
 );
@@ -89,9 +90,15 @@ console.error(
       }
     );
 
-    LOG.info(
-      `📨 Telegram notification sent to ${destination}`
-    );
+   
+LOG.info(
+  "📨 Telegram notification sent:",
+  {
+    notificationId: job.notificationId ?? null,
+    destination,
+  }
+);
+
 
   } catch (err) {
 

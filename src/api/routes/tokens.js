@@ -9,10 +9,6 @@ import { getExcludedHolderAddressesForMint } from "../../scanner/excludedHolderA
 import { fetchTokenSocialData } from "../../scanner/fetchTokenSocialData.js";
 import { checkWebsiteStatus } from "../../scanner/checkWebsiteStatus.js";
 import { checkSocialStatus } from "../../scanner/checkSocialStatus.js";
-
-
-
-
 import { getAlphaCallers } from "../../scanner/alphaCallers.js";
 import { acquireBuyLock, enqueueBuyJob } from "../../queue/tradeQueue.js";
 import { fetchMarketIntegrityData } from "../../scanner/fetchMarketIntegrityData.js";
