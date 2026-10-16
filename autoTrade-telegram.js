@@ -3098,7 +3098,7 @@ if (!trailingShouldBeActive) {
 
             price,
 
-            entryPrice: entry,
+            entryPrice: entryPriceUsd,
 
             highestPrice: walletHigh,
 
@@ -3312,7 +3312,7 @@ if (
 
     price,
 
-    entryPrice: entry,
+    entryPrice: entryPriceUsd,
 
     highestPrice: walletHigh,
 
@@ -3436,7 +3436,7 @@ if (
 
     price,
 
-    entryPrice: entry,
+    entryPrice: entryPriceUsd,
 
     highestPrice: walletHigh,
 
@@ -3553,7 +3553,7 @@ if (
 
     price,
 
-    entryPrice: entry,
+    entryPrice: entryPriceUsd,
 
     highestPrice: walletHigh,
 
@@ -3707,7 +3707,7 @@ if (trailingShouldBeActive) {
       {
         walletAddress,
         mint,
-        entry,
+        entryPrice: entryPriceUsd,
         walletHigh,
         currentPrice: price,
         trailingDistancePct,
@@ -3718,7 +3718,6 @@ if (trailingShouldBeActive) {
     );
 
     const exitRequest = buildExitTradeRequest({
-
       walletAddress,
 
       wallet: info.wallet,
@@ -3729,7 +3728,7 @@ if (trailingShouldBeActive) {
 
       price,
 
-      entryPrice: entry,
+      entryPrice: entryPriceUsd,
 
       highestPrice: walletHigh,
 
