@@ -1,0 +1,6717 @@
+ 
+// autoTrade-telegram.js
+// Rewritten for FULL WALLET MODE (no per-user Telegram identity)
+
+import dotenv from "dotenv";
+import mongoose from "mongoose";
+import { Telegraf } from "telegraf";
+
+import { TOKEN_PROGRAM_ID }
+from "@solana/spl-token";
+
+import pino from "pino";
+import {
+  Connection,
+  PublicKey,
+  SystemProgram,
+  Transaction,
+  LAMPORTS_PER_SOL,
+} from "@solana/web3.js";
+// Ensure fetch exists in Node <18 (optional)
+import nodeFetch from "node-fetch";
+if (typeof global.fetch !== "function") global.fetch = nodeFetch;
+import {
+  enqueueBuyJob,
+  acquireBuyLock,
+  enqueueSellJob,
+  acquireSellLock,
+  releaseSellLock,
+} from "./src/queue/tradeQueue.js";
+import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
+import User from "./models/User.js";
+import TokenOutcome from "./models/TokenOutcome.js";
+import bot from "./src/telegram/bot.js";
+import { restoreTradingWallet } from "./src/services/walletService.js";
+import ChannelSettings from "./models/ChannelSettings.js";
+import SignalChannel from "./models/SignalChannel.js";
+import ProcessedSignal from "./models/ProcessedSignal.js";
+import cors from "cors";
+import express from "express";
+// 🔴 Redis (shared state between bot & API)
+import { redis } from "./src/utils/redis.js";
+import {
+  positionKey,
+  walletActiveSet,
+  walletPositionsKey,
+  walletSnapshotKey,
+  POSITION_FIELDS,
+} from "./src/redis/positionKeys.js";
+import {
+  startBuyWorker,
+  registerBuyExecutor,
+} from "./src/workers/buyWorker.js";
+import { startSellWorker, registerSellExecutor } from "./src/workers/sellWorker.js";
+import { manualSellCommandKey } from "./src/redis/commandKeys.js";
+
+import {
+  getDexScreenerPrice,
+  getDexScreenerPrices,
+  getDexScreenerMarketSnapshots,
+} from "./src/services/priceFeed.js";
+
+import {
+  scanWalletForMissingPositions,
+} from "./src/recovery/scanWalletForMissingPositions.js";
+
+import {
+  createNotification,
+} from "./src/services/notificationService.js";
+
+import {
+  rebuildPositionsFromBlockchain,
+} from "./src/recovery/rebuildPositionsFromBlockchain.js";
+// import {
+//  restoreWalletBalances,
+// } from "./src/recovery/restoreWalletBalances.js";
+import {
+  getWalletTokenBalance,
+} from "./src/services/walletBalance.js";
+import {
+  setTelegramBot,
+} from "./src/services/telegramBotService.js";
+import {
+  startTelegramQueueWorker,
+} from "./src/services/telegramQueueWorker.js";
+import {
+    processAIEntryPipeline,
+} from "./src/ai/pipelines/processAIEntryPipeline.js";
+
+import {
+    runAIReviewManager,
+} from "./src/ai/orchestration/AIReviewManager.js";
+
+import {
+    processAIExitPipeline,
+} from "./src/ai/pipelines/processAIExitPipeline.js";
+import {
+    createPipelineContext,
+} from "./src/ai/core/createPipelineContext.js";
+
+import {
+    evaluatePositionHealth,
+} from "./src/ai/services/PositionIntelligenceEngine.js";
+
+import {
+    runProtectionStrategyEngine,
+} from "./src/ai/services/ProtectionStrategyEngine.js";
+import {
+    generateTradeDecision,
+} from "./src/ai/orchestration/TradeDecisionCoordinator.js";
+
+import {
+    runAIExitEngine,
+} from "./src/ai/core/AIExitEngine.js";
+
+import {
+    buildTradeManagementPlan,
+} from "./src/ai/orchestration/TradeManagementPlanner.js";
+
+import { saveAIStateToRedis } from "./src/services/saveAIStateToRedis.js";
+import { loadAIStateFromRedis } from "./src/services/loadAIStateFromRedis.js";
+import { analyzeAITimeline } from "./src/services/AITimelineAnalyzer.js";
+import {
+    runRecommendationEngine,
+} from "./src/ai/services/RecommendationEngine.js";
+import {
+  publishLiveAIState,
+} from "./src/services/liveAIStateEvents.js";
+
+
+let recoverySchedulerStarted = false;
+
+redis.ping().then((res) => {
+  console.log("🧠 BOT Redis ping:", res);
+});
+
+
+// 🔥 MUST BE HERE
+dotenv.config();
+const LOG = pino({ level: process.env.LOG_LEVEL || "info" });
+
+// ===================================================
+// 🧨 RAW TELEGRAM TAP — MUST LOG ALL COMMANDS
+// ===================================================
+ bot.on(["message", "channel_post"], async (ctx, next) => {
+  const text =
+   ctx.channelPost?.text ||
+    ctx.message?.text ||
+    null;
+
+    console.log("🧨 RAW TAP HIT", {
+   updateType: ctx.updateType,
+    chatType: ctx.chat?.type,
+    chatId: ctx.chat?.id,
+    text,
+    hasChannelPost: Boolean(ctx.channelPost),
+    hasMessage: Boolean(ctx.message),
+  });
+
+  return next();
+ });
+
+
+// ===================================================
+// 🧭 + 🧪 SINGLE CHANNEL_POST ROUTER
+// Commands FIRST, Signals SECOND
+// ===================================================
+bot.on("channel_post", async (ctx) => {
+  try {
+    const text = ctx.channelPost?.text?.trim();
+    const chat = ctx.chat;
+    if (!text || !chat) return;
+
+    const channelId = String(chat.id);
+
+    // ===================================================
+    // 🧭 COMMAND ROUTER (ALWAYS FIRST)
+    // ===================================================
+    if (text.startsWith("/")) {
+      const [command, arg] = text.split(/\s+/);
+
+      console.log("🧭 CHANNEL ROUTER HIT", {
+        command,
+        channelId,
+        text,
+      });
+
+      // ---------------------------------------------------
+      // 📋 /pending_requests
+      // ---------------------------------------------------
+      if (command === "/pending_requests") {
+        const channel = await SignalChannel.findOne({ channelId });
+        if (!channel?.ownerWallet) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Channel not claimed yet. Use /claim_channel first."
+          );
+          return;
+        }
+
+        const users = await User.find({
+          subscribedChannels: {
+            $elemMatch: { channelId, status: "pending" },
+          },
+        }).lean();
+
+        if (!users.length) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "✅ No pending requests."
+          );
+          return;
+        }
+
+        let msg = "⏳ Pending Wallet Requests:\n\n";
+        for (const user of users) {
+          const sub = user.subscribedChannels.find(
+            (s) => String(s.channelId) === channelId
+          );
+
+          msg += `• ${user.walletAddress}\n`;
+          msg += `  Requested: ${new Date(
+            sub.requestedAt
+          ).toLocaleString()}\n\n`;
+        }
+
+        await ctx.telegram.sendMessage(channelId, msg);
+        return;
+      }
+
+      // ---------------------------------------------------
+      // 🔐 /claim_channel <WALLET>
+      // ---------------------------------------------------
+      if (command === "/claim_channel") {
+        const walletAddress = arg;
+        if (!walletAddress) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Usage: /claim_channel <WALLET_ADDRESS>"
+          );
+          return;
+        }
+
+        const botMember = await ctx.telegram.getChatMember(
+          chat.id,
+          ctx.botInfo.id
+        );
+
+        if (botMember.status !== "administrator") {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Bot must be an admin to claim this channel."
+          );
+          return;
+        }
+
+        const channel = await SignalChannel.findOne({ channelId });
+        if (!channel) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Channel not registered. Add bot as admin first."
+          );
+          return;
+        }
+
+        if (channel.ownerWallet) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            `⚠️ Channel already claimed\nOwner: ${channel.ownerWallet}`
+          );
+          return;
+        }
+
+        channel.ownerWallet = walletAddress;
+        channel.claimedAt = new Date();
+        await channel.save();
+
+        await ctx.telegram.sendMessage(
+          channelId,
+          `✅ Channel claimed successfully\n\nChannel: ${chat.title}\nOwner wallet: ${walletAddress}`
+        );
+
+        console.log("🔐 CLAIM SUCCESS", { channelId, walletAddress });
+        return;
+      }
+
+      // ---------------------------------------------------
+      // 🔐 /approve_wallet & /reject_wallet
+      // ---------------------------------------------------
+      if (command === "/approve_wallet" || command === "/reject_wallet") {
+        const walletAddress = arg;
+        if (!walletAddress) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Usage: /approve_wallet <WALLET_ADDRESS>"
+          );
+          return;
+        }
+
+        const user = await User.findOne({ walletAddress });
+        if (!user) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Wallet not found in database."
+          );
+          return;
+        }
+
+        const sub = user.subscribedChannels?.find(
+          (s) => String(s.channelId) === channelId
+        );
+
+        if (!sub) {
+          await ctx.telegram.sendMessage(
+            channelId,
+            "❌ Wallet did not request this channel."
+          );
+          return;
+        }
+
+        if (sub.status !== "pending") {
+          await ctx.telegram.sendMessage(
+            channelId,
+            `❌ Request not pending (current: ${sub.status})`
+          );
+          return;
+        }
+
+        const isApprove = command === "/approve_wallet";
+
+        sub.status = isApprove ? "approved" : "rejected";
+        sub.enabled = isApprove;
+        sub.approvedAt = new Date();
+        await user.save();
+
+        notifyUserOfApproval(user, channelId, isApprove).catch((err) =>
+          LOG.error(
+            { err, walletAddress, channelId },
+            "notifyUserOfApproval failed"
+          )
+        );
+
+        notifyDashboardOfApproval({
+          walletAddress,
+          channelId,
+          status: isApprove ? "approved" : "rejected",
+        }).catch((err) =>
+          LOG.error(
+            { err, walletAddress, channelId },
+            "notifyDashboardOfApproval failed"
+          )
+        );
+
+        await ctx.telegram.sendMessage(
+          channelId,
+          isApprove
+            ? `✅ Wallet approved:\n${walletAddress}`
+            : `🚫 Wallet rejected:\n${walletAddress}`
+        );
+
+        console.log("🔐 APPROVAL SUCCESS", {
+          walletAddress,
+          channelId,
+          action: isApprove ? "approved" : "rejected",
+        });
+
+        return;
+      }
+
+      // Unknown command → ignore
+      return;
+    }
+
+    // ===================================================
+    // 🧪 SIGNAL HANDLER (NON-COMMAND POSTS ONLY)
+    // ===================================================
+    console.log("🧪 SIGNAL HANDLER HIT (CHANNEL_POST)", {
+      channelId,
+      chatTitle: chat.title,
+      chatUsername: chat.username,
+      text,
+    });
+
+    const mintMatch = text.match(/[1-9A-HJ-NP-Za-km-z]{32,44}/);
+    if (!mintMatch) {
+      console.log("🧪 NO MINT FOUND IN CHANNEL POST");
+      return;
+    }
+
+    const mint = mintMatch[0];
+
+    console.log("🧪 MINT DETECTED", {
+      mint,
+      channel: chat.username || chat.title,
+    });
+
+    const users = await User.find({
+      active: { $ne: false },
+      subscribedChannels: {
+        $elemMatch: {
+          channelId,
+          enabled: true,
+          status: "approved",
+        },
+      },
+    }).lean();
+
+    if (!users.length) {
+      console.log("🧪 NO ELIGIBLE WALLETS FOR THIS SIGNAL", {
+        channelId,
+        mint,
+      });
+      return;
+    }
+    // LIVE TRADE FOR EVERY USER
+console.log("🚀 SIGNAL RECEIVED — ENQUEUEING FOR APPROVED USERS", {
+  channelId,
+  mint,
+  users: users.length,
+});
+
+for (const user of users) {
+  try {
+    const walletAddress = String(user.walletAddress || "").trim();
+    if (!walletAddress) continue;
+
+    // 🔒 prevent duplicate buy jobs for same wallet+mint
+    const locked = await acquireBuyLock(walletAddress, mint);
+    if (!locked) {
+      LOG.info(
+        { walletAddress, mint, channelId },
+        "⏭️ Buy skipped — duplicate buy lock already exists"
+      );
+      continue;
+    }
+
+    await enqueueBuyJob({
+      walletAddress,
+      mint,
+      channelId,
+      createdAt: Date.now(),
+    });
+
+    LOG.info(
+      { walletAddress, mint, channelId },
+      "🧾 Buy job enqueued"
+    );
+  } catch (err) {
+    LOG.error(
+      { err, wallet: user.walletAddress, mint, channelId },
+      "❌ Failed to enqueue buy job for user"
+    );
+  }
+}
+
+return;
+  } catch (err) {
+    console.error("❌ channel_post unified handler crashed", err);
+  }
+});
+
+
+function isUserApprovedForChannel(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+
+  const sub = user.subscribedChannels.find(
+    c => c.channelId === channelId
+  );
+
+  return (
+    sub &&
+    sub.enabled === true &&
+    sub.status === "approved"
+  );
+}
+
+function isChannelEnabledForUser(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+  return user.subscribedChannels.some(
+    (c) => c.channelId === channelId && c.enabled === true
+  );
+}
+
+
+// ========= Config =========
+const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const RPC_URL = process.env.RPC_URL;
+const MONGO_URI = process.env.MONGO_URI;
+const FEE_WALLET = process.env.FEE_WALLET;
+const ADMIN_IDS = (process.env.ADMIN_TELEGRAM_ID || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+const POLL_INTERVAL_MS = parseInt(process.env.POLL_INTERVAL_MS || "15000", 10);
+
+if (!BOT_TOKEN) throw new Error("TELEGRAM_BOT_TOKEN is required");
+if (!MONGO_URI) throw new Error("MONGO_URI is required");
+if (!RPC_URL) throw new Error("RPC_URL is required");
+if (!FEE_WALLET) throw new Error("FEE_WALLET is required");
+
+// ============================
+// 💰 PLATFORM FEES
+// ============================
+const FEE_BUY_SOL = 0.0025;
+const FEE_BUY_LAMPORTS = Math.floor(FEE_BUY_SOL * LAMPORTS_PER_SOL);
+
+// ============================
+const FEE_SELL_SOL = 0.0025;
+const FEE_SELL_LAMPORTS = Math.floor(FEE_SELL_SOL * LAMPORTS_PER_SOL);
+
+const connection = new Connection(RPC_URL, "confirmed");
+
+// ===================================================
+// 💸 BUY FEE HELPER
+// ===================================================
+async function chargeBuyFee(wallet, buyTxid, mint) {
+  try {
+    const feePubkey = new PublicKey(FEE_WALLET);
+
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: feePubkey,
+        lamports: FEE_BUY_LAMPORTS,
+      })
+    );
+
+    const sig = await connection.sendTransaction(tx, [wallet], {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    await connection.confirmTransaction(sig, "confirmed");
+
+    LOG.info(
+      { feeSig: sig, buyTxid, mint, feeLamports: FEE_BUY_LAMPORTS },
+      "💸 BUY fee paid"
+    );
+
+    return sig;
+  } catch (err) {
+    LOG.error(
+      { errName: err?.name, errMessage: err?.message, mint, buyTxid },
+      "❌ BUY fee payment failed"
+    );
+    return null;
+  }
+}
+
+// ===================================================
+// 💸 SELL FEE HELPER
+// ===================================================
+async function chargeSellFee(wallet, sellTxid, mint, reason = "sell_fee") {
+  try {
+    const feePubkey = new PublicKey(FEE_WALLET);
+
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: wallet.publicKey,
+        toPubkey: feePubkey,
+        lamports: FEE_SELL_LAMPORTS,
+      })
+    );
+
+    const sig = await connection.sendTransaction(tx, [wallet], {
+      skipPreflight: false,
+      preflightCommitment: "confirmed",
+    });
+
+    await connection.confirmTransaction(sig, "confirmed");
+
+    LOG.info(
+      { feeSig: sig, sellTxid, mint, reason, feeLamports: FEE_SELL_LAMPORTS },
+      "💸 SELL fee paid"
+    );
+
+    return sig;
+  } catch (err) {
+    // Fee failure should NOT crash selling
+    LOG.error(
+      { errName: err?.name, errMessage: err?.message, mint, sellTxid, reason },
+      "❌ SELL fee payment failed"
+    );
+    return null;
+  }
+}
+
+// ===================================================
+// ✅ AUTO CHANNEL DISCOVERY (my_chat_member)
+// ===================================================
+bot.on("my_chat_member", async (ctx) => {
+  try {
+    const update = ctx.update.my_chat_member;
+    const chat = update.chat;
+
+    // Only channels matter
+    if (chat.type !== "channel") return;
+
+    const status = update.new_chat_member.status;
+
+   // Bot added to channel
+
+if (status === "administrator" || status === "member") {
+
+  await SignalChannel.findOneAndUpdate(
+    { channelId: String(chat.id) },
+    {
+      channelId: String(chat.id),
+      title: chat.title || "Unnamed Channel",
+      username: chat.username || null,
+      status: "active",
+      connectedAt: new Date(),
+    },
+    { upsert: true }
+  );
+
+  LOG.info(
+    { channelId: chat.id, title: chat.title },
+    "Channel auto-connected via admin add"
+  );
+}
+
+    // Bot removed from channel
+    if (status === "left") {
+      await SignalChannel.updateOne(
+        { channelId: String(chat.id) },
+        { $set: { status: "inactive" } }
+      );
+
+      LOG.warn(
+        { channelId: chat.id, title: chat.title },
+        "Channel disconnected (bot removed)"
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "my_chat_member handler failed");
+  }
+});
+
+
+
+// ===================================================
+// 🔗 LINK TELEGRAM ↔ WALLET
+// Usage (private chat):
+// /link_wallet <CODE>
+// ===================================================
+bot.command("link_wallet", async (ctx) => {
+  try {
+    // Must be private chat
+    if (ctx.chat.type !== "private") {
+      return ctx.reply("❌ Please DM me to link your wallet.");
+    }
+
+    const args = ctx.message.text.split(" ").slice(1);
+    const code = args[0];
+
+    if (!code) {
+      return ctx.reply("❌ Usage: /link_wallet <CODE>");
+    }
+
+    console.log("🔗 link_wallet received:", code);
+
+    const user = await User.findOne({
+      "telegram.linkCode": code,
+      "telegram.linkedAt": null,
+    });
+
+    if (!user) {
+      return ctx.reply("❌ Invalid or expired link code.");
+    }
+
+    // 🔒 GLOBAL ONE TELEGRAM → ONE WALLET LOCK
+    const existing = await User.findOne({
+      "telegram.userId": String(ctx.from.id),
+      walletAddress: { $ne: user.walletAddress },
+    });
+
+    if (existing) {
+      return ctx.reply(
+        "❌ This Telegram account is already linked to another wallet."
+      );
+    }
+
+    user.telegram = {
+      userId: String(ctx.from.id),
+      username: ctx.from.username || null,
+      firstName: ctx.from.first_name || null,
+      linkedAt: new Date(),
+      linkCode: null,
+    };
+
+    await user.save();
+
+    await ctx.reply(
+      `✅ Wallet linked successfully!\n\n` +
+      `💼 Wallet: ${user.walletAddress}\n` +
+      `👤 Telegram: @${ctx.from.username || "no_username"}`
+    );
+  } catch (err) {
+    console.error("link_wallet error:", err);
+    ctx.reply("❌ Failed to link wallet.");
+  }
+});
+
+
+// ========= Dynamic Channel Management =========
+let CHANNELS = [];
+
+async function loadChannels() {
+  try {
+    const rows = await SignalChannel.find({
+      status: "active",
+    }).lean();
+
+    CHANNELS = rows.map((c) => String(c.channelId));
+
+    LOG.info(
+      { channels: CHANNELS },
+      "Loaded allowed channels from DB"
+    );
+  } catch (err) {
+    LOG.error(err, "Failed to load channels from DB");
+    CHANNELS = [];
+  }
+}
+
+// ========= Subscription Watcher (STEP 1.1 — FINAL NON-SPAM) =========
+let subscriptionPollRunning = false;
+
+async function pollPendingSubscriptions() {
+  if (subscriptionPollRunning) return;
+  subscriptionPollRunning = true;
+
+  try {
+    const users = await User.find({
+      subscribedChannels: {
+        $elemMatch: {
+          status: "pending",
+          $or: [
+            { notifiedAt: { $exists: false } },
+            { notifiedAt: null },
+          ],
+        },
+      },
+    });
+
+    for (const user of users) {
+      for (const sub of user.subscribedChannels) {
+        if (sub.status !== "pending") continue;
+        if (sub.notifiedAt) continue;
+
+        const rawChannelId = String(sub.channelId);   // "-100..." OR "@xitech101"
+
+        const result = await User.updateOne(
+          {
+            walletAddress: user.walletAddress,
+            subscribedChannels: {
+              $elemMatch: {
+                channelId: rawChannelId,
+                status: "pending",
+                $or: [
+                  { notifiedAt: { $exists: false } },
+                  { notifiedAt: null },
+                ],
+              },
+            },
+          },
+          {
+            $set: {
+              "subscribedChannels.$.notifiedAt": new Date(),
+            },
+          }
+        );
+
+        if (result.modifiedCount === 0) {
+          LOG.info(
+            { wallet: user.walletAddress, channelId: rawChannelId },
+            "⏭️ Skipping — already notified"
+          );
+          continue;
+        }
+
+        try {
+          LOG.info(
+            { wallet: user.walletAddress, channelId: rawChannelId },
+            "📩 Sending approval request to channel"
+          );
+
+          // ✅ IMPORTANT:
+          // - If channelId is numeric "-100...", send it as-is
+          // - If legacy "@username", also send it as-is
+          // sendApprovalRequestToChannel will resolve username OR channelId safely
+          await sendApprovalRequestToChannel({
+            walletAddress: user.walletAddress,
+            channelId: rawChannelId, // ✅ NOT normalized
+          });
+
+        } catch (err) {
+          LOG.error(
+            {
+              errName: err?.name,
+              errMessage: err?.message,
+              wallet: user.walletAddress,
+              channelId: rawChannelId,
+            },
+            "❌ Failed to send approval request"
+          );
+
+          // 🔁 Roll back so it retries later
+          await User.updateOne(
+            {
+              walletAddress: user.walletAddress,
+              "subscribedChannels.channelId": rawChannelId,
+            },
+            {
+              $unset: {
+                "subscribedChannels.$.notifiedAt": "",
+              },
+            }
+          );
+        }
+      }
+    }
+  } catch (err) {
+    LOG.error({ err }, "❌ pollPendingSubscriptions error");
+  } finally {
+    subscriptionPollRunning = false;
+  }
+}
+
+
+
+// ========= Approval Request Helper (FINAL — SAFE + IDENTITY-CONSISTENT) =========
+function escapeTelegram(text) {
+  return String(text).replace(/[<>&]/g, (c) => {
+    if (c === "<") return "&lt;";
+    if (c === ">") return "&gt;";
+    if (c === "&") return "&amp;";
+    return c;
+  });
+}
+
+async function sendApprovalRequestToChannel({ walletAddress, channelId }) {
+  const user = await User.findOne({ walletAddress });
+  if (!user) throw new Error("User not found");
+
+  // --------------------------------------------------
+  // 🔧 Normalize incoming identifier
+  // - accepts "-100..." OR "@username" OR "username"
+  // --------------------------------------------------
+  const raw = String(channelId || "").trim();
+  if (!raw) throw new Error("channelId missing");
+
+  const normalized = raw.replace(/^@/, ""); // remove @ if present
+  const isNumericId = /^-?\d+$/.test(normalized); // Telegram channel IDs are negative numbers
+
+  // --------------------------------------------------
+  // ✅ Find active channel
+  // - If numeric: match by channelId ONLY
+  // - If username: match by username
+  // --------------------------------------------------
+  let channel = await SignalChannel.findOne(
+    isNumericId
+      ? { channelId: normalized, status: "active" }
+      : { username: normalized, status: "active" }
+  );
+
+  // --------------------------------------------------
+  // 🧠 If missing but numeric ID, auto-upsert from Telegram
+  // (fixes "Channel not found" when DB is missing/old)
+  // --------------------------------------------------
+  if (!channel && isNumericId) {
+    try {
+      // Telegraf getChat accepts number or string; we’ll pass string
+      const chat = await bot.telegram.getChat(normalized);
+
+      // Upsert SignalChannel as active
+      await SignalChannel.findOneAndUpdate(
+        { channelId: String(chat.id) },
+        {
+          channelId: String(chat.id),
+          title: chat.title || "Unnamed Channel",
+          username: chat.username || null,
+          status: "active",
+          connectedAt: new Date(),
+        },
+        { upsert: true, new: true }
+      );
+
+      // Re-fetch
+      channel = await SignalChannel.findOne({
+        channelId: String(chat.id),
+        status: "active",
+      });
+    } catch (e) {
+      // If bot isn't in the channel / no permission, Telegram will throw
+      throw new Error(
+        `Channel not found in DB and cannot fetch from Telegram. ` +
+          `Make sure the bot is added (preferably admin). channelId=${normalized}`
+      );
+    }
+  }
+
+  // --------------------------------------------------
+  // Final guard
+  // --------------------------------------------------
+  if (!channel) {
+    throw new Error(`Channel not found or inactive for channelId=${raw}`);
+  }
+
+  // --------------------------------------------------
+  // Compose message
+  // --------------------------------------------------
+  const username = user.telegram?.username
+    ? `@${user.telegram.username}`
+    : "(not linked yet)";
+
+  const telegramId = user.telegram?.userId
+    ? String(user.telegram.userId)
+    : "(not linked yet)";
+
+  const safeUsername = escapeTelegram(username);
+  const safeTelegramId = escapeTelegram(telegramId);
+  const safeWallet = escapeTelegram(walletAddress);
+
+  const message =
+    "🆕 Trade Access Request\n\n" +
+    "👤 Telegram: " + safeUsername + "\n" +
+    "🆔 Telegram ID: " + safeTelegramId + "\n" +
+    "💼 Wallet: " + safeWallet + "\n\n" +
+    "Approve:\n" +
+    "/approve_wallet " + walletAddress + "\n\n" +
+    "Reject:\n" +
+    "/reject_wallet " + walletAddress;
+
+  // ✅ Always send to the numeric channelId from DB
+  await bot.telegram.sendMessage(channel.channelId, message);
+
+  LOG.info(
+    { walletAddress, sentTo: channel.channelId, username: channel.username },
+    "📩 Approval request sent"
+  );
+}
+
+  
+
+// ===================================================
+// 📣 STEP 4 — APPROVAL NOTIFICATIONS + DASHBOARD SYNC
+// ===================================================
+async function notifyUserOfApproval(user, channelId, isApprove) {
+  try {
+    if (!user.telegram?.userId) {
+      LOG.warn(
+        { wallet: user.walletAddress },
+        "User not linked to Telegram — skipping DM"
+      );
+      return;
+    }
+
+    const message = isApprove
+      ? `✅ Your wallet has been APPROVED for channel ${channelId}`
+      : `🚫 Your wallet has been REJECTED for channel ${channelId}`;
+
+    await bot.telegram.sendMessage(user.telegram.userId, message);
+
+    LOG.info(
+      {
+        wallet: user.walletAddress,
+        telegramId: user.telegram.userId,
+        channelId,
+        action: isApprove ? "approved" : "rejected",
+      },
+      "📣 Sent approval DM to user"
+    );
+  } catch (err) {
+    LOG.error(
+      { err, wallet: user.walletAddress, channelId },
+      "❌ Failed to notify user of approval"
+    );
+  }
+}
+
+async function notifyDashboardOfApproval({ walletAddress, channelId, status }) {
+  // 🛡️ HARD GUARD — dashboard sync must NEVER crash the bot
+  if (!BACKEND_BASE) {
+    LOG.warn(
+      { walletAddress, channelId, status },
+      "⚠️ BACKEND_BASE not set — skipping dashboard approval sync"
+    );
+    return;
+  }
+
+  try {
+    const base = BACKEND_BASE.replace(/\/$/, "");
+    const endpoint = `${base}/api/channels/approval-event`;
+
+    const payload = {
+      walletAddress,
+      channelId,
+      status, // approved | rejected
+      at: new Date().toISOString(),
+      source: "telegram",
+    };
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      LOG.error(
+        { status: res.status, body: text, walletAddress, channelId },
+        "Dashboard approval sync failed"
+      );
+    } else {
+      LOG.info(
+        { walletAddress, channelId, status },
+        "📊 Dashboard approval synced"
+      );
+    }
+  } catch (err) {
+    LOG.error(
+      { err, walletAddress, channelId },
+      "❌ Dashboard approval notify crashed"
+    );
+  }
+}
+
+
+// ===================================================
+// ⏳ STEP 3 — AUTO-EXPIRE PENDING CHANNEL REQUESTS
+// ===================================================
+const PENDING_EXPIRY_MS = parseInt(
+  process.env.PENDING_EXPIRY_MS || String(24 * 60 * 60 * 1000), // default 24h
+  10
+);
+
+async function expireOldPendingRequests() {
+  try {
+    const cutoff = new Date(Date.now() - PENDING_EXPIRY_MS);
+
+    const result = await User.updateMany(
+      {
+        "subscribedChannels": {
+          $elemMatch: {
+            status: "pending",
+            requestedAt: { $lt: cutoff },
+          },
+        },
+      },
+      {
+        $set: {
+          "subscribedChannels.$[elem].status": "expired",
+          "subscribedChannels.$[elem].enabled": false,
+          "subscribedChannels.$[elem].expiredAt": new Date(),
+        },
+      },
+      {
+        arrayFilters: [
+          {
+            "elem.status": "pending",
+            "elem.requestedAt": { $lt: cutoff },
+          },
+        ],
+      }
+    );
+
+    if (result.modifiedCount > 0) {
+      LOG.info(
+        {
+          expired: result.modifiedCount,
+          cutoff: cutoff.toISOString(),
+        },
+        "⏳ Auto-expired pending channel requests"
+      );
+    }
+  } catch (err) {
+    LOG.error(err, "❌ expireOldPendingRequests failed");
+  }
+}
+
+
+// ========= MongoDB + Bot bootstrap =========
+mongoose
+  .connect(MONGO_URI)
+  .then(async () => {
+    LOG.info("Connected to MongoDB");
+setTelegramBot(bot);
+
+  await loadChannels();
+LOG.info("Initial channel list loaded");
+
+registerBuyExecutor(executeTradePlan);
+registerSellExecutor(executeQueuedSell);
+
+startBuyWorker();
+startSellWorker();
+await restoreOpenPositions();
+
+setInterval(() => {
+  refreshAllMonitoredMintPrices().catch((err) => {
+    LOG.error({ err }, "❌ global price refresh interval failed");
+  });
+}, 3000);
+
+    // ========= STEP 3B — Start subscription watcher =========
+     const SUBSCRIPTION_POLL_MS = parseInt(
+  process.env.SUBSCRIPTION_POLL_MS ||
+  String(12 * 60 * 60 * 1000), // 12 hours
+  10
+);
+
+    // initial kick
+   pollPendingSubscriptions().catch((err) =>
+     LOG.error({ err }, "Initial subscription poll failed")
+   );
+
+     // periodic poll
+    setInterval(() => {
+     pollPendingSubscriptions().catch((err) =>
+       LOG.error({ err }, "Periodic subscription poll failed")
+      );
+    }, SUBSCRIPTION_POLL_MS);
+
+    // ========= STEP 3 — Auto-expiry scheduler =========
+    const EXPIRY_POLL_MS = parseInt(
+      process.env.EXPIRY_POLL_MS || "600000", // default: every 10 minutes
+      10
+    );
+
+    // initial run
+    expireOldPendingRequests().catch((err) =>
+      LOG.error({ err }, "Initial expiry sweep failed")
+    );
+
+    // periodic sweep
+    setInterval(() => {
+      expireOldPendingRequests().catch((err) =>
+        LOG.error({ err }, "Periodic expiry sweep failed")
+      );
+    }, EXPIRY_POLL_MS);
+
+ LOG.info("Launching Telegram bot (wallet-mode)...");
+
+    bot.launch({
+      allowedUpdates: ["message", "channel_post", "my_chat_member"],
+    }).catch((err) => {
+      LOG.error(err, "Telegram bot launch failed");
+    });
+
+    LOG.info("Telegram bot polling started");
+startTelegramQueueWorker(bot);
+
+    // ✅ START periodic refresh ONLY AFTER bot is running
+    const CHANNEL_REFRESH_MS = parseInt(
+      process.env.CHANNEL_REFRESH_MS || "300000",
+      10
+    );
+
+    setInterval(() => {
+      loadChannels().catch((err) =>
+        LOG.error({ err }, "Periodic channel reload failed")
+      );
+    }, CHANNEL_REFRESH_MS);
+  })
+  .catch((err) => {
+    LOG.error(err, "MongoDB Error");
+    process.exit(1);
+  });
+
+
+
+
+// ========= Utils =========
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+function isMapLike(x) {
+  return x && typeof x.get === "function" && typeof x.set === "function";
+}
+function looksLikeMint(s) {
+  return typeof s === "string" && /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(s);
+}
+
+// ===== USER_TOGGLE helpers =====
+function isChannelEnabled(user, channelId) {
+  if (!Array.isArray(user.subscribedChannels)) return false;
+
+  return user.subscribedChannels.some(
+    (c) => c.channelId === channelId && c.enabled === true
+  );
+}
+
+function getProfileForChannel(channelProfiles, channel) {
+  if (!channelProfiles) return null;
+  if (isMapLike(channelProfiles)) return channelProfiles.get(channel) || null;
+  return channelProfiles[channel] || null;
+}
+function setProfileForChannel(channelProfiles, channel, profile) {
+  if (!channelProfiles) return;
+  if (isMapLike(channelProfiles)) channelProfiles.set(channel, profile);
+  else channelProfiles[channel] = profile;
+}
+function deleteProfileForChannel(channelProfiles, channel) {
+  if (!channelProfiles) return false;
+  if (isMapLike(channelProfiles)) {
+    if (channelProfiles.has(channel)) {
+      channelProfiles.delete(channel);
+      return true;
+    }
+    return false;
+  } else {
+    if (channelProfiles[channel]) {
+      delete channelProfiles[channel];
+      return true;
+    }
+    return false;
+  }
+}
+
+// ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
+// ========= DASHBOARD TRADE SAVE HELPER (walletAddress) =========
+const BACKEND_BASE =
+  process.env.BACKEND_BASE ||
+  process.env.API_BASE ||          // ✅ this matches Railway
+  process.env.BOT_API_BASE ||
+  process.env.VITE_API_BASE ||
+  `http://127.0.0.1:${process.env.PORT || 8080}`;
+
+
+async function saveTradeToBackend({
+  walletAddress,
+  mint,
+  solAmount,
+  tokenAmount,
+  solReceived,
+  entryPrice,
+  exitPrice,
+  pnlPercent,
+  buyTxid,
+  sellTxid,
+  sourceChannel,
+  reason,
+  tradeType = "auto",
+}) {
+  const base = BACKEND_BASE.replace(/\/$/, "");
+  const endpoint = `${base}/api/trades/record`;
+
+  try {
+    const payload = {
+      walletAddress: String(walletAddress),
+      tradeType,
+
+      tokenMint: mint,
+
+      // ===================================================
+      // 💰 AUTHORITATIVE EXECUTION ACCOUNTING
+      // ===================================================
+
+      // SOL committed/spent on the BUY
+      amountSol:
+        Number.isFinite(Number(solAmount))
+          ? Number(solAmount)
+          : 0,
+
+      // Actual tokens received/sold
+      amountToken:
+        Number.isFinite(Number(tokenAmount))
+          ? Number(tokenAmount)
+          : 0,
+
+      // Actual SOL received from SELL
+      solReceived:
+        Number.isFinite(Number(solReceived))
+          ? Number(solReceived)
+          : 0,
+
+      // Actual execution prices
+      entryPrice:
+        Number.isFinite(Number(entryPrice))
+          ? Number(entryPrice)
+          : 0,
+
+      exitPrice:
+        Number.isFinite(Number(exitPrice))
+          ? Number(exitPrice)
+          : 0,
+
+      // Actual trade PNL
+      pnlPercent:
+        Number.isFinite(Number(pnlPercent))
+          ? Number(pnlPercent)
+          : null,
+
+      buyTxid: buyTxid || null,
+      sellTxid: sellTxid || null,
+
+      status: "closed",
+
+      source: "telegram",
+
+      params: {
+        sourceChannel,
+        reason,
+      },
+
+      state: {},
+
+      createdAt: new Date().toISOString(),
+    };
+
+    LOG.info(
+      {
+        endpoint,
+        base: BACKEND_BASE,
+
+        walletAddress,
+        mint,
+
+        // Accounting debug
+        amountSol: payload.amountSol,
+        amountToken: payload.amountToken,
+        solReceived: payload.solReceived,
+        entryPrice: payload.entryPrice,
+        exitPrice: payload.exitPrice,
+        pnlPercent: payload.pnlPercent,
+
+        buyTxid: payload.buyTxid,
+        sellTxid: payload.sellTxid,
+      },
+      "🧪 saveTradeToBackend sending AUTHORITATIVE TRADE DATA"
+    );
+
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const text = await res.text().catch(() => "");
+
+    LOG.info(
+      {
+        endpoint,
+        status: res.status,
+        statusText: res.statusText,
+        body: text,
+      },
+      "🧪 saveTradeToBackend response"
+    );
+
+    if (!res.ok) {
+      LOG.error(
+        {
+          endpoint,
+          status: res.status,
+          statusText: res.statusText,
+          body: text,
+          walletAddress,
+          mint,
+          reason,
+          tradeType,
+        },
+        "saveTradeToBackend failed"
+      );
+
+      return;
+    }
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        amountSol: payload.amountSol,
+        amountToken: payload.amountToken,
+        solReceived: payload.solReceived,
+        entryPrice: payload.entryPrice,
+        exitPrice: payload.exitPrice,
+        pnlPercent: payload.pnlPercent,
+      },
+      "✅ AUTHORITATIVE TRADE SAVED TO BACKEND"
+    );
+
+  } catch (err) {
+    console.error("❌ saveTradeToBackend error (raw)", err);
+
+    LOG.error(
+      {
+        endpoint,
+        base: BACKEND_BASE,
+        walletAddress,
+        mint,
+        reason,
+        tradeType,
+
+        errName: err?.name,
+        errMessage: err?.message,
+        errCode: err?.code,
+        errCause: err?.cause?.message,
+        errStack: err?.stack,
+      },
+      "saveTradeToBackend error"
+    );
+  }
+}
+
+
+// ========= Centralized monitoring (wallet keyed) =========
+const monitored = new Map(); // Map<mint, { users: Map<wallet,info>, entryPrices: Map<wallet,entry>, lastPrice, intervalId }>
+
+// ===================================================
+// 🤖 LIVE AI EXIT EXECUTION GUARD
+// Prevents the 10-second AI monitor from submitting
+// the same FULL_EXIT repeatedly while execution is active.
+// ===================================================
+const liveAIExitExecutions = new Set();
+
+// ===================================================
+// 🔒 REDIS POSITION CLOSE GUARD (ATOMIC)
+// Prevents double-sell across bot instances
+// ===================================================
+
+async function tryMarkPositionClosing(walletAddress, mint) {
+  const key = positionKey(walletAddress, mint);
+
+  while (true) {
+    await redis.watch(key);
+
+    const currentStatus = await redis.hget(key, "status");
+
+    if (!currentStatus) {
+      await redis.unwatch();
+      LOG.warn({ walletAddress, mint }, "Redis position missing");
+      return false;
+    }
+
+    if (currentStatus !== "open") {
+      await redis.unwatch();
+      LOG.warn(
+        { walletAddress, mint, currentStatus },
+        "Position already closing/closed"
+      );
+      return false;
+    }
+
+    const multi = redis.multi();
+    multi.hset(key, "status", "closing");
+
+    const result = await multi.exec();
+
+    if (result) {
+      LOG.info(
+        { walletAddress, mint },
+        "🔒 Position atomically marked as closing"
+      );
+      return true;
+    }
+
+    // Retry if transaction failed due to race
+  }
+}
+
+// ===================================================
+// 🔔 REDIS → BOT: MANUAL SELL COMMAND LISTENER
+// (after monitored map is initialized)
+// ===================================================
+
+const redisSub = redis.duplicate();
+
+redisSub.subscribe(manualSellCommandKey()).then(() => {
+  LOG.info("📡 Subscribed to manual sell Redis channel");
+});
+
+redisSub.on("message", async (channel, message) => {
+  if (channel !== manualSellCommandKey()) return;
+
+  let walletAddress, mint, percent;
+
+  try {
+    const cmd = JSON.parse(message);
+    walletAddress = String(cmd.walletAddress || "").trim();
+    mint = String(cmd.mint || "").trim();
+    percent = Number(cmd.percent || 100);
+
+    if (!walletAddress || !mint) {
+      LOG.warn(
+        { message },
+        "Manual sell ignored — missing walletAddress or mint"
+      );
+      return;
+    }
+
+    if (![25, 50, 75, 100].includes(percent)) {
+      LOG.warn(
+        { walletAddress, mint, percent },
+        "Manual sell ignored — invalid percent"
+      );
+      return;
+    }
+
+    LOG.info(
+      { walletAddress, mint, percent },
+      "🔥 Manual sell command received"
+    );
+
+    // 🔒 Verify position still exists in memory
+    const state = monitored.get(mint);
+    const info = state?.users?.get(walletAddress);
+
+    if (!state || !info) {
+      LOG.warn(
+        { walletAddress, mint, percent },
+        "Manual sell ignored — position not found"
+      );
+      return;
+    }
+
+    // ✅ Resolve wallet (prefer stored wallet from monitor state)
+    let wallet = info.wallet;
+
+    // ✅ Resolve slippageBps (prefer stored slippageBps from monitor state)
+    let slippageBps =
+      typeof info.slippageBps === "number" ? info.slippageBps : null;
+
+    // Fallback: load user from DB if wallet/slippage missing
+    if (!wallet || !slippageBps) {
+      const user = await User.findOne({ walletAddress }).lean();
+      if (!user) {
+        LOG.warn(
+          { walletAddress, mint, percent },
+          "Manual sell failed — user not found"
+        );
+        return;
+      }
+
+      if (!wallet) {
+        wallet = restoreTradingWallet(user);
+      }
+
+      if (!slippageBps) {
+        const userSlippagePercent =
+          typeof user.maxSlippagePercent === "number"
+            ? user.maxSlippagePercent
+            : 5;
+
+        slippageBps = Math.min(
+          Math.max(Math.round(userSlippagePercent * 100), 50), // min 0.5%
+          2000 // max 20%
+        );
+      }
+    }
+
+    if (!wallet?.publicKey) {
+      LOG.error(
+        { walletAddress, mint, percent },
+        "Manual sell failed — wallet missing/invalid"
+      );
+      return;
+    }
+
+    const traceId = `${walletAddress}:${mint}:manual_sell_${percent}:${Date.now()}`;
+    LOG.info(
+      { traceId, walletAddress, mint, percent, slippageBps },
+      "🧪 MANUAL SELL TRACE START"
+    );
+
+    let sellRes;
+
+    if (percent === 100) {
+      // 🔒 Prevent double full-close across bot instances
+      const allowed = await tryMarkPositionClosing(walletAddress, mint);
+      if (!allowed) return;
+
+      sellRes = await safeSellAll(wallet, mint, slippageBps, 4, traceId);
+    } else {
+     
+
+
+ // ✅ Partial sell: keep position open
+      sellRes = await safeSellPartial(
+        wallet,
+        mint,
+        percent,
+        slippageBps,
+        4,
+        traceId
+      );
+    }
+
+console.log("SELL RES RAW =", sellRes);
+console.log("SELL RES TYPE =", typeof sellRes);
+console.log("SELL RES TXID =", sellRes?.txid);
+
+    let sellTxid = null;
+
+if (typeof sellRes?.txid === "object") {
+  sellTxid = sellRes.txid.txid;
+} else {
+  sellTxid =
+    sellRes?.txid ||
+    sellRes?.signature ||
+    sellRes?.sig ||
+    null;
+}
+
+LOG.info(
+  {
+    sellRes,
+    sellTxid,
+    sellTxidType: typeof sellTxid,
+  },
+  "🧪 SELL TX DEBUG"
+);
+
+
+    // 💸 Charge platform SELL fee
+    await chargeSellFee(
+      wallet,
+      sellTxid,
+      mint,
+      percent === 100 ? "manual_sell" : `manual_sell_${percent}`
+    );
+
+    if (percent === 100) {
+      // ---------------------------------------------------
+      // Mark position closed in Redis + cleanup
+      // ---------------------------------------------------
+      const posKey = positionKey(walletAddress, mint);
+
+      await redis.hset(posKey, "status", "closed");
+      await redis.srem(walletPositionsKey(walletAddress), mint);
+
+     // ===================================================
+// 💰 ACTUAL MANUAL SELL EXECUTION PRICE
+// ===================================================
+
+const actualTokensSold =
+  Number(
+    sellRes?.tokenAmount ||
+    sellRes?.txid?.tokenAmount ||
+    0
+  );
+
+const actualSolReceived =
+  Number(
+    sellRes?.solReceived ||
+    0
+  );
+
+let exitPrice = null;
+
+if (
+  Number.isFinite(actualTokensSold) &&
+  actualTokensSold > 0 &&
+  Number.isFinite(actualSolReceived) &&
+  actualSolReceived >= 0
+) {
+
+  exitPrice =
+    actualSolReceived /
+    actualTokensSold;
+
+} else {
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      actualTokensSold,
+      actualSolReceived,
+      sellRes,
+    },
+    "⚠️ Unable to calculate actual MANUAL SELL execution price"
+  );
+
+}
+
+
+      // Entry price (prefer monitor state entryPrices map)
+      const entryPrice =
+        state.entryPrices.get(walletAddress) ??
+        info.entryPrice ??
+        0;
+
+      // Save trade to backend (best effort)
+      try {
+        await saveTradeToBackend({
+  walletAddress,
+  mint,
+  solAmount: info.solAmount || 0,
+
+  entryPrice:
+    Number(entryPrice || 0),
+
+  exitPrice:
+    Number(exitPrice || 0),
+
+  buyTxid:
+    info.buyTxid || null,
+
+  sellTxid,
+
+  sourceChannel:
+    info.sourceChannel || "manual_redis",
+
+  reason:
+    "manual_sell",
+
+  tradeType:
+    "manual",
+
+  // Actual execution information
+  tokenAmount:
+    actualTokensSold,
+
+  solReceived:
+    actualSolReceived,
+});
+
+
+      } catch (err) {
+        LOG.error(
+          { err, walletAddress, mint },
+          "Manual sell: saveTradeToBackend failed"
+        );
+      }
+
+      // Remove from monitoring
+      state.users.delete(walletAddress);
+      state.entryPrices.delete(walletAddress);
+      state.highestPrices?.delete?.(walletAddress);
+
+try {
+  const soldTokens = Number(
+    sellRes?.txid?.tokenAmount ||
+    sellRes?.tokenAmount ||
+    0
+  ).toLocaleString();
+
+  const solReceived = Number(
+    sellRes?.solReceived || 0
+  ).toFixed(6);
+
+  LOG.info(
+    {
+      sellRes,
+      soldTokens,
+      solReceived,
+    },
+    "SELL RESULT FOR NOTIFICATION"
+  );
+
+  await createNotification({
+    walletAddress,
+    type: "success",
+    title: "Sell Executed",
+    message:
+      soldTokens !== "0"
+        ? `Sold ${soldTokens} tokens for ${solReceived} SOL`
+        : "Position sold successfully",
+  });
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      percent,
+    },
+    "🧪 MANUAL SELL NOTIFICATION CREATED"
+  );
+} catch (err) {
+  LOG.error(
+    {
+      err,
+      walletAddress,
+      mint,
+    },
+    "❌ Failed to create manual sell notification"
+  );
+}
+// notification
+  LOG.info(
+  {
+    walletAddress,
+    mint,
+    percent,
+    reason,
+  },
+  `✅ Sell executed (${percent}%)`
+);
+}
+  } catch (err) {
+    LOG.error(
+      { err, walletAddress, mint, percent },
+      "❌ Manual sell command failed"
+    );
+
+    // Only revert closing state for full sell
+    if (walletAddress && mint && percent === 100) {
+      try {
+        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      } catch {}
+    }
+  }
+});
+
+async function refreshAllMonitoredMintPrices() {
+  try {
+    const mints = Array.from(monitored.keys());
+
+    if (mints.length === 0) return;
+
+    const marketSnapshots =
+      await getDexScreenerMarketSnapshots(mints);
+
+    for (const mint of mints) {
+      const state = monitored.get(mint);
+
+      if (!state) continue;
+
+      const snapshot = marketSnapshots.get(mint);
+
+      if (!snapshot) continue;
+
+      if (
+        typeof snapshot.priceUsd !== "number" ||
+        !Number.isFinite(snapshot.priceUsd) ||
+        snapshot.priceUsd <= 0
+      ) {
+        continue;
+      }
+
+      // Current live market state.
+      state.lastPrice = snapshot.priceUsd;
+      state.currentMarketCap = snapshot.marketCapUsd ?? null;
+      state.currentLiquidity = snapshot.liquidityUsd ?? null;
+      state.lastMarketSnapshot = snapshot;
+      state.lastMarketSnapshotAt = new Date();
+    }
+  } catch (err) {
+    LOG.error(
+      { err },
+      "❌ refreshAllMonitoredMintPrices failed"
+    );
+  }
+}
+
+// ENSURE MONITOR USER
+async function ensureMonitor(mint) {
+  if (monitored.has(mint)) return monitored.get(mint);
+
+const state = {
+  mint,
+  users: new Map(),
+  entryPrices: new Map(),
+
+  // ✅ per-wallet highest
+  highestPrices: new Map(), // Map<walletAddress, highestPrice>
+
+  // 📊 Current live market state
+  lastPrice: null,
+  currentMarketCap: null,
+  currentLiquidity: null,
+  lastMarketSnapshot: null,
+  lastMarketSnapshotAt: null,
+
+  intervalId: null,
+};
+
+  const loop = async () => {
+    try {
+      const price = state.lastPrice;
+
+      if (typeof price !== "number" || Number.isNaN(price)) {
+        return; // wait until global refresher has populated price
+      }
+
+      // ✅ Update highestPrice PER WALLET (not global)
+      for (const [walletAddress] of state.users.entries()) {
+        const prevHigh = state.highestPrices.get(walletAddress);
+
+        if (prevHigh == null || price > prevHigh) {
+          state.highestPrices.set(walletAddress, price);
+
+          // 🧪 DEBUG — confirm highest update
+          LOG.info(
+            { walletAddress, mint, prevHigh, newHigh: price },
+            "📈 updated per-wallet highestPrice"
+          );
+        }
+      }
+
+      for (const [walletAddress, info] of Array.from(state.users.entries())) {
+        try {
+          await monitorUser(mint, price, walletAddress, info, state);
+        } catch (err) {
+          LOG.error({ err, mint, walletAddress }, "monitorUser error");
+        }
+      }
+
+      state._lastSnapshotAt = state._lastSnapshotAt || 0;
+
+      if (Date.now() - state._lastSnapshotAt < 3000) {
+        return; // ⛔ skip snapshot (only every 3s)
+      }
+
+      state._lastSnapshotAt = Date.now();
+
+      // ===================================================
+      // 📊 BUILD + STORE WALLET SNAPSHOTS (LIGHTWEIGHT)
+      // ===================================================
+      const snapshotsByWallet = new Map();
+
+      for (const [walletAddress, info] of state.users.entries()) {
+  // ===================================================
+  // 💰 ENTRY PRICE
+  // ===================================================
+
+  // Authoritative execution price.
+  // UNIT: SOL/token
+  const entryPriceSol =
+    state.entryPrices.get(walletAddress) ??
+    info.entryPrice;
+
+  // Market entry baseline.
+  // UNIT: USD/token
+  const entryPriceUsd =
+    Number(info.entryPriceUsd);
+
+  // Current market price.
+  // UNIT: USD/token
+  const currentPriceUsd =
+    Number(price);
+
+  if (
+    !Number.isFinite(entryPriceUsd) ||
+    entryPriceUsd <= 0
+  ) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        entryPriceSol,
+        entryPriceUsd,
+        currentPriceUsd,
+      },
+      "⚠️ Missing valid USD entry price for position snapshot"
+    );
+
+    continue;
+  }
+
+  if (
+    !Number.isFinite(currentPriceUsd) ||
+    currentPriceUsd <= 0
+  ) {
+    continue;
+  }
+
+  // ===================================================
+  // 📊 USD-TO-USD PRICE CHANGE
+  // ===================================================
+
+  const changePercent =
+    ((currentPriceUsd - entryPriceUsd) /
+      entryPriceUsd) *
+    100;
+
+  // ===================================================
+  // 💰 POSITION VALUE / PNL
+  // ===================================================
+
+  const tokenAmount =
+    Number(info.tokenAmount || 0);
+
+  const entryValueUsd =
+    entryPriceUsd * tokenAmount;
+
+  const currentValueUsd =
+    currentPriceUsd * tokenAmount;
+
+  const pnlUsd =
+    currentValueUsd - entryValueUsd;
+
+  // Existing SOL-denominated PNL estimate.
+  const solAmount =
+    Number(info.solAmount || 0);
+
+  const pnlSol =
+    (changePercent / 100) * solAmount;
+
+  // ===================================================
+  // 📈 HIGHEST PRICE
+  // UNIT: USD/token
+  // ===================================================
+
+  const highestPriceUsd =
+    state.highestPrices?.get(walletAddress) ??
+    currentPriceUsd;
+
+  // ===================================================
+  // 💾 LIVE REDIS POSITION UPDATE
+  // ===================================================
+
+  await redis.hset(
+    positionKey(walletAddress, mint),
+    {
+      currentPrice:
+        String(currentPriceUsd),
+
+      entryPriceUsd:
+        String(entryPriceUsd),
+
+      changePercent:
+        String(changePercent),
+
+      pnlSol:
+        String(pnlSol),
+
+      pnlUsd:
+        String(pnlUsd),
+
+      entryValueUsd:
+        String(entryValueUsd),
+
+      currentValueUsd:
+        String(currentValueUsd),
+
+      highestPrice:
+        String(highestPriceUsd),
+    }
+  );
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      entryPriceUsd,
+      currentPriceUsd,
+      changePercent,
+      pnlSol,
+      pnlUsd,
+    },
+    "🧪 POSITION PRICE UPDATED"
+  );
+
+  // ===================================================
+  // 👛 RESOLVE TRADING WALLET
+  // ===================================================
+
+  const tradingWalletAddress =
+    info.wallet?.publicKey?.toBase58?.();
+
+  if (!tradingWalletAddress) {
+    continue;
+  }
+
+  // ===================================================
+  // 🪙 GET REAL TOKEN BALANCE
+  // ===================================================
+
+  const realTokenBalance =
+    await getWalletTokenBalance(
+      tradingWalletAddress,
+      mint
+    );
+
+  LOG.info(
+    {
+      walletAddress: tradingWalletAddress,
+      mint,
+      realTokenBalance,
+    },
+    "🧪 BALANCE CHECK"
+  );
+
+  // ===================================================
+  // 🧹 AUTO-REMOVE DEAD POSITIONS
+  // ===================================================
+
+  if (realTokenBalance <= 0) {
+    LOG.warn(
+      {
+        walletAddress:
+          tradingWalletAddress,
+        mint,
+      },
+      "🧹 Removing dead position (0 token balance)"
+    );
+
+    state.users.delete(walletAddress);
+    state.entryPrices.delete(walletAddress);
+    state.highestPrices.delete(walletAddress);
+
+    await redis.del(
+      positionKey(walletAddress, mint)
+    );
+
+    await redis.srem(
+      walletPositionsKey(walletAddress),
+      mint
+    );
+
+    continue;
+  }
+
+  // ===================================================
+  // 📸 BUILD DASHBOARD SNAPSHOT
+  // ===================================================
+
+  const snapshotItem = {
+    mint,
+
+    walletAddress:
+      tradingWalletAddress,
+
+    // Dashboard/display price.
+    // UNIT: USD/token
+    entryPrice:
+      entryPriceUsd,
+
+    currentPrice:
+      currentPriceUsd,
+
+    // Preserve authoritative execution price.
+    // UNIT: SOL/token
+    entryPriceSol:
+      Number(entryPriceSol),
+
+    // Market entry baseline.
+    // UNIT: USD/token
+    entryPriceUsd,
+
+    changePercent,
+
+    pnlSol,
+    pnlUsd,
+
+    entryValueUsd,
+    currentValueUsd,
+
+    // Position info
+    solAmount:
+      info.solAmount || 0,
+
+    tokenAmount:
+      realTokenBalance,
+
+    tpStage:
+      info.tpStage || 0,
+
+    highestPrice:
+      highestPriceUsd,
+
+    // Metadata
+    buyTxid:
+      info.buyTxid || null,
+
+    sourceChannel:
+      info.sourceChannel || null,
+
+    openedAt:
+      info.openedAt || 0,
+  };
+
+  if (!snapshotsByWallet.has(walletAddress)) {
+    snapshotsByWallet.set(
+      walletAddress,
+      []
+    );
+  }
+
+  snapshotsByWallet
+    .get(walletAddress)
+    .push(snapshotItem);
+}
+
+      // Write snapshots to Redis (MERGE per wallet)
+      for (const [walletAddress, newPositions] of snapshotsByWallet.entries()) {
+        try {
+          const key = walletSnapshotKey(walletAddress);
+
+          // Get existing snapshot (if any)
+          let existing = [];
+          const raw = await redis.get(key);
+
+          if (raw) {
+            try {
+              existing = JSON.parse(raw);
+            } catch {
+              existing = [];
+            }
+          }
+
+          // Remove old entries for this mint
+          const filtered = existing.filter((p) => p.mint !== mint);
+
+          // Merge new + existing
+          const merged = [...filtered, ...newPositions];
+
+          await redis.set(
+            key,
+            JSON.stringify(merged),
+            "EX",
+            10
+          );
+        } catch (err) {
+          LOG.error(
+            { err, walletAddress },
+            "❌ Failed to write wallet snapshot"
+          );
+        }
+      }
+
+      if (state.users.size === 0) {
+        LOG.info({ mint }, "no users left — stopping monitor");
+        if (state.intervalId) clearInterval(state.intervalId);
+        monitored.delete(mint);
+      }
+    } catch (err) {
+      LOG.error({ err, mint }, "monitor loop error");
+    }
+  };
+
+  state.startLoop = () => {
+  if (state.intervalId) return;
+
+  state.intervalId = setInterval(() => {
+    loop().catch((err) =>
+      LOG.error(
+        { err, mint },
+        "monitor loop async error"
+      )
+    );
+  }, POLL_INTERVAL_MS);
+};
+
+  monitored.set(mint, state);
+  LOG.info({ mint }, "monitor started");
+
+  // ✅ seed first price quickly for this/new monitored mint(s)
+  refreshAllMonitoredMintPrices().catch((err) => {
+    LOG.error({ err }, "❌ initial global price refresh failed");
+  });
+
+  return state;
+}
+// MONITOR USER
+async function monitorUser(mint, price, walletAddress, info, state) {
+  const {
+  profile,
+  entryPrice: storedEntryPrice,
+} = info;
+
+
+// ===================================================
+// Resolve and validate position prices
+// ===================================================
+
+// ===================================================
+// Resolve position prices
+// ===================================================
+
+// ===================================================
+// 💰 POSITION PRICE BASELINE
+// ===================================================
+
+// Authoritative on-chain execution price.
+// UNIT: SOL/token
+const rawEntrySol =
+  state.entryPrices.get(walletAddress) ??
+  storedEntryPrice;
+
+const entryPriceSol =
+  Number(rawEntrySol);
+
+// Current market price.
+// UNIT: USD/token
+const currentPriceUsd =
+  Number(price);
+
+// ===================================================
+// 📊 ORIGINAL USD ENTRY PRICE
+// ===================================================
+
+// Primary source:
+// in-memory position created immediately after BUY.
+let entryPriceUsd =
+  Number(info.entryPriceUsd);
+
+// Fallback:
+// immutable AI entry snapshot captured at BUY.
+if (
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
+) {
+  const snapshotExecution =
+    info?.entrySnapshot?.execution ?? {};
+
+  const snapshotEntryPriceUsd =
+    Number(
+      snapshotExecution.entryPriceUsd
+    );
+
+  if (
+    Number.isFinite(snapshotEntryPriceUsd) &&
+    snapshotEntryPriceUsd > 0
+  ) {
+    entryPriceUsd =
+      snapshotEntryPriceUsd;
+  }
+}
+
+// Final fallback:
+// scanner market price stored in the
+// immutable AI entry snapshot.
+if (
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
+) {
+  const snapshotMarketMetrics =
+    info?.entrySnapshot
+      ?.analyses
+      ?.market
+      ?.metrics ?? {};
+
+  const snapshotMarketPriceUsd =
+    Number(
+      snapshotMarketMetrics.priceUsd
+    );
+
+  if (
+    Number.isFinite(snapshotMarketPriceUsd) &&
+    snapshotMarketPriceUsd > 0
+  ) {
+    entryPriceUsd =
+      snapshotMarketPriceUsd;
+  }
+}
+
+// ===================================================
+// 🚫 DO NOT INVENT USD ENTRY PRICE
+// ===================================================
+
+if (
+  !Number.isFinite(entryPriceUsd) ||
+  entryPriceUsd <= 0
+) {
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      entryPriceSol,
+      entryPriceUsd,
+      currentPriceUsd,
+    },
+    "⚠️ Unable to determine valid USD entry price"
+  );
+
+  return;
+}
+
+
+// ===================================================
+// Validate entry price
+// ===================================================
+
+if (
+    !Number.isFinite(entryPriceSol) ||
+    entryPriceSol <= 0
+) {
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            rawEntrySol,
+            entryPriceSol,
+        },
+        "⚠️ monitorUser skipped — invalid entry SOL price"
+    );
+
+    return;
+}
+
+// ===================================================
+// Validate current market price
+// ===================================================
+
+if (
+    !Number.isFinite(currentPriceUsd) ||
+    currentPriceUsd <= 0
+) {
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            price,
+            currentPriceUsd,
+        },
+        "⚠️ monitorUser skipped — invalid current USD price"
+    );
+
+    return;
+}
+
+// ===================================================
+// Calculate PNL
+// ===================================================
+
+const change =
+    ((currentPriceUsd - entryPriceUsd) / entryPriceUsd) * 100;
+
+
+// ===================================================
+// Final PNL safety check
+// ===================================================
+
+if (!Number.isFinite(change)) {
+
+    LOG.warn(
+        {
+            walletAddress,
+            mint,
+            entryPriceSol,
+            entryPriceUsd,
+            currentPriceUsd,
+            change,
+        },
+        "⚠️ monitorUser skipped — invalid PNL calculation"
+    );
+
+    return;
+}
+
+
+if (
+    typeof info.tpStage === "undefined"
+) {
+
+    info.tpStage = 0;
+
+}
+
+// ===================================================
+// 🎯 TP AI REVIEW CHECKPOINT STATE
+// ===================================================
+
+
+if (!info.tpReviewState) {
+
+    info.tpReviewState = {
+
+        tp1: false,
+
+        tp2: false,
+
+        tp3: false,
+
+    };
+
+}
+
+// ===================================================
+// Refresh AI every 10 seconds
+// ===================================================
+
+info._lastAIUpdateAt =
+  info._lastAIUpdateAt || 0;
+
+const shouldRefreshAI =
+  Date.now() - info._lastAIUpdateAt >= 10000;
+
+
+// ===================================================
+// Restore Previous AI Memory
+// ===================================================
+
+const previousAI =
+  await loadAIStateFromRedis(
+    walletAddress,
+    mint
+  );
+
+
+// ===================================================
+// 🧠 LIVE AI POSITION ANALYSIS
+// ===================================================
+
+if (shouldRefreshAI) {
+
+    try {
+
+        // ==========================================
+        // Create a FRESH AI context
+        // ==========================================
+
+const aiContext =
+    createPipelineContext({
+
+        walletAddress,
+
+        wallet: info.wallet,
+
+        user: info.user,
+
+        mint,
+
+        // ==========================================
+        // POSITION PRICES
+        // ==========================================
+
+       entryPrice: entryPriceUsd,
+
+currentPrice: currentPriceUsd,
+
+highestPrice:
+    state.highestPrices?.get(
+        walletAddress
+    ),
+
+changePercent: change,
+
+// Preserve authoritative execution price.
+entryPriceSol:
+    entryPriceSol,
+
+entryPriceUsd:
+    entryPriceUsd,
+
+currentPriceUsd:
+    currentPriceUsd,
+
+currentMarketCap:
+    state.currentMarketCap ?? null,
+
+currentLiquidity:
+    state.currentLiquidity ?? null,
+
+currentMarketSnapshot:
+    state.lastMarketSnapshot ?? null,
+
+        // ==========================================
+        // POSITION SIZE
+        // ==========================================
+
+        solAmount:
+            info.solAmount,
+
+        tokenAmount:
+            info.tokenAmount,
+
+        buyTxid:
+            info.buyTxid,
+
+        // ==========================================
+        // TRADE SOURCE / SETTINGS
+        // ==========================================
+
+        sourceChannel:
+            info.sourceChannel,
+
+        slippageBps:
+            info.slippageBps,
+
+        profile,
+
+        // ==========================================
+        // LIVE POSITION STATE
+        // ==========================================
+
+        state,
+
+        info,
+
+        // ==========================================
+        // ORIGINAL ENTRY AI SNAPSHOT
+        //
+        // This contains the AI thesis and evidence
+        // that existed when the position was opened.
+        // ==========================================
+
+        entrySnapshot:
+            info?.entrySnapshot ??
+            null,
+
+        // ==========================================
+        // METADATA
+        // ==========================================
+
+        metadata: {
+
+            source:
+                "LIVE_MONITOR",
+
+            monitoredAt:
+                new Date(),
+
+        },
+
+    });
+
+        // ==========================================
+        // RESTORE AI MEMORY
+        // ==========================================
+
+        if (previousAI?.aiMemory) {
+
+            aiContext.aiMemory = {
+
+                ...(aiContext.aiMemory || {}),
+
+                ...previousAI.aiMemory,
+
+                timeline:
+                    Array.isArray(
+                        previousAI.aiMemory.timeline
+                    )
+                        ? [
+                            ...previousAI.aiMemory.timeline,
+                        ]
+                        : [],
+
+            };
+
+        }
+
+
+        // ==========================================
+        // RESTORE PREVIOUS AI OUTPUTS
+        //
+        // IMPORTANT:
+        // Do NOT restore the entire pipeline object.
+        // The current cycle must have its own
+        // pipeline lifecycle.
+        // ==========================================
+
+        if (previousAI) {
+
+            if (previousAI.positionHealth) {
+
+                aiContext.positionHealth =
+                    previousAI.positionHealth;
+
+            }
+
+            if (previousAI.protectionStrategy) {
+
+                aiContext.protectionStrategy =
+                    previousAI.protectionStrategy;
+
+            }
+
+            if (previousAI.exitDecision) {
+
+                aiContext.exitDecision =
+                    previousAI.exitDecision;
+
+            }
+
+            if (previousAI.tradeDecision) {
+
+                aiContext.tradeDecision =
+                    previousAI.tradeDecision;
+
+            }
+
+            if (previousAI.tradePlan) {
+
+                aiContext.tradePlan =
+                    previousAI.tradePlan;
+
+            }
+
+        }
+
+
+        // ==========================================
+        // RESET CURRENT LIVE PIPELINE STATE
+        // ==========================================
+
+        aiContext.pipeline = {
+
+            ...(aiContext.pipeline || {}),
+
+            name: "EXIT_PIPELINE",
+
+            version: "2.0.0",
+
+            stage: "LIVE_MONITOR",
+
+            status: "RUNNING",
+
+            currentEngine: null,
+
+            progress: 0,
+
+            startedAt:
+                new Date(),
+
+            completedAt:
+                null,
+
+        };
+
+
+      // ==========================================
+// AI POSITION INTELLIGENCE
+// ==========================================
+
+aiContext.pipeline.stage =
+    "POSITION_HEALTH";
+
+evaluatePositionHealth(
+    aiContext
+);
+
+
+// ==========================================
+// AI PROTECTION STRATEGY
+// ==========================================
+
+aiContext.pipeline.stage =
+    "PROTECTION_STRATEGY";
+
+runProtectionStrategyEngine(
+    aiContext
+);
+
+
+// ==========================================
+// AI RECOMMENDATION
+//
+// Generates the current AI recommendation
+// and stores it in:
+//
+//     aiContext.recommendation
+//
+// This must happen BEFORE
+// generateTradeDecision().
+// ==========================================
+
+aiContext.pipeline.stage =
+    "RECOMMENDATION";
+
+runRecommendationEngine(
+    aiContext
+);
+
+
+// ==========================================
+// LIVE AI RECOMMENDATION DEBUG
+// ==========================================
+
+LOG.info(
+    {
+        walletAddress,
+
+        mint,
+
+        recommendation:
+            aiContext.recommendation
+                ?.recommendation ??
+            aiContext.recommendation
+                ?.action ??
+            null,
+
+        recommendationConfidence:
+            aiContext.recommendation
+                ?.confidence ??
+            null,
+
+        recommendationSource:
+            aiContext.recommendation
+                ? "RecommendationEngine"
+                : "NONE",
+
+    },
+
+    "🧠 LIVE AI RECOMMENDATION"
+);
+
+
+// ==========================================
+// AI EXIT INTELLIGENCE
+//
+// Evaluates the EXISTING position.
+//
+// This remains independent from the
+// market recommendation.
+// ==========================================
+
+aiContext.pipeline.stage =
+    "EXIT_DECISION";
+
+runAIExitEngine(
+    aiContext
+);
+
+
+// ==========================================
+// AI TRADE DECISION
+//
+// Combines:
+//
+// - Recommendation
+// - Position Health
+// - Protection Strategy
+// - Exit Decision
+//
+// The exit decision has higher priority
+// for an already-open position.
+// ==========================================
+
+aiContext.pipeline.stage =
+    "TRADE_DECISION";
+
+generateTradeDecision(
+    aiContext
+);
+
+
+// ==========================================
+// AI TRADE MANAGEMENT PLAN
+//
+// Converts the coordinated decision into
+// the actual management action:
+//
+// HOLD
+// PARTIAL_EXIT
+// SCALE_OUT
+// FULL_EXIT
+// ==========================================
+
+aiContext.pipeline.stage =
+    "TRADE_PLANNING";
+
+buildTradeManagementPlan(
+    aiContext
+);
+
+// ===================================================
+// 🤖 LIVE AI → TRADE EXECUTION BRIDGE
+//
+// The AI monitor normally only calculates and stores
+// the decision. If the completed AI plan says FULL_EXIT,
+// send that plan into the existing trade execution gateway.
+//
+// IMPORTANT:
+// - Only FULL_EXIT is executed here.
+// - HOLD / CONTINUE are never executed.
+// - The existing Redis position-close guard remains
+//   the final duplicate-sell protection.
+// - The local Set prevents repeated submissions while
+//   this monitor is refreshing every 10 seconds.
+// ===================================================
+
+const liveAITradePlan =
+    aiContext.tradePlan ??
+    aiContext.tradeManagementPlan ??
+    null;
+
+const liveAIAction =
+    liveAITradePlan?.action ??
+    aiContext.tradeDecision?.action ??
+    aiContext.exitDecision?.decision ??
+    aiContext.exitDecision?.action ??
+    null;
+
+// INDEPENDENT AI REVIEW BLOCK
+
+// ===================================================
+// 🚫 LIVE AI EXIT EXECUTION DISABLED
+//
+// The 10-second AI refresh may analyze the position
+// and produce an exit recommendation, but it must
+// NOT execute an exit by itself.
+//
+// Actual exit execution must come through the
+// trigger-based exit system:
+//
+// - STOP LOSS
+// - TRAILING STOP
+// - TP1
+// - TP2
+// - TP3
+//
+// Those triggers call processExitDecision(), which
+// runs the proper AI review pipeline before execution.
+// ===================================================
+
+if (liveAIAction === "FULL_EXIT") {
+
+    LOG.info(
+        {
+            walletAddress,
+            mint,
+            action: liveAIAction,
+        },
+        "🧠 AI FULL_EXIT detected during 10-second analysis — execution blocked; waiting for an authorized exit trigger"
+    );
+}
+
+// ==========================================
+// COMPLETE CURRENT AI CYCLE
+// ==========================================
+
+aiContext.pipeline.stage =
+    "COMPLETED";
+
+aiContext.pipeline.status =
+    "COMPLETED";
+
+aiContext.pipeline.completedAt =
+    new Date();
+
+
+// ==========================================
+// 📡 PUBLISH FINAL LIVE AI STATE
+// ==========================================
+
+
+
+publishLiveAIState(
+    walletAddress,
+    aiContext
+);
+
+
+        // ==========================================
+        // SAVE CURRENT AI STATE
+        // ==========================================
+
+        await saveAIStateToRedis(
+            aiContext
+        );
+
+
+        // ==========================================
+        // ANALYZE UPDATED AI TIMELINE
+        // ==========================================
+
+        const timelineAnalysis =
+            analyzeAITimeline(
+                aiContext.aiMemory,
+                {
+                    windowSize: 10,
+                }
+            );
+
+
+        // ==========================================
+        // FINAL AI CONSISTENCY LOG
+        // ==========================================
+
+        LOG.info(
+            {
+
+                walletAddress,
+
+                mint,
+
+                pnl:
+                    change,
+
+                health:
+                    aiContext.positionHealth
+                        ?.overallHealth,
+
+                trend:
+                    aiContext.positionHealth
+                        ?.trend,
+
+                protection:
+                    aiContext.protectionStrategy
+                        ?.protectionLevel,
+
+                exitDecision:
+                    aiContext.exitDecision
+                        ?.decision ??
+                    aiContext.exitDecision
+                        ?.action ??
+                    null,
+
+               recommendation:
+    aiContext.recommendation
+        ?.recommendation ??
+    aiContext.recommendation
+        ?.action ??
+    aiContext.tradeDecision
+        ?.recommendation ??
+    null,
+
+                action:
+                    aiContext.tradePlan
+                        ?.action ??
+                    null,
+
+                confidence:
+    aiContext.recommendation
+        ?.confidence ??
+    aiContext.tradeDecision
+        ?.confidence ??
+    aiContext.confidence
+        ?.overall ??
+    null,
+
+                timelineAvailable:
+                    timelineAnalysis.available,
+
+                sampleCount:
+                    timelineAnalysis.sampleCount,
+
+                evolution:
+                    timelineAnalysis.evolution,
+
+            },
+
+            "🧠 COMPLETE LIVE AI DECISION"
+
+        );
+
+
+        // ==========================================
+        // AI REFRESH SUCCESSFUL
+        // ==========================================
+
+        info._lastAIUpdateAt =
+            Date.now();
+
+    }
+
+    catch (err) {
+
+        LOG.warn(
+            {
+                err,
+                walletAddress,
+                mint,
+            },
+
+            "Live AI monitoring failed"
+        );
+
+    }
+
+}
+
+// INTERNAL HELPER
+
+ // ===================================================
+// 📈 TRAILING ACTIVATION — STICKY STATE
+// ===================================================
+
+const trailingDistancePct =
+  Number(profile.trailingDistancePercent ?? 0);
+
+const walletHigh =
+  state.highestPrices?.get(walletAddress);
+
+const activationProfitPct =
+  Number(profile.trailingActivationPercent ?? 5);
+
+const wasTrailingActivated =
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
+
+if (
+  !wasTrailingActivated &&
+  Number.isFinite(trailingDistancePct) &&
+  trailingDistancePct > 0 &&
+  Number.isFinite(activationProfitPct) &&
+  Number.isFinite(change) &&
+  change >= activationProfitPct
+) {
+  // Calculate the highest milestone reached on this tick.
+  // Example: activation +10%, interval 10%, profit +37%
+  // => first protected milestone is +30%.
+  const milestonesAboveActivation = Math.floor(
+    (change - activationProfitPct) / trailingDistancePct
+  );
+
+  const initialProtectedPct =
+    activationProfitPct +
+    milestonesAboveActivation * trailingDistancePct;
+
+  const activatedAt = String(Date.now());
+
+  try {
+    // Persist activation and protection together in one Redis
+    // hash update, so a successful activation has a milestone.
+    await redis.hset(
+      positionKey(walletAddress, mint),
+      {
+        trailingActivated: "true",
+        trailingActivatedAt: activatedAt,
+        trailingProtectedPct: String(initialProtectedPct),
+        trailingProtectedAt: activatedAt,
+      }
+    );
+
+    // Update in-memory state only after persistence succeeds.
+    info.trailingActivated = true;
+    info.trailingProtectedPct = initialProtectedPct;
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        change,
+        activationProfitPct,
+        trailingDistancePct,
+        trailingProtectedPct: initialProtectedPct,
+      },
+      "📈 Trailing activated with initial protection milestone"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        err,
+        walletAddress,
+        mint,
+        change,
+        activationProfitPct,
+        trailingDistancePct,
+        initialProtectedPct,
+      },
+      "❌ Failed to persist trailing activation and protection"
+    );
+  }
+}
+
+const trailingShouldBeActive =
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
+
+// ===================================================
+// 🛑 ORIGINAL STOP-LOSS — BEFORE TRAILING ACTIVATION
+// ===================================================
+
+// Use the configured original stop-loss only.
+// Post-TP dynamic protection is handled separately below.
+if (!trailingShouldBeActive) {
+  const currentStopLoss =
+    Number(profile.stopLossPercent);
+
+  if (
+    Number.isFinite(change) &&
+    Number.isFinite(currentStopLoss) &&
+    currentStopLoss > 0 &&
+    change <= -currentStopLoss
+  ) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        change,
+        currentStopLoss,
+      },
+      "🛑 Configured stop-loss triggered — queuing full exit"
+    );
+
+    const locked =
+      await acquireSellLock(walletAddress, mint);
+
+    if (!locked) {
+      LOG.warn(
+        { walletAddress, mint },
+        "⏭️ Stop-loss sell skipped — sell lock unavailable"
+      );
+
+      return;
+    }
+
+    await enqueueSellJob({
+      walletAddress,
+      mint,
+      reason: "stop_loss",
+      percent: 100,
+      createdAt: Date.now(),
+    });
+
+    return;
+  }
+}
+
+
+// ===================================================
+// 💾 PERSIST TP AI REVIEW CHECKPOINT STATE
+// ===================================================
+//
+// Persists the TP lifecycle state so that:
+// - AI HOLD decisions survive restart
+// - TP execution state survives restart
+// - TP re-arm state survives restart
+//
+// IMPORTANT:
+// This does NOT execute a trade.
+// It only persists position-management state.
+// ===================================================
+
+async function persistTPReviewState() {
+  try {
+    await redis.hset(
+      positionKey(walletAddress, mint),
+      {
+        tpStage: String(info.tpStage ?? 0),
+
+        tpReviewState: JSON.stringify(
+          info.tpReviewState || {
+            tp1: false,
+            tp2: false,
+            tp3: false,
+          }
+        ),
+
+        dynamicStopLoss:
+          info.dynamicStopLoss == null
+            ? ""
+            : String(info.dynamicStopLoss),
+      }
+    );
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        tpStage: info.tpStage,
+        tpReviewState: info.tpReviewState,
+        dynamicStopLoss: info.dynamicStopLoss,
+      },
+      "💾 TP AI review state persisted"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        walletAddress,
+        mint,
+        error: err?.message,
+      },
+      "❌ Failed to persist TP AI review state"
+    );
+  }
+}
+
+/**
+ * ===================================================
+ * 🎯 RE-ARM TP REVIEW CHECKPOINTS
+ * ===================================================
+ *
+ * A TP checkpoint is re-armed only after price
+ * falls back below that TP threshold.
+ *
+ * This allows:
+ *
+ * TP1 reached
+ * → AI HOLD
+ * → price continues
+ * → no repeated TP1 review
+ *
+ * But if price later falls below TP1 and
+ * crosses TP1 again:
+ *
+ * → TP1 can be reviewed again.
+ * ===================================================
+ */
+
+if (
+  info.tpStage < 1 &&
+  info.tpReviewState.tp1 &&
+  change < profile.tp1Percent
+) {
+
+  info.tpReviewState.tp1 = false;
+
+await persistTPReviewState();
+
+LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp1Percent: profile.tp1Percent,
+    },
+    "🔄 TP1 AI review checkpoint re-armed"
+  );
+}
+
+if (
+  info.tpStage < 2 &&
+  info.tpReviewState.tp2 &&
+  change < profile.tp2Percent
+) {
+
+  info.tpReviewState.tp2 = false;
+await persistTPReviewState();
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp2Percent: profile.tp2Percent,
+    },
+    "🔄 TP2 AI review checkpoint re-armed"
+  );
+}
+
+if (
+  info.tpStage < 3 &&
+  info.tpReviewState.tp3 &&
+  change < profile.tp3Percent
+) {
+
+  info.tpReviewState.tp3 = false;
+await persistTPReviewState();
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+      tp3Percent: profile.tp3Percent,
+    },
+    "🔄 TP3 AI review checkpoint re-armed"
+  );
+}
+
+
+/**
+ * ===================================================
+ * 🎯 TP1 — AI REVIEW
+ * ===================================================
+ */
+if (
+  info.tpStage < 1 &&
+  !info.tpReviewState.tp1 &&
+  change >= profile.tp1Percent
+) {
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP1 reached (AI review)"
+  );
+
+  const exitRequest = buildExitTradeRequest({
+
+    walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
+    mint,
+
+    price,
+
+    entryPrice: entryPriceUsd,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
+    reason: "tp1",
+
+    percent: profile.tp1SellPercent,
+
+    event: {
+
+      type: "TP1_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp1Percent,
+
+    },
+
+  });
+
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved TP1 execution
+  // ==========================================
+
+  if (
+    result?.success &&
+    (
+      result.action === "PARTIAL_EXIT" ||
+      result.action === "SCALE_OUT"
+    )
+  ) {
+
+    // Move protection to break-even
+   info.dynamicStopLoss = 0;
+info.tpStage = 1;
+info.tpReviewState.tp1 = false;
+await persistTPReviewState();
+
+    // TP1 execution completed this cycle
+    return;
+  }
+
+// ==========================================
+// AI rejected TP1 / decided HOLD or CONTINUE
+// ==========================================
+//
+// IMPORTANT:
+// - Do NOT advance tpStage.
+// - Do NOT sell.
+// - Mark the TP1 checkpoint as reviewed.
+// - Continue monitoring the position.
+//
+// TP1 becomes eligible for another review only
+// after price falls back below the TP1 threshold
+// and later crosses it again.
+// ==========================================
+
+info.tpReviewState.tp1 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp1ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP1 — checkpoint reviewed, continuing position monitoring"
+);
+}
+
+/**
+ * ===================================================
+ * 🎯 TP2 — AI REVIEW
+ * ===================================================
+ */
+if (
+  info.tpStage < 2 &&
+  !info.tpReviewState.tp2 &&
+  change >= profile.tp2Percent
+) {
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP2 reached (AI review)"
+  );
+
+  const exitRequest = buildExitTradeRequest({
+
+    walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
+    mint,
+
+    price,
+
+    entryPrice: entryPriceUsd,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
+    reason: "tp2",
+
+    percent: profile.tp2SellPercent,
+
+    event: {
+
+      type: "TP2_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp2Percent,
+
+    },
+
+  });
+
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved TP2 execution
+  // ==========================================
+
+  if (
+    result?.success &&
+    (
+      result.action === "PARTIAL_EXIT" ||
+      result.action === "SCALE_OUT"
+    )
+  ) {
+
+    // Lock TP1 profit
+    info.dynamicStopLoss = profile.tp1Percent;
+info.tpStage = 2;
+info.tpReviewState.tp2 = false;
+await persistTPReviewState();
+    // TP2 execution completed this cycle
+    return;
+  }
+
+// ==========================================
+// AI rejected TP2 / decided HOLD or CONTINUE
+// ==========================================
+//
+// Do NOT advance tpStage.
+// Mark TP2 checkpoint as reviewed.
+// Continue monitoring the open position.
+// ==========================================
+
+info.tpReviewState.tp2 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp2ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP2 — checkpoint reviewed, continuing position monitoring"
+);
+}
+
+/**
+ * ===================================================
+ * 🎯 TP3 — AI REVIEW
+ * ===================================================
+ */
+if (
+  info.tpStage < 3 &&
+  !info.tpReviewState.tp3 &&
+  change >= profile.tp3Percent
+) {
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      change,
+    },
+    "🎯 TP3 reached (AI review)"
+  );
+
+  const exitRequest = buildExitTradeRequest({
+
+    walletAddress,
+
+    wallet: info.wallet,
+
+    user: info.user,
+
+    mint,
+
+    price,
+
+    entryPrice: entryPriceUsd,
+
+    highestPrice: walletHigh,
+
+    solAmount: info.solAmount,
+
+    buyTxid: info.buyTxid,
+
+    sourceChannel: info.sourceChannel,
+
+    slippageBps: info.slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
+    reason: "tp3",
+
+    percent: 100,
+
+    event: {
+
+      type: "TP3_REACHED",
+
+      triggerPrice: price,
+
+      changePercent: change,
+
+      targetPercent: profile.tp3Percent,
+
+    },
+
+  });
+
+  const result = await processExitDecision(
+    exitRequest
+  );
+
+  // ==========================================
+  // AI approved TP3 full exit
+  // ==========================================
+
+  if (
+    result?.success &&
+    result.action === "FULL_EXIT"
+  ) {
+
+    // TP3 was actually executed
+   info.tpStage = 3;
+info.tpReviewState.tp3 = false;
+await persistTPReviewState();
+    // Position exit completed this cycle
+    return;
+  }
+
+// ==========================================
+// AI rejected TP3 / decided HOLD or CONTINUE
+// ==========================================
+//
+// Do NOT advance tpStage.
+// Mark TP3 checkpoint as reviewed.
+// Continue monitoring the open position.
+// ==========================================
+
+info.tpReviewState.tp3 = true;
+await persistTPReviewState();
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    change,
+    aiAction: result?.action ?? null,
+    tpStage: info.tpStage,
+    tp3ReviewCompleted: true,
+  },
+  "🧠 AI chose not to execute TP3 — checkpoint reviewed, continuing position monitoring"
+);
+}
+
+// ===================================================
+// 🛡️ DYNAMIC STOP AFTER TP — ALWAYS ACTIVE
+// ===================================================
+if (
+  !trailingShouldBeActive &&
+  info.tpStage > 0 &&
+  info.dynamicStopLoss != null
+) {
+  if (change <= info.dynamicStopLoss) {
+    LOG.info(
+      { walletAddress, mint, change, dynamicStopLoss: info.dynamicStopLoss },
+      "🛡️ Dynamic stop hit after TP (queued sell)"
+    );
+
+    const locked = await acquireSellLock(walletAddress, mint);
+    if (!locked) return;
+
+    await enqueueSellJob({
+      walletAddress,
+      mint,
+      reason: "dynamic_stop",
+      percent: 100,
+      createdAt: Date.now(),
+    });
+
+    return;
+  }
+}
+
+// ===================================================
+// 🧪 DEBUG — TRAILING STATUS
+// ===================================================
+
+info._lastTrailLogAt =
+  info._lastTrailLogAt || 0;
+
+if (Date.now() - info._lastTrailLogAt > 15_000) {
+  info._lastTrailLogAt = Date.now();
+
+  const dropFromPeakPct =
+    walletHigh != null && walletHigh > 0
+      ? ((walletHigh - price) / walletHigh) * 100
+      : null;
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      tpStage: info.tpStage,
+      trailingDistancePct,
+      walletHigh,
+      price,
+      dropFromPeakPct,
+      trailingActive: trailingShouldBeActive,
+    },
+    "🧪 trailing status"
+  );
+}
+
+
+ // ===================================================
+// 📈 MILESTONE TRAILING STOP — DIRECT EXECUTION
+// ===================================================
+
+if (trailingShouldBeActive) {
+  const entryPrice = Number(entryPriceUsd);
+  const intervalPct = Number(trailingDistancePct);
+
+  if (
+    Number.isFinite(change) &&
+    Number.isFinite(entryPrice) &&
+    entryPrice > 0 &&
+    Number.isFinite(intervalPct) &&
+    intervalPct > 0
+  ) {
+    // The activation threshold is the first protected milestone.
+    const activationPct =
+      Number(profile.trailingActivationPercent ?? 5);
+
+  // Restore the highest profit milestone already protected.
+let storedProtectedPct =
+  info.trailingProtectedPct !== undefined &&
+  info.trailingProtectedPct !== ""
+    ? Number(info.trailingProtectedPct)
+    : null;
+
+let hasStoredProtection =
+  storedProtectedPct !== null &&
+  Number.isFinite(storedProtectedPct);
+
+// SAFEGUARD: an activated position must have a protection level.
+if (!hasStoredProtection) {
+  storedProtectedPct = activationPct;
+  hasStoredProtection = true;
+
+  // Set in-memory protection immediately.
+  info.trailingProtectedPct = storedProtectedPct;
+
+  try {
+    await redis.hset(positionKey(walletAddress, mint), {
+      trailingActivated: "true",
+      trailingProtectedPct: String(storedProtectedPct),
+      trailingProtectedAt: String(Date.now()),
+    });
+
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        change,
+        trailingProtectedPct: storedProtectedPct,
+      },
+      "⚠️ Missing trailing milestone recovered using activation threshold"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        err,
+        walletAddress,
+        mint,
+        trailingProtectedPct: storedProtectedPct,
+      },
+      "❌ Failed to persist recovered trailing milestone"
+    );
+  }
+}
+
+    // Check the EXISTING protection before raising it.
+    // This prevents an exit on the same tick that establishes
+    // a new milestone.
+    if (
+      hasStoredProtection &&
+      change <= storedProtectedPct
+    ) {
+      const protectedExitPrice =
+        entryPrice * (1 + storedProtectedPct / 100);
+
+      LOG.warn(
+        {
+          walletAddress,
+          mint,
+          change,
+          storedProtectedPct,
+          protectedExitPrice,
+        },
+        "📉 Trailing protection reached — queuing full exit"
+      );
+
+      const locked =
+        await acquireSellLock(walletAddress, mint);
+
+      if (!locked) {
+        LOG.warn(
+          { walletAddress, mint },
+          "⏭️ Trailing exit skipped — sell lock unavailable"
+        );
+
+        return;
+      }
+
+      try {
+        await enqueueSellJob({
+          walletAddress,
+          mint,
+          reason: "trailing",
+          percent: 100,
+          createdAt: Date.now(),
+        });
+      } catch (err) {
+        // Allow a later monitoring cycle to retry if enqueueing
+        // fails, rather than leaving the position locked.
+        await releaseSellLock(walletAddress, mint);
+        throw err;
+      }
+
+      return;
+    }
+
+    // Establish protection only after trailing has activated.
+    if (change >= activationPct) {
+      const milestonesAboveActivation =
+        Math.floor(
+          (change - activationPct) / intervalPct
+        );
+
+      const candidateProtectedPct =
+        activationPct +
+        milestonesAboveActivation * intervalPct;
+
+      const nextProtectedPct =
+        hasStoredProtection
+          ? Math.max(
+              storedProtectedPct,
+              candidateProtectedPct
+            )
+          : candidateProtectedPct;
+
+      // Persist only when protection is first established
+      // or a higher milestone is reached.
+      if (
+        !hasStoredProtection ||
+        nextProtectedPct > storedProtectedPct
+      ) {
+        await redis.hset(
+          positionKey(walletAddress, mint),
+          {
+            trailingActivated: "true",
+            trailingProtectedPct:
+              String(nextProtectedPct),
+            trailingProtectedAt: String(Date.now()),
+          }
+        );
+
+        info.trailingActivated = true;
+        info.trailingProtectedPct = nextProtectedPct;
+
+        LOG.info(
+          {
+            walletAddress,
+            mint,
+            change,
+            previousProtectedPct:
+              hasStoredProtection
+                ? storedProtectedPct
+                : null,
+            trailingProtectedPct: nextProtectedPct,
+          },
+                    "📈 Trailing protection milestone updated"
+        );
+      }
+    }
+  }
+}
+
+// ✅ THIS closes monitorUser
+}
+
+// ===================================================
+// BUILD EXIT TRADE REQUEST
+// ===================================================
+function buildExitTradeRequest({
+
+    walletAddress,
+
+    wallet,
+
+    user,
+
+    mint,
+
+    price,
+
+    entryPrice,
+
+    highestPrice,
+
+    solAmount,
+
+    buyTxid,
+
+    sourceChannel,
+
+    slippageBps,
+
+    profile,
+
+    state,
+
+    info,
+
+    reason,
+
+    percent = 100,
+
+    event,
+
+}) {
+
+const tradeRequest = {
+
+    // ==========================================
+    // Identity
+    // ==========================================
+
+    requestId:
+        `${walletAddress}:${mint}:${Date.now()}`,
+
+    action:
+        "REVIEW_EXIT",
+
+    walletAddress,
+    wallet,
+    user,
+    mint,
+
+    // ==========================================
+    // Position
+    // ==========================================
+
+    entryPrice,
+    currentPrice: price,
+    highestPrice,
+    solAmount,
+    buyTxid,
+    sourceChannel,
+    slippageBps,
+entrySnapshot:
+    info?.entrySnapshot ?? null,
+
+    // ==========================================
+    // Exit Request
+    // ==========================================
+
+    percent,
+    reason,
+
+    // ==========================================
+    // Market Snapshot
+    // ==========================================
+
+    // Market Snapshot
+profile,
+state,
+info,
+currentMarketSnapshot:
+    state?.lastMarketSnapshot ?? null,
+
+    // ==========================================
+    // Metadata
+    // ==========================================
+
+    metadata: {
+        source: "POSITION_MONITOR",
+        monitoredAt: new Date(),
+    },
+
+};
+
+const context = createPipelineContext(
+    tradeRequest
+);
+
+return {
+
+    context,
+
+    event,
+
+};
+}
+// ===================================================
+// AI EXIT DECISION PROCESSOR
+// ===================================================
+
+async function processExitDecision({
+
+    context,
+
+    event,
+
+}) {
+
+    if (!context) {
+
+        throw new Error(
+            "Exit decision context is required."
+        );
+
+    }
+
+    if (!event) {
+
+        throw new Error(
+            "Exit review event is required."
+        );
+
+    }
+try {
+    // ==========================================
+    // Queue AI Review
+    // ==========================================
+
+    runAIReviewManager(
+        context,
+        event
+    );
+
+    // ==========================================
+    // AI Review Not Required
+    // ==========================================
+
+    if (
+
+        !context.pendingReview?.reviewRequired
+
+    ) {
+
+        LOG.info(
+            {
+                walletAddress:
+                    context.walletAddress,
+
+                mint:
+                    context.mint,
+
+                event:
+                    event.type,
+
+            },
+            "🧠 AI review skipped."
+        );
+
+        return {
+
+            success: true,
+
+            action: "CONTINUE",
+
+            executionState: "SKIPPED",
+
+            reason: "Review not required.",
+
+        };
+
+    }
+
+    // ==========================================
+    // Run Exit Pipeline
+    // ==========================================
+
+   const pipelineResult =
+    await processAIExitPipeline(
+        context
+    );
+
+// ==========================================
+// Persist AI state for dashboard
+// ==========================================
+
+try {
+
+    await saveAIStateToRedis(
+        pipelineResult.context
+    );
+
+}
+catch (err) {
+
+    LOG.error(
+        {
+            err,
+            walletAddress:
+                context.walletAddress,
+
+            mint:
+                context.mint,
+        },
+        "Failed to persist AI dashboard state"
+    );
+
+}
+
+if (
+
+    !pipelineResult?.approved
+
+) {
+
+    LOG.info(
+        {
+            walletAddress:
+                context.walletAddress,
+
+            mint:
+                context.mint,
+
+        },
+        "🧠 Exit pipeline rejected execution."
+    );
+
+    return {
+
+        success: true,
+
+        action: "CONTINUE",
+
+        executionState: "SKIPPED",
+
+        reason: "Exit pipeline rejected.",
+
+    };
+
+}
+
+    // ==========================================
+    // Execute Approved Trade Plan
+    // ==========================================
+
+const executionResult = await executeTradePlan(
+    pipelineResult.tradePlan
+);
+
+LOG.info(
+    {
+        walletAddress: context.walletAddress,
+        mint: context.mint,
+        action: executionResult?.action,
+        executionState: executionResult?.executionState,
+    },
+    "🧠 Exit execution completed."
+);
+
+return executionResult;
+
+} catch (err) {
+
+    LOG.error(
+        {
+            err,
+            walletAddress: context.walletAddress,
+            mint: context.mint,
+            event: event?.type,
+        },
+        "❌ AI Exit Decision failed."
+    );
+
+    return {
+
+        success: false,
+
+        action: "CONTINUE",
+
+        executionState: "FAILED",
+
+        reason: err.message,
+
+    };
+
+}
+
+}
+
+// ===================================================
+// 🚀 TRADE EXECUTION GATEWAY
+// ===================================================
+
+async function executeTradePlan(plan) {
+
+  if (!plan) {
+    throw new Error("Execution plan is required.");
+  }
+
+  const {
+
+    action,
+    user,
+    walletAddress,
+    wallet,
+    mint,
+    sourceChannel,
+    percent,
+    reason,
+    slippageBps,
+
+  } = plan;
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+      action,
+      percent,
+      reason,
+    },
+    "🚀 Executing AI trade plan"
+  );
+
+  switch (action) {
+
+    // ==========================================
+    // BUY
+    // ==========================================
+
+   case "BUY": {
+
+// ==========================================================
+// 🔗 SCANNER → AUTOTRADE AI BRIDGE
+//
+// The API scanner stores the authoritative scanner result in
+// TokenOutcome. The BUY queue does not carry that result, so
+// retrieve the latest scan here before the AI Entry Pipeline
+// creates its context.
+//
+// This keeps the AI engines unchanged.
+// ==========================================================
+
+try {
+    const latestScannerResult =
+        await TokenOutcome.findOne({
+            mintAddress: plan.mint,
+        })
+        .sort({ scannedAt: -1 })
+        .lean();
+
+    if (latestScannerResult) {
+
+        const entryAnalysis =
+            latestScannerResult.entryAnalysis || {};
+
+        plan.aiContext = {
+
+            analyses: {
+                ...(entryAnalysis || {}),
+
+                forecast:
+                    entryAnalysis.forecast ?? {
+                        score:
+                            latestScannerResult.forecastScore ?? 0,
+
+                        verdict:
+                            latestScannerResult.forecastVerdict ?? null,
+                    },
+
+                momentum:
+                    entryAnalysis.momentum ?? {
+                        score:
+                            latestScannerResult.momentumScore ?? 0,
+                    },
+
+                liquidity:
+                    entryAnalysis.liquidity ?? {},
+
+                volume:
+                    entryAnalysis.volume ?? {},
+            },
+
+            evidence: {
+                forecast:
+                    entryAnalysis.forecast ??
+                    {
+                        score:
+                            latestScannerResult.forecastScore ?? 0,
+
+                        verdict:
+                            latestScannerResult.forecastVerdict ?? null,
+                    },
+
+                momentum:
+                    entryAnalysis.momentum ?? {},
+
+                liquidity:
+                    entryAnalysis.liquidity ?? {},
+
+                volume:
+                    entryAnalysis.volume ?? {},
+            },
+
+            investmentThesis:
+                latestScannerResult.aiSnapshot?.investmentThesis ??
+                null,
+
+            recommendation:
+                latestScannerResult.aiSnapshot?.recommendation ??
+                latestScannerResult.recommendation ??
+                null,
+
+            confidence: {
+                recommendation:
+                    latestScannerResult.recommendationConfidence ??
+                    0,
+
+                overall:
+                    latestScannerResult.overallConfidence ??
+                    0,
+            },
+        };
+
+        LOG.info(
+            {
+                mint: plan.mint,
+                scannedAt: latestScannerResult.scannedAt,
+
+                forecastScore:
+                    latestScannerResult.forecastScore,
+
+                forecastVerdict:
+                    latestScannerResult.forecastVerdict,
+
+                momentumScore:
+                    latestScannerResult.momentumScore,
+
+                hasLiquidity:
+                    Boolean(entryAnalysis.liquidity),
+
+                hasVolume:
+                    Boolean(entryAnalysis.volume),
+
+                hasAIContext:
+                    Boolean(plan.aiContext),
+            },
+            "🔗 Scanner result injected into AutoTrade AI context"
+        );
+
+    } else {
+
+        LOG.warn(
+            {
+                mint: plan.mint,
+            },
+            "⚠️ No TokenOutcome found — AI will run without scanner context"
+        );
+    }
+
+} catch (scannerContextError) {
+
+    LOG.error(
+        {
+            mint: plan.mint,
+            error:
+                scannerContextError?.message ||
+                scannerContextError,
+        },
+        "❌ Failed to load scanner result for AutoTrade AI"
+    );
+}
+
+
+    // ==========================================
+    // AI Entry Pipeline
+    // ==========================================
+
+    const approvedPlan = await processAIEntryPipeline(plan);
+
+    if (!approvedPlan?.approved) {
+
+        LOG.info(
+            {
+                requestId: plan.requestId,
+                walletAddress,
+                mint,
+            },
+            "🧠 AI rejected BUY request."
+        );
+
+        return {
+
+            success: false,
+
+            action: "HOLD",
+
+            executionState: "REJECTED",
+
+            reason: "AI rejected entry.",
+
+        };
+
+    }
+
+    LOG.info(
+        {
+            requestId: approvedPlan.requestId,
+            walletAddress,
+            mint,
+            action: approvedPlan.action,
+        },
+        "🧠 AI approved BUY request."
+    );
+
+return executeUserTrade(
+    user,
+    mint,
+    sourceChannel,
+    approvedPlan.context
+);
+
+}
+
+    // ==========================================
+    // SCALE OUT
+    // ==========================================
+
+    case "SCALE_OUT":
+
+    // ==========================================
+    // PARTIAL EXIT
+    // ==========================================
+
+    case "PARTIAL_EXIT":
+
+    // ==========================================
+    // FULL EXIT
+    // ==========================================
+
+    case "FULL_EXIT": {
+
+      return executeQueuedSell({
+
+        action,
+
+        walletAddress,
+
+        wallet,
+
+        mint,
+
+        percent,
+
+        reason,
+
+        slippageBps,
+
+        user,
+
+      });
+
+    }
+
+    // ==========================================
+    // HOLD POSITION
+    // ==========================================
+
+    case "CONTINUE":
+
+    case "HOLD": {
+
+      LOG.info(
+        {
+          walletAddress,
+          mint,
+        },
+        "AI decided to continue holding position."
+      );
+
+      return {
+
+        success: true,
+
+        action,
+
+        executionState: "SKIPPED",
+
+        reason: "AI decided to continue holding.",
+
+      };
+
+    }
+
+    // ==========================================
+    // UNKNOWN ACTION
+    // ==========================================
+
+    default: {
+
+      throw new Error(
+
+        `Unsupported execution action: ${action}`
+
+      );
+
+    }
+
+  }
+
+}
+
+
+// EXECUTE QUEUE SELL
+async function executeQueuedSell({ action, walletAddress, wallet, mint, reason, percent = 100,  slippageBps, user }) {
+  const state = monitored.get(mint);
+  const info = state?.users?.get(walletAddress);
+
+   // ==========================================
+  // Execution Context
+  // ==========================================
+
+const isFullExit =
+    action === "FULL_EXIT" ||
+    percent === 100;
+
+const isPartialExit =
+    action === "PARTIAL_EXIT";
+
+const isScaleOut =
+    action === "SCALE_OUT";
+
+  
+
+ if (!state || !info) {
+    LOG.warn(
+      { walletAddress, mint, reason },
+      "⏭️ Queued sell skipped — position not found in monitor state"
+    );
+    return;
+}
+
+const executionWallet =
+
+    wallet ||
+
+    info.wallet;
+
+  const price = state.lastPrice || info.entryPrice || 0;
+
+const {
+    profile,
+    buyTxid,
+    solAmount,
+    entryPrice: storedEntryPrice,
+    sourceChannel,
+    slippageBps: storedSlippageBps,
+} = info;
+
+const effectiveSlippageBps =
+
+    slippageBps ??
+
+    storedSlippageBps;
+
+  const entry = state.entryPrices.get(walletAddress) ?? storedEntryPrice;
+  if (!entry) {
+    LOG.warn({ walletAddress, mint, reason }, "⏭️ Queued sell skipped — missing entry price");
+    return;
+  }
+
+  async function finalizeTrade({ reason, percent = 100 }) {
+    let sellRes;
+    let exitPrice = price;
+    let sellTxid = null;
+
+    try {
+      if (isFullExit) {
+        const allowed = await tryMarkPositionClosing(walletAddress, mint);
+        if (!allowed) {
+          LOG.warn(
+            { walletAddress, mint },
+            "Finalize aborted — already closing/closed"
+          );
+          return;
+        }
+      }
+
+     
+
+      if (!executionWallet) {
+        LOG.error(
+          { walletAddress, mint },
+          "❌ Missing wallet in monitor state"
+        );
+
+        if (isFullExit) {
+          await redis.hset(positionKey(walletAddress, mint), "status", "open");
+        }
+
+        return;
+      }
+
+      LOG.info(
+  {
+    wallet: executionWallet.publicKey.toBase58(),
+    mint,
+    percent,
+    reason,
+  },
+  "🔐 Using user wallet for queued SELL"
+);
+
+      const traceId = `${walletAddress}:${mint}:${reason}:${Date.now()}`;
+
+     LOG.info(
+  {
+    traceId,
+    action,
+    walletAddress,
+    mint,
+    reason,
+    percent,
+    isFullExit,
+    isPartialExit,
+    isScaleOut,
+  },
+  "🧪 AI EXECUTION PLAN RECEIVED"
+);
+
+      if (isFullExit) {
+
+    sellRes = await safeSellAll(
+        executionWallet,
+        mint,
+        effectiveSlippageBps,
+        4,
+        traceId
+    );
+
+} else if (isPartialExit || isScaleOut) {
+
+    sellRes = await safeSellPartial(
+        executionWallet,
+        mint,
+        percent,
+        effectiveSlippageBps,
+        4,
+        traceId
+    );
+
+} else {
+
+    throw new Error(
+        `Unsupported sell action: ${action}`
+    );
+
+}
+
+      
+
+if (typeof sellRes?.txid === "object") {
+  sellTxid = sellRes.txid.txid;
+} else {
+  sellTxid =
+    sellRes?.txid ||
+    sellRes?.signature ||
+    sellRes?.sig ||
+    null;
+}
+
+LOG.info(
+  {
+    sellRes,
+    sellTxid,
+    sellTxidType: typeof sellTxid,
+    reason,
+    percent,
+  },
+  "🧪 QUEUED SELL TX DEBUG"
+);
+
+      await chargeSellFee(executionWallet, sellTxid, mint, reason);
+    } catch (err) {
+      LOG.error(
+        { err, walletAddress, mint, reason },
+        "❌ Queued sell execution failed"
+      );
+
+      if (isFullExit) {
+        await redis.hset(positionKey(walletAddress, mint), "status", "open");
+      }
+
+      return;
+    }
+
+if (isFullExit) {
+
+  const key =
+    positionKey(
+      walletAddress,
+      mint
+    );
+
+  await redis.hset(
+    key,
+    "status",
+    "closed"
+  );
+
+  await redis.srem(
+    walletPositionsKey(walletAddress),
+    mint
+  );
+
+
+  // ===================================================
+  // 💰 ACTUAL SELL EXECUTION DATA
+  // ===================================================
+  //
+  // sellRes comes directly from the executed swap.
+  //
+  // tokenAmount = actual tokens sold
+  // solReceived = actual SOL received
+  //
+  // Therefore:
+  //
+  // actual exit price =
+  // actual SOL received / actual tokens sold
+  //
+  // NEVER use DexScreener here.
+  // ===================================================
+
+  const actualTokensSold =
+    Number(
+      sellRes?.tokenAmount ||
+      sellRes?.txid?.tokenAmount ||
+      0
+    );
+
+  const actualSolReceived =
+    Number(
+      sellRes?.solReceived ||
+      0
+    );
+
+
+  let exitPrice = null;
+
+
+  if (
+    Number.isFinite(actualTokensSold) &&
+    actualTokensSold > 0 &&
+    Number.isFinite(actualSolReceived) &&
+    actualSolReceived >= 0
+  ) {
+
+    exitPrice =
+      actualSolReceived /
+      actualTokensSold;
+
+  } else {
+
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        actualTokensSold,
+        actualSolReceived,
+        sellRes,
+      },
+      "⚠️ Unable to calculate actual SELL execution price"
+    );
+
+  }
+
+
+  // ===================================================
+  // 🧮 ACTUAL TRADE PNL
+  // ===================================================
+
+  const actualEntryPrice =
+    Number(entry);
+
+  const actualExitPrice =
+    Number(exitPrice);
+
+  let pnlPercent = null;
+
+  if (
+    Number.isFinite(actualEntryPrice) &&
+    actualEntryPrice > 0 &&
+    Number.isFinite(actualExitPrice)
+  ) {
+
+    pnlPercent =
+      (
+        (actualExitPrice - actualEntryPrice) /
+        actualEntryPrice
+      ) * 100;
+
+  }
+
+
+  // ===================================================
+  // 🔎 EXECUTION ACCOUNTING DEBUG
+  // ===================================================
+
+  LOG.info(
+    {
+      walletAddress,
+      mint,
+
+      entryPrice:
+        actualEntryPrice,
+
+      exitPrice:
+        actualExitPrice,
+
+      tokensSold:
+        actualTokensSold,
+
+      solReceived:
+        actualSolReceived,
+
+      pnlPercent,
+
+      buyTxid,
+      sellTxid,
+
+    },
+    "💰 ACTUAL TRADE EXECUTION ACCOUNTING"
+  );
+
+
+  // ===================================================
+  // 💾 SAVE AUTHORITATIVE TRADE RECORD
+  // ===================================================
+
+  await saveTradeToBackend({
+
+    action,
+
+    walletAddress,
+
+    mint,
+
+    solAmount,
+
+    entryPrice:
+      actualEntryPrice,
+
+    exitPrice:
+      actualExitPrice,
+
+    buyTxid,
+
+    sellTxid,
+
+    sourceChannel,
+
+    reason,
+
+    // Actual execution information
+    tokenAmount:
+      actualTokensSold,
+
+    solReceived:
+      actualSolReceived,
+
+    pnlPercent,
+
+  });
+
+
+  // ===================================================
+  // 🧹 REMOVE FROM MONITORING
+  // ===================================================
+
+  state.users.delete(
+    walletAddress
+  );
+
+  state.entryPrices.delete(
+    walletAddress
+  );
+
+  state.highestPrices.delete(
+    walletAddress
+  );
+}
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "🧪 ABOUT TO CREATE SELL NOTIFICATION"
+);
+
+
+
+const soldTokens = Number(
+  sellRes?.txid?.tokenAmount ||
+  sellRes?.tokenAmount ||
+  0
+).toLocaleString();
+
+const solReceived = Number(
+  sellRes?.solReceived || 0
+).toFixed(6);
+
+LOG.info(
+  {
+    sellRes,
+    soldTokens,
+    solReceived,
+  },
+  "SELL RESULT FOR NOTIFICATION"
+);
+
+await createNotification({
+  walletAddress,
+  type: "success",
+  title: "Sell Executed",
+  message:
+    soldTokens !== "0"
+      ? `Sold ${soldTokens} tokens for ${solReceived} SOL`
+      : isFullExit
+      ? "Position sold successfully"
+      : `Successfully sold ${percent}% of position`,
+});
+
+
+
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "🧪 SELL NOTIFICATION CREATED"
+);
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    reason,
+    percent,
+  },
+  "✅ Queued trade finalized"
+);
+  }
+
+  await finalizeTrade({ reason, percent });
+}
+
+// ========= Safe wrappers =========
+async function safeExecuteSwap(
+  {
+    mint,
+    solAmount,
+    side,
+    feeWallet,
+    slippageBps, // 🔐 STEP 3.5 — USER SLIPPAGE WIRED IN
+  },
+  retries = 4
+) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      return await executeSwap({
+        wallet: INTERNAL_TRADING_WALLET, // 🔐 backend custody wallet
+        mint,
+        solAmount,
+        side,
+        feeWallet,
+        slippageBps, // ✅ PASSED THROUGH TO EXECUTION LAYER
+      });
+    } catch (err) {
+      LOG.warn(
+        {
+          err,
+          attempt: i + 1,
+          mint,
+          solAmount,
+          side,
+          slippageBps,
+        },
+        "swap failed — retrying"
+      );
+
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+async function safeSellPartial(
+  wallet,
+  mint,
+  percent,
+  slippageBps,
+  retries = 4,
+  traceId = null
+) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      LOG.info(
+        {
+          traceId,
+          mint,
+          percent,
+          slippageBps,
+          walletPubkey: wallet?.publicKey?.toBase58?.(),
+          hasPublicKey: !!wallet?.publicKey,
+          attempt: i + 1,
+          retries,
+        },
+        "🧪 safeSellPartial input"
+      );
+
+      // ✅ solanaUtils signature is positional:
+      // sellPartial(wallet, mint, percent, slippageBps)
+      return await sellPartial(wallet, mint, percent, slippageBps);
+    } catch (err) {
+      LOG.error(
+        {
+          traceId,
+          errName: err?.name,
+          errMessage: err?.message,
+          errStack: err?.stack,
+          mint,
+          percent,
+          slippageBps,
+          attempt: i + 1,
+          retries,
+        },
+        "sellPartial failed"
+      );
+
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+async function safeSellAll(
+  wallet,
+  mint,
+  slippageBps,
+  retries = 4,
+  traceId = null
+) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      LOG.info(
+        {
+          traceId,
+          mint,
+          slippageBps,
+          walletPubkey: wallet?.publicKey?.toBase58?.(),
+          hasPublicKey: !!wallet?.publicKey,
+          attempt: i + 1,
+          retries,
+        },
+        "🧪 safeSellAll input"
+      );
+
+      // ✅ solanaUtils signature is positional:
+      // sellAll(wallet, mint, slippageBps)
+      return await sellAll(wallet, mint, slippageBps);
+    } catch (err) {
+      LOG.error(
+        {
+          traceId,
+          errName: err?.name,
+          errMessage: err?.message,
+          errStack: err?.stack,
+          mint,
+          slippageBps,
+          attempt: i + 1,
+          retries,
+        },
+        "sellAll failed"
+      );
+
+      if (i === retries - 1) throw err;
+      await sleep(1000 * (i + 1));
+    }
+  }
+}
+
+
+
+async function executeUserTrade(user, mint, sourceChannel, entryContext = null) {
+    if (!user) {
+        LOG.error(
+            { mint, sourceChannel },
+            "❌ executeUserTrade called without user"
+        );
+        return;
+    }
+
+  try {
+    // ===================================================
+    // 🔒 Require trading enabled
+    // ===================================================
+    if (!user.tradingEnabled) {
+      LOG.info(
+        { wallet: user.walletAddress },
+        "⛔ Trade blocked: trading not enabled"
+      );
+      return;
+    }
+
+    // ===================================================
+// 🔒 Channel approval enforcement
+// Skip for manual dashboard buys
+// ===================================================
+const isManualBuy =
+  String(sourceChannel) === "manual_dashboard";
+
+if (!isManualBuy) {
+  const sub = user.subscribedChannels?.find(
+    (s) => String(s.channelId) === String(sourceChannel)
+  );
+
+  if (!sub || sub.enabled !== true || sub.status !== "approved") {
+    LOG.warn(
+      {
+        wallet: user.walletAddress,
+        channel: sourceChannel,
+      },
+      "⛔ Trade blocked: channel not approved"
+    );
+    return;
+  }
+} else {
+  LOG.info(
+    {
+      wallet: user.walletAddress,
+      channel: sourceChannel,
+    },
+    "✅ Manual dashboard buy — channel approval bypassed"
+  );
+}
+
+    // ===================================================
+    // 🔐 Restore USER trading wallet
+    // ===================================================
+    const wallet = restoreTradingWallet(user);
+
+    LOG.info(
+      {
+        user: user.walletAddress,
+        tradingWallet: wallet.publicKey.toBase58(),
+      },
+      "🔐 User trading wallet restored"
+    );
+
+    // ===================================================
+    // 💰 Resolve SOL amount
+    // ===================================================
+    const solAmount = user.solPerTrade || 0.01;
+    if (solAmount <= 0) {
+      LOG.warn(
+        { wallet: user.walletAddress },
+        "Invalid solPerTrade"
+      );
+      return;
+    }
+
+    const lamports = Math.floor(solAmount * LAMPORTS_PER_SOL);
+    // ✅ Balance guard: trade amount + fees/rent buffer
+const balance = await connection.getBalance(wallet.publicKey, "confirmed");
+
+// Buffer to cover: ATA rent + tx fees
+const BUFFER_LAMPORTS = 3_000_000;
+
+// ✅ Include BUY fee
+const REQUIRED_LAMPORTS = lamports + BUFFER_LAMPORTS + FEE_BUY_LAMPORTS;
+
+if (balance < REQUIRED_LAMPORTS) {
+  LOG.warn(
+    {
+      tradingWallet: wallet.publicKey.toBase58(),
+      balanceLamports: balance,
+      requiredLamports: REQUIRED_LAMPORTS,
+      tradeLamports: lamports,
+      feeLamports: FEE_BUY_LAMPORTS,
+      bufferLamports: BUFFER_LAMPORTS,
+    },
+    "⛔ Skipping BUY: insufficient SOL for trade+fee+buffer"
+  );
+
+  await createNotification({
+    walletAddress:
+      user.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      "Insufficient SOL balance for trade, fees and buffer.",
+  });
+
+  return;
+}
+
+    // ===================================================
+    // 🔐 Slippage (clamped)
+    // ===================================================
+    const userSlippagePercent =
+      typeof user.maxSlippagePercent === "number"
+        ? user.maxSlippagePercent
+        : 5;
+
+    const slippageBps = Math.min(
+      Math.max(Math.round(userSlippagePercent * 100), 50),  // 0.5% min
+      2000 // 20% max
+    );
+
+    LOG.info(
+      {
+        wallet: user.walletAddress,
+        slippageBps,
+      },
+      "🔐 Slippage resolved"
+    );
+
+    // ===================================================
+    // 📊 Get quote
+    // ===================================================
+    const quote = await getQuote(
+      "So11111111111111111111111111111111111111112", // SOL
+      mint,
+      lamports,
+      slippageBps
+    );
+
+   if (!quote) {
+  LOG.warn(
+    { wallet: user.walletAddress },
+    "Quote failed"
+  );
+
+  await createNotification({
+    walletAddress:
+      user.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      "Unable to obtain swap quote.",
+  });
+
+  return;
+}
+
+// 🚀 Execute BUY from USER wallet
+// ===================================================
+const buyResult = await executeSwap(wallet, quote);
+
+const buyTxid = buyResult?.txid;
+
+// ===================================================
+// 💰 AUTHORITATIVE ON-CHAIN BUY EXECUTION
+// ===================================================
+
+
+const actualSolSpent =
+  Number(buyResult?.actualSolSpent || 0);
+
+const actualTokensReceived =
+  Number(buyResult?.actualOutputTokenAmount || 0);
+
+const actualTokenDecimals =
+  Number(
+    buyResult?.actualOutputTokenDecimals ??
+    quote?.outputMintDecimals ??
+    6
+  );
+
+LOG.info(
+  {
+    wallet: user.walletAddress,
+    mint,
+    buyTxid,
+
+    actualSolSpent,
+    actualTokensReceived,
+    actualTokenDecimals,
+
+    executionPrice:
+      buyResult?.executionPriceSolPerToken ?? null,
+
+    transactionFeeSol:
+      buyResult?.transactionFeeSol ?? null,
+
+    quotedTokenAmount:
+      buyResult?.tokenAmount ?? null,
+  },
+  "✅ BUY executed — AUTHORITATIVE ON-CHAIN VALUES"
+);
+
+// ===================================================
+// BUY NOTIFICATION
+// ===================================================
+
+await createNotification({
+  walletAddress:
+    user.walletAddress,
+
+  type: "success",
+
+  title: "Buy Executed",
+
+  message:
+    `Successfully purchased ${actualTokensReceived.toFixed(4)} tokens`,
+});
+
+// 💸 Charge platform BUY fee
+await chargeBuyFee(
+  wallet,
+  buyTxid,
+  mint
+);
+
+// ===================================================
+// 📈 ACTUAL BUY EXECUTION PRICE
+// ===================================================
+
+
+let entryPrice = null;
+
+if (
+  Number.isFinite(actualSolSpent) &&
+  actualSolSpent > 0 &&
+  Number.isFinite(actualTokensReceived) &&
+  actualTokensReceived > 0
+) {
+  entryPrice =
+    actualSolSpent /
+    actualTokensReceived;
+
+} else {
+  LOG.warn(
+    {
+      wallet: user.walletAddress,
+      mint,
+      actualSolSpent,
+      actualTokensReceived,
+      buyResult,
+    },
+    "⚠️ Unable to calculate actual BUY execution price"
+  );
+}
+
+// ===================================================
+// 📊 CAPTURE USD ENTRY MARKET BASELINE
+// ===================================================
+
+
+let entryMarketSnapshot = null;
+
+try {
+  const snapshots =
+    await getDexScreenerMarketSnapshots([mint]);
+
+  entryMarketSnapshot =
+    snapshots.get(mint) ?? null;
+
+  LOG.info(
+    {
+      wallet: user.walletAddress,
+      mint,
+      entryPriceSol: entryPrice,
+      entryPriceUsd:
+        entryMarketSnapshot?.priceUsd ?? null,
+      entryMarketCapUsd:
+        entryMarketSnapshot?.marketCapUsd ?? null,
+      entryLiquidityUsd:
+        entryMarketSnapshot?.liquidityUsd ?? null,
+    },
+    "📊 Captured USD entry market baseline"
+  );
+} catch (err) {
+  LOG.warn(
+    {
+      wallet: user.walletAddress,
+      mint,
+      err,
+    },
+    "⚠️ Unable to capture USD entry market baseline"
+  );
+}
+
+const entryPriceUsd =
+  Number(entryMarketSnapshot?.priceUsd);
+
+const entryMarketCapUsd =
+  Number(entryMarketSnapshot?.marketCapUsd);
+
+const entryLiquidityUsd =
+  Number(entryMarketSnapshot?.liquidityUsd);
+
+// ===================================================
+// 🧠 IMMUTABLE AI ENTRY SNAPSHOT
+// ===================================================
+
+
+const entrySnapshot = entryContext
+  ? {
+      version: 1,
+
+      createdAt: new Date(),
+
+      // =================================================
+      // ORIGINAL AI ENTRY DECISION
+      // =================================================
+
+      thesis:
+        entryContext.investmentThesis ?? null,
+
+      recommendation:
+        entryContext.recommendation ?? null,
+
+      entryValidation:
+        entryContext.entryValidation ?? null,
+
+      tradeDecision:
+        entryContext.tradeDecision ?? null,
+
+      confidence:
+        entryContext.confidence ?? null,
+
+      // =================================================
+      // ORIGINAL ENTRY EVIDENCE
+      // =================================================
+
+      evidence:
+        entryContext.evidence ?? null,
+
+      analyses:
+        entryContext.analyses ?? null,
+
+      // =================================================
+      // ORIGINAL AI PIPELINE IDENTIFIERS
+      // =================================================
+
+      requestId:
+        entryContext.requestId ?? null,
+
+      pipeline:
+        entryContext.pipeline ?? null,
+
+      metadata:
+        entryContext.metadata ?? null,
+
+      // =================================================
+// ACTUAL POSITION OPENING DATA
+// =================================================
+
+execution: {
+  // Authoritative on-chain execution price
+  // SOL per token
+  entryPrice,
+
+  // USD market baseline captured at entry
+  entryPriceUsd:
+    Number.isFinite(entryPriceUsd) &&
+    entryPriceUsd > 0
+      ? entryPriceUsd
+      : null,
+
+  // Market baseline captured at entry
+  marketCapUsd:
+    Number.isFinite(entryMarketCapUsd) &&
+    entryMarketCapUsd > 0
+      ? entryMarketCapUsd
+      : null,
+
+  liquidityUsd:
+    Number.isFinite(entryLiquidityUsd) &&
+    entryLiquidityUsd > 0
+      ? entryLiquidityUsd
+      : null,
+
+  solAmount: actualSolSpent,
+  tokenAmount: actualTokensReceived,
+  buyTxid,
+},
+    }
+  : null;
+
+    // ===================================================
+// 🧠 Write position to Redis
+// ===================================================
+try {
+  const walletKey = walletPositionsKey(user.walletAddress);
+  const posKey = positionKey(user.walletAddress, mint);
+
+  await redis.sadd(walletKey, mint);
+
+  await redis.hset(posKey, {
+
+  // ===================================================
+  // POSITION IDENTITY
+  // ===================================================
+
+  [POSITION_FIELDS.walletAddress]:
+    user.walletAddress,
+
+  [POSITION_FIELDS.mint]:
+    mint,
+
+  [POSITION_FIELDS.sourceChannel]:
+    sourceChannel,
+
+
+  // ===================================================
+  // POSITION AMOUNTS
+  // ===================================================
+
+ [POSITION_FIELDS.solAmount]:
+  String(actualSolSpent),
+
+tokenAmount:
+  String(actualTokensReceived),
+
+
+  // ===================================================
+  // ENTRY
+  // ===================================================
+
+  [POSITION_FIELDS.entryPrice]:
+  String(entryPrice ?? 0),
+
+// Market entry baseline.
+// UNIT: USD/token
+entryPriceUsd:
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? String(entryPriceUsd)
+    : "",
+
+[POSITION_FIELDS.buyTxid]:
+  String(buyTxid),
+
+
+  // ===================================================
+  // POSITION MANAGEMENT
+  // ===================================================
+
+  [POSITION_FIELDS.tpStage]:
+    "0",
+
+  [POSITION_FIELDS.highestPrice]:
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? String(entryPriceUsd)
+    : "",
+
+  status:
+    "open",
+
+  [POSITION_FIELDS.openedAt]:
+    String(Date.now()),
+
+// ===================================================
+// 🧠 IMMUTABLE AI ENTRY SNAPSHOT
+// ===================================================
+
+entrySnapshot:
+  entrySnapshot
+    ? JSON.stringify(entrySnapshot)
+    : "",
+
+  // ===================================================
+  // 🧠 RESET AI MEMORY FOR NEW POSITION
+   // ===================================================
+
+  aiMemory:
+    JSON.stringify({
+
+      timeline: [],
+
+      lastSnapshot: null,
+
+      lastUpdated: null,
+
+      version: 1,
+
+    }),
+
+});
+
+
+
+  // ✅ verify the write landed (super important for debugging)
+  const status = await redis.hget(posKey, "status");
+  LOG.info({ walletKey, posKey, status }, "🧪 Redis verify write (status)");
+
+  LOG.info({ wallet: user.walletAddress, mint }, "🧠 Position written to Redis");
+const verifyPosition = await redis.hgetall(posKey);
+
+LOG.info(
+  {
+    walletAddress: user.walletAddress,
+    tradingWalletPublicKey:
+      user.tradingWalletPublicKey,
+    posKey,
+    status: verifyPosition.status,
+    mint: verifyPosition.mint,
+  },
+  "🧪 NEW POSITION CREATED"
+);
+// ADDED
+setTimeout(async () => {
+  try {
+    const stillThere = await redis.hgetall(posKey);
+
+    LOG.info(
+      {
+        posKey,
+        exists: !!stillThere?.status,
+        status: stillThere?.status,
+        mint: stillThere?.mint,
+      },
+      "🧪 POSITION AFTER 30 SECONDS"
+    );
+  } catch (err) {
+    LOG.error(err, "POSITION CHECK FAILED");
+  }
+}, 30000);
+
+} catch (err) {
+  const walletKey = walletPositionsKey(user.walletAddress);
+  const posKey = positionKey(user.walletAddress, mint);
+
+  LOG.error(
+    {
+      redisUrl: process.env.REDIS_URL ? "set" : "missing",
+      wallet: user.walletAddress,
+      mint,
+      walletKey,
+      posKey,
+      errName: err?.name,
+      errMessage: err?.message,
+      errCode: err?.code,
+      errStack: err?.stack,
+    },
+    "❌ Failed to write position to Redis"
+  );
+}
+
+
+    // ===================================================
+    // 📈 Register for monitoring
+    // ===================================================
+    const state = await ensureMonitor(mint);
+state.startLoop?.();
+
+state.users.set(String(user.walletAddress), {
+  walletAddress: user.walletAddress,
+  wallet,
+  tpStage: 0,
+
+  profile: {
+    tp1Percent: user.tp1,
+    tp1SellPercent: user.tp1SellPercent,
+    tp2Percent: user.tp2,
+    tp2SellPercent: user.tp2SellPercent,
+    tp3Percent: user.tp3,
+    tp3SellPercent: user.tp3SellPercent,
+    stopLossPercent: user.stopLoss,
+
+    trailingDistancePercent:
+      Number(user.trailingDistance || 0),
+
+    trailingActivationPercent:
+      Number(user.trailingTrigger || 5),
+  },
+
+  buyTxid,
+
+  // ===================================================
+  // 💰 AUTHORITATIVE ON-CHAIN POSITION AMOUNTS
+  // ===================================================
+
+solAmount: actualSolSpent,
+tokenAmount: actualTokensReceived,
+
+// Authoritative execution price.
+// UNIT: SOL/token
+entryPrice,
+
+// Market entry baseline.
+// UNIT: USD/token
+entryPriceUsd:
+  Number.isFinite(entryPriceUsd) &&
+  entryPriceUsd > 0
+    ? entryPriceUsd
+    : null,
+
+entrySnapshot,
+
+sourceChannel,
+slippageBps,
+});
+
+// ===================================================
+// 📈 INITIALIZE PER-WALLET HIGHEST PRICE
+// UNIT: USD/token
+// ===================================================
+
+if (state.lastPrice != null) {
+  const wa = String(user.walletAddress);
+
+  const currentUsdPrice =
+    Number(state.lastPrice);
+
+  const prev =
+    state.highestPrices.get(wa);
+
+  if (
+    Number.isFinite(currentUsdPrice) &&
+    currentUsdPrice > 0 &&
+    (prev == null ||
+      currentUsdPrice > prev)
+  ) {
+    state.highestPrices.set(
+      wa,
+      currentUsdPrice
+    );
+  }
+}
+
+    if (entryPrice) {
+  state.entryPrices.set(user.walletAddress, entryPrice);
+}
+
+    LOG.info(
+      { wallet: user.walletAddress, mint },
+      "📈 Position registered for monitoring"
+    );
+
+} catch (err) {
+  LOG.error(
+    {
+      err,
+      wallet: user?.walletAddress,
+    },
+    "❌ executeUserTrade error"
+  );
+
+  await createNotification({
+    walletAddress:
+      user?.walletAddress,
+
+    type: "error",
+
+    title: "Buy Failed",
+
+    message:
+      err?.message ||
+      "Unknown trade error",
+  });
+}
+}
+
+
+
+ 
+const app = express();
+app.use(express.json());
+app.use(cors());
+
+// ===================================================
+// 📩 API → BOT: POST CHANNEL APPROVAL REQUEST
+// ===================================================
+app.post("/bot/request-approval", async (req, res) => {
+  try {
+    LOG.info("📩 APPROVAL REQUEST RECEIVED", req.body);
+
+    const { walletAddress, channelId } = req.body;
+
+    if (!walletAddress || !channelId) {
+      return res.status(400).json({
+        error: "walletAddress & channelId required",
+      });
+    }
+
+    await sendApprovalRequestToChannel({ walletAddress, channelId });
+
+    return res.json({ ok: true });
+  } catch (err) {
+    LOG.error({ err }, "request-approval error");
+    return res.status(500).json({ error: "internal_error" });
+  }
+});
+
+
+
+// ========= Admin channel management commands via Telegram (keep admin only) =========
+
+bot.command("users", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("Unauthorized");
+  const users = await User.find({});
+  const out = users.map((u) => `${u.walletAddress} active:${u.active}`).slice(0, 50);
+  ctx.reply(out.join("\n") || "No users");
+});
+
+bot.command("admin_addchannel", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const parts = ctx.message.text.split(" ").filter(Boolean);
+  if (parts.length !== 2) return ctx.reply("Usage: /admin_addchannel @channel");
+  const raw = parts[1].replace(/^@/, "");
+
+  let doc = await ChannelSettings.findById("global");
+  if (!doc) doc = new ChannelSettings({ _id: "global", channels: [] });
+
+  if (doc.channels.includes(raw)) return ctx.reply("⚠️ Channel already exists.");
+
+  doc.channels.push(raw);
+  await doc.save();
+  await loadChannels();
+  ctx.reply(`✅ Added @${raw} to allowed channels.`);
+});
+
+bot.command("admin_removechannel", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const parts = ctx.message.text.split(" ").filter(Boolean);
+  if (parts.length !== 2) return ctx.reply("Usage: /admin_removechannel @channel");
+  const raw = parts[1].replace(/^@/, "");
+
+  const doc = await ChannelSettings.findById("global");
+  if (!doc) return ctx.reply("⚠️ No channels configured yet.");
+
+  doc.channels = doc.channels.filter((c) => c !== raw);
+  await doc.save();
+  await loadChannels();
+  ctx.reply(`✅ Removed @${raw} from allowed channels.`);
+});
+
+bot.command("admin_channels", async (ctx) => {
+  const caller = String(ctx.from.id);
+  if (!ADMIN_IDS.includes(caller)) return ctx.reply("🚫 Unauthorized");
+
+  const doc = await ChannelSettings.findById("global");
+  const list = doc?.channels?.length ? doc.channels.map((c) => "@" + c).join(", ") : "No channels configured.";
+  ctx.reply("📢 Current allowed channels: " + list);
+});
+
+
+process.once("SIGINT", () => {
+  bot.stop("SIGINT");
+  process.exit(0);
+});
+
+process.once("SIGTERM", () => {
+  bot.stop("SIGTERM");
+  process.exit(0);
+});
+
+
+export async function restoreOpenPositions() {
+  try {
+    LOG.info("♻️ Restoring open positions from Redis...");
+
+
+
+    const walletKeys = await redis.keys("wallet:active:*");
+
+
+
+await scanWalletForMissingPositions();
+await rebuildPositionsFromBlockchain();
+
+if (!recoverySchedulerStarted) {
+
+    recoverySchedulerStarted = true;
+
+    LOG.info(
+        "♻️ Starting 15-minute recovery scheduler"
+    );
+
+    setInterval(async () => {
+
+        try {
+
+            await scanWalletForMissingPositions();
+
+            await rebuildPositionsFromBlockchain();
+
+        } catch (err) {
+
+            LOG.error(
+                err,
+                "❌ Periodic recovery failed"
+            );
+
+        }
+
+    }, 15 * 60 * 1000);
+
+}
+
+
+
+
+// REBUILD FROM BLOCKCHAIN
+if (!walletKeys.length) {
+  LOG.warn("⚠️ Redis positions empty — rebuilding from blockchain");
+
+  const users = await User.find({
+    tradingEnabled: true,
+  });
+
+  for (const user of users) {
+    try {
+      const wallet = restoreTradingWallet(user);
+
+      const tokenAccounts =
+        await connection.getParsedTokenAccountsByOwner(
+          wallet.publicKey,
+          {
+            programId: TOKEN_PROGRAM_ID,
+          }
+        );
+
+      for (const acc of tokenAccounts.value) {
+        const info =
+          acc.account.data.parsed.info;
+
+        const mint = info.mint;
+
+        const amount =
+          Number(info.tokenAmount.uiAmount || 0);
+
+        // Skip empty balances
+        if (amount <= 0) {
+          continue;
+        }
+
+        // Optional: ignore dust/spam balances
+        if (amount < 0.000001) {
+          continue;
+        }
+
+        LOG.info(
+          {
+            wallet: user.walletAddress,
+            mint,
+            amount,
+          },
+          "♻️ Recovered token from blockchain"
+        );
+
+        // ==========================================
+        // Create monitor state
+        // ==========================================
+        const state = await ensureMonitor(mint);
+
+        // Try to fetch current market price
+        let currentPrice = 0;
+
+        try {
+          currentPrice =
+            await getDexScreenerPrice(mint);
+
+          if (
+            !currentPrice ||
+            Number.isNaN(currentPrice)
+          ) {
+            currentPrice = 0;
+          }
+        } catch (err) {
+          LOG.warn(
+            {
+              wallet: user.walletAddress,
+              mint,
+            },
+            "⚠️ Failed to fetch restore price"
+          );
+        }
+
+        // ==========================================
+        // Register user position
+        // ==========================================
+        state.users.set(
+          String(user.walletAddress),
+          {
+            walletAddress:
+              user.walletAddress,
+
+            wallet,
+
+            tpStage: 0,
+
+            buyTxid: null,
+
+            solAmount: 0,
+
+            tokenAmount: amount,
+
+            entryPrice: currentPrice,
+
+            sourceChannel: "restore",
+
+            slippageBps: Math.min(
+              Math.max(
+                Math.round(
+                  (user.maxSlippagePercent || 5) *
+                    100
+                ),
+                50
+              ),
+              2000
+            ),
+
+            profile: {
+              tp1Percent: user.tp1,
+              tp1SellPercent:
+                user.tp1SellPercent,
+
+              tp2Percent: user.tp2,
+              tp2SellPercent:
+                user.tp2SellPercent,
+
+              tp3Percent: user.tp3,
+              tp3SellPercent:
+                user.tp3SellPercent,
+
+              stopLossPercent:
+                user.stopLoss,
+
+              trailingDistancePercent:
+                Number(
+                  user.trailingDistance || 0
+                ),
+
+              trailingActivationPercent:
+                Number(
+                  user.trailingTrigger || 5
+                ),
+            },
+          }
+        );
+
+        // ==========================================
+        // Restore entry/highest tracking
+        // ==========================================
+        if (currentPrice > 0) {
+          state.entryPrices.set(
+            String(user.walletAddress),
+            currentPrice
+          );
+
+          state.highestPrices.set(
+            String(user.walletAddress),
+            currentPrice
+          );
+        }
+
+        // ==========================================
+        // Rebuild Redis position
+        // ==========================================
+        await redis.sadd(
+          walletPositionsKey(
+            user.walletAddress
+          ),
+          mint
+        );
+
+const estimatedSolAmount =
+  Number(amount || 0) *
+  Number(currentPrice || 0);
+        await redis.hset(
+          positionKey(
+            user.walletAddress,
+            mint
+          ),
+          {
+            walletAddress:
+              user.walletAddress,
+
+            mint,
+
+            sourceChannel: "restore",
+
+            solAmount:
+  String(estimatedSolAmount),
+
+            tokenAmount:
+              String(amount),
+
+            entryPrice:
+              String(currentPrice),
+
+            buyTxid: "",
+
+            tpStage: "0",
+
+            highestPrice:
+              String(currentPrice),
+
+            status: "open",
+
+            openedAt: String(
+              Date.now()
+            ),
+          recovered: "true",
+          }
+        );
+
+        LOG.info(
+          {
+            wallet: user.walletAddress,
+            mint,
+            currentPrice,
+          },
+          "✅ Position rebuilt from blockchain"
+        );
+
+        state.startLoop?.();
+      }
+    } catch (err) {
+      LOG.error(
+        {
+          err,
+          wallet: user.walletAddress,
+        },
+        "❌ Blockchain restore failed"
+      );
+    }
+  }
+
+  LOG.info(
+    "✅ Blockchain rebuild completed"
+  );
+}
+
+    let restored = 0;
+
+    for (const walletKey of walletKeys) {
+LOG.info(
+  {
+    walletKey,
+    mints: await redis.smembers(walletKey),
+  },
+  "🧪 Redis wallet positions"
+);
+
+      const walletAddress = walletKey.split(":")[2];
+
+      const mints = await redis.smembers(walletKey);
+
+      for (const mint of mints) {
+        try {
+          const posKey = positionKey(walletAddress, mint);
+
+          const info = await redis.hgetall(posKey);
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    posKey,
+    status: info?.status,
+    fields: Object.keys(info || {}),
+  },
+  "🧪 Position data found"
+);
+
+
+         
+
+if (!info) {
+  continue;
+}
+
+const user = await User.findOne({
+  walletAddress,
+});
+
+if (!user) {
+  continue;
+}
+
+// =========================================
+// HANDLE STUCK CLOSING POSITIONS
+// =========================================
+if (info.status === "closing") {
+
+  const restoredWallet =
+    restoreTradingWallet(user);
+
+  const tokenBalance =
+    await getWalletTokenBalance(
+      restoredWallet.publicKey.toBase58(),
+      mint
+    );
+
+  if (tokenBalance <= 0) {
+
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+      },
+      "🧹 Closing position already empty — marking closed"
+    );
+
+    await redis.hset(
+      posKey,
+      "status",
+      "closed"
+    );
+
+    await redis.srem(
+      walletPositionsKey(walletAddress),
+      mint
+    );
+
+    continue;
+  }
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      tokenBalance,
+    },
+    "♻️ Recovering stuck closing position"
+  );
+
+  await redis.hset(
+    posKey,
+    "status",
+    "open"
+  );
+
+  info.status = "open";
+}
+
+// =========================================
+// CHECK REAL WALLET BALANCE
+// =========================================
+const restoredWallet =
+  restoreTradingWallet(user);
+
+const realTokenBalance =
+  await getWalletTokenBalance(
+    restoredWallet.publicKey.toBase58(),
+    mint
+  );
+
+LOG.warn(
+  {
+    walletAddress,
+    mint,
+    realTokenBalance,
+    status: info.status,
+  },
+  "🧪 CLOSED POSITION BALANCE CHECK"
+);
+
+// =========================================
+// REOPEN CLOSED POSITIONS IF TOKENS EXIST
+// =========================================
+if (
+  info.status === "closed" &&
+  realTokenBalance > 0
+) {
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      realTokenBalance,
+    },
+    "♻️ Reopening closed position because tokens still exist"
+  );
+
+  await redis.hset(
+    posKey,
+    "status",
+    "open"
+  );
+
+  info.status = "open";
+
+  info.tokenAmount =
+    String(realTokenBalance);
+}
+
+// Skip only truly closed positions
+if (info.status !== "open") {
+
+  LOG.warn(
+    {
+      walletAddress,
+      mint,
+      status: info.status,
+    },
+    "🚨 Position skipped during restore"
+  );
+
+  continue;
+}
+
+const state = await ensureMonitor(mint);
+
+        
+
+
+LOG.info(
+  {
+    walletAddress,
+    hasWalletObject: !!restoredWallet,
+    hasPublicKey:
+      !!restoredWallet?.publicKey,
+    restoredWalletPubkey:
+      restoredWallet?.publicKey?.toBase58?.(),
+  },
+  "🧪 restoreTradingWallet result"
+);
+
+// ===================================================
+// 🧠 RESTORE TP AI REVIEW CHECKPOINT STATE
+// ===================================================
+
+let tpReviewState = {
+  tp1: false,
+  tp2: false,
+  tp3: false,
+};
+
+if (info.tpReviewState) {
+  try {
+    const parsed =
+      JSON.parse(info.tpReviewState);
+
+    tpReviewState = {
+      tp1: parsed?.tp1 === true,
+      tp2: parsed?.tp2 === true,
+      tp3: parsed?.tp3 === true,
+    };
+  } catch (err) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        err,
+      },
+      "⚠️ Failed to restore TP review state — using defaults"
+    );
+  }
+}
+
+// ===================================================
+// 📸 RESTORE IMMUTABLE ENTRY AI SNAPSHOT
+// ===================================================
+//
+// This is the original AI decision captured when
+// the position was opened.
+//
+// It is historical context for future AI Exit reviews.
+// It must NOT be regenerated during restoration.
+// ===================================================
+
+let entrySnapshot = null;
+
+if (info.entrySnapshot) {
+  try {
+    entrySnapshot =
+      JSON.parse(info.entrySnapshot);
+  } catch (err) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        err,
+      },
+      "⚠️ Failed to restore entry AI snapshot — using null"
+    );
+  }
+}
+
+
+ // ===================================================
+// 🛡️ RESTORE DYNAMIC STOP-LOSS STATE
+// ===================================================
+
+let dynamicStopLoss = null;
+
+if (
+  info.dynamicStopLoss !== undefined &&
+  info.dynamicStopLoss !== ""
+) {
+  const parsedDynamicStopLoss =
+    Number(info.dynamicStopLoss);
+
+  if (!Number.isNaN(parsedDynamicStopLoss)) {
+    dynamicStopLoss = parsedDynamicStopLoss;
+  }
+}
+
+// ===================================================
+// 📈 RESTORE STICKY TRAILING ACTIVATION
+// ===================================================
+
+// Redis stores this field as the string "true".
+// Missing or false values mean trailing has not
+// previously been activated.
+const trailingActivated =
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
+
+// ===================================================
+// 📈 RESTORE TRAILING PROTECTED MILESTONE
+// ===================================================
+
+const parsedTrailingProtectedPct =
+  info.trailingProtectedPct !== undefined &&
+  info.trailingProtectedPct !== ""
+    ? Number(info.trailingProtectedPct)
+    : null;
+
+const trailingProtectedPct =
+  parsedTrailingProtectedPct !== null &&
+  Number.isFinite(parsedTrailingProtectedPct)
+    ? parsedTrailingProtectedPct
+    : null;
+
+
+// ===================================================
+// 👤 RESTORE USER POSITION INTO MONITOR STATE
+// ===================================================
+
+state.users.set(
+  String(walletAddress),
+  {
+    walletAddress,
+    wallet: restoredWallet,
+
+    // 📈 Preserve trailing activation across restarts.
+    trailingActivated,
+    trailingProtectedPct,
+
+    tpStage: Number(
+      info.tpStage || 0
+    ),
+
+    // ===================================================
+    // 🧠 RESTORED TP AI REVIEW CHECKPOINT STATE
+    // ===================================================
+
+    tpReviewState,
+dynamicStopLoss,
+entrySnapshot,
+    buyTxid: info.buyTxid,
+
+    solAmount: Number(
+      info.solAmount || 0
+    ),
+
+    tokenAmount: Number(
+      info.tokenAmount || 0
+    ),
+
+    entryPrice: Number(
+      info.entryPrice || 0
+    ),
+
+    sourceChannel:
+      info.sourceChannel,
+
+    slippageBps: Number(
+      info.slippageBps || 500
+    ),
+
+    profile: {
+      tp1Percent: Number(
+        info.tp1Percent || 25
+      ),
+
+      tp1SellPercent: Number(
+        info.tp1SellPercent || 25
+      ),
+
+      tp2Percent: Number(
+        info.tp2Percent || 50
+      ),
+
+      tp2SellPercent: Number(
+        info.tp2SellPercent || 25
+      ),
+
+      tp3Percent: Number(
+        info.tp3Percent || 100
+      ),
+
+      tp3SellPercent: Number(
+        info.tp3SellPercent || 50
+      ),
+
+      stopLossPercent: Number(
+        info.stopLossPercent || 20
+      ),
+
+      trailingDistancePercent:
+        Number(
+          info.trailingDistancePercent || 10
+        ),
+
+      trailingActivationPercent:
+        Number(
+          info.trailingActivationPercent || 5
+        ),
+    },
+  }
+);
+
+
+LOG.info(
+  {
+    walletAddress,
+    hasInfoWallet: !!info.wallet,
+    walletPubkey:
+      info.wallet?.publicKey?.toBase58?.(),
+  },
+  "🧪 snapshot wallet verification"
+);
+
+          const entryPrice = Number(
+            info.entryPrice || 0
+          );
+
+          if (entryPrice > 0) {
+            state.entryPrices.set(
+              walletAddress,
+              entryPrice
+            );
+
+            state.highestPrices.set(
+              walletAddress,
+              Number(
+                info.highestPrice ||
+                  entryPrice
+              )
+            );
+          }
+
+LOG.info(
+  {
+    walletAddress,
+    mint,
+    status: info.status
+  },
+  "✅ RESTORING POSITION"
+);
+
+          restored++;
+ // ===================================================
+          // 📸 Rebuild wallet snapshot cache
+          // ===================================================
+          const snapshotKey =
+            walletSnapshotKey(
+              walletAddress
+            );
+
+          const existingRaw =
+            await redis.get(snapshotKey);
+
+          let snapshots = [];
+
+          try {
+            snapshots = existingRaw
+              ? JSON.parse(existingRaw)
+              : [];
+          } catch {
+            snapshots = [];
+          }
+
+          const alreadyExists =
+            snapshots.some(
+              (s) => s.mint === mint
+            );
+
+          if (!alreadyExists) {
+            snapshots.push({
+              mint,
+
+              sourceChannel:
+                info.sourceChannel || null,
+
+              solAmount: Number(
+                info.solAmount || 0
+              ),
+
+           tokenAmount:
+  await getWalletTokenBalance(
+    restoredWallet.publicKey.toBase58(),
+    mint
+  ),
+
+              entryPrice: Number(
+                info.entryPrice || 0
+              ),
+
+              currentPrice: Number(
+                info.entryPrice || 0
+              ),
+
+              changePercent: 0,
+
+              pnlSol: 0,
+
+              buyTxid:
+                info.buyTxid || null,
+
+              tpStage: Number(
+                info.tpStage || 0
+              ),
+
+              highestPrice: Number(
+                info.highestPrice || 0
+              ),
+
+              openedAt: Number(
+                info.openedAt || 0
+              ),
+            });
+
+            await redis.set(
+              snapshotKey,
+              JSON.stringify(snapshots)
+            );
+          }
+
+        } catch (err) {
+          LOG.error(
+            {
+              walletAddress,
+              mint,
+              err,
+            },
+            "❌ Failed restoring position"
+          );
+        }
+      }
+    }
+
+    LOG.info(
+      { restored },
+      "♻️ Position recovery complete"
+    );
+
+for (const state of monitored.values()) {
+  state.startLoop?.();
+}
+
+  } catch (err) {
+    LOG.error(
+      err,
+      "❌ restoreOpenPositions failed"
+    );
+  }
+}

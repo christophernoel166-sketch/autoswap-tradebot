@@ -24,7 +24,8 @@ import {
   enqueueBuyJob,
   acquireBuyLock,
   enqueueSellJob,
-  acquireSellLock
+  acquireSellLock,
+  releaseSellLock,
 } from "./src/queue/tradeQueue.js";
 import { getQuote, executeSwap, getCurrentPrice, sellPartial, sellAll } from "./solanaUtils.js";
 import User from "./models/User.js";
@@ -3046,99 +3047,143 @@ publishLiveAIState(
 }
 
 // INTERNAL HELPER
-// ===================================================
-// 📈 TRAILING ACTIVATION CHECK
+
+ // ===================================================
+// 📈 TRAILING ACTIVATION — STICKY STATE
 // ===================================================
 
 const trailingDistancePct =
-  Number(profile.trailingDistancePercent || 0);
+  Number(profile.trailingDistancePercent ?? 0);
 
 const walletHigh =
   state.highestPrices?.get(walletAddress);
 
-// ✅ trailing only active AFTER profit reaches trailingActivationPercent
 const activationProfitPct =
-  Number(profile.trailingActivationPercent || 5);
+  Number(profile.trailingActivationPercent ?? 5);
+
+const wasTrailingActivated =
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
+
+if (
+  !wasTrailingActivated &&
+  Number.isFinite(trailingDistancePct) &&
+  trailingDistancePct > 0 &&
+  Number.isFinite(activationProfitPct) &&
+  Number.isFinite(change) &&
+  change >= activationProfitPct
+) {
+  // Calculate the highest milestone reached on this tick.
+  // Example: activation +10%, interval 10%, profit +37%
+  // => first protected milestone is +30%.
+  const milestonesAboveActivation = Math.floor(
+    (change - activationProfitPct) / trailingDistancePct
+  );
+
+  const initialProtectedPct =
+    activationProfitPct +
+    milestonesAboveActivation * trailingDistancePct;
+
+  const activatedAt = String(Date.now());
+
+  try {
+    // Persist activation and protection together in one Redis
+    // hash update, so a successful activation has a milestone.
+    await redis.hset(
+      positionKey(walletAddress, mint),
+      {
+        trailingActivated: "true",
+        trailingActivatedAt: activatedAt,
+        trailingProtectedPct: String(initialProtectedPct),
+        trailingProtectedAt: activatedAt,
+      }
+    );
+
+    // Update in-memory state only after persistence succeeds.
+    info.trailingActivated = true;
+    info.trailingProtectedPct = initialProtectedPct;
+
+    LOG.info(
+      {
+        walletAddress,
+        mint,
+        change,
+        activationProfitPct,
+        trailingDistancePct,
+        trailingProtectedPct: initialProtectedPct,
+      },
+      "📈 Trailing activated with initial protection milestone"
+    );
+  } catch (err) {
+    LOG.error(
+      {
+        err,
+        walletAddress,
+        mint,
+        change,
+        activationProfitPct,
+        trailingDistancePct,
+        initialProtectedPct,
+      },
+      "❌ Failed to persist trailing activation and protection"
+    );
+  }
+}
 
 const trailingShouldBeActive =
-  trailingDistancePct > 0 &&
-  change >= activationProfitPct;
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
 
 // ===================================================
-// 🛑 STOP LOSS ONLY BEFORE PROFIT
+// 🛑 ORIGINAL STOP-LOSS — BEFORE TRAILING ACTIVATION
 // ===================================================
 
+// Use the configured original stop-loss only.
+// Post-TP dynamic protection is handled separately below.
 if (!trailingShouldBeActive) {
+  const currentStopLoss =
+    Number(profile.stopLossPercent);
 
-    const currentStopLoss =
-        info.dynamicStopLoss ??
-        profile.stopLossPercent;
+  if (
+    Number.isFinite(change) &&
+    Number.isFinite(currentStopLoss) &&
+    currentStopLoss > 0 &&
+    change <= -currentStopLoss
+  ) {
+    LOG.warn(
+      {
+        walletAddress,
+        mint,
+        change,
+        currentStopLoss,
+      },
+      "🛑 Configured stop-loss triggered — queuing full exit"
+    );
 
-    if (change <= -currentStopLoss) {
+    const locked =
+      await acquireSellLock(walletAddress, mint);
 
-        LOG.info(
-            {
-                walletAddress,
-                mint,
-                change,
-                currentStopLoss,
-            },
-            "🛑 Stop-loss hit (AI review)"
-        );
+    if (!locked) {
+      LOG.warn(
+        { walletAddress, mint },
+        "⏭️ Stop-loss sell skipped — sell lock unavailable"
+      );
 
-        const exitRequest = buildExitTradeRequest({
-
-            walletAddress,
-
-            wallet: info.wallet,
-
-            user: info.user,
-
-            mint,
-
-            price,
-
-            entryPrice: entryPriceUsd,
-
-            highestPrice: walletHigh,
-
-            solAmount: info.solAmount,
-
-            buyTxid: info.buyTxid,
-
-            sourceChannel: info.sourceChannel,
-
-            slippageBps: info.slippageBps,
-
-            profile,
-
-            state,
-
-            info,
-
-            reason: "stop_loss",
-
-            percent: 100,
-
-            event: {
-
-                type: "STOP_LOSS",
-
-                triggerPrice: price,
-
-                changePercent: change,
-
-            },
-
-        });
-
-        await processExitDecision(exitRequest);
-
-        return;
-
+      return;
     }
 
+    await enqueueSellJob({
+      walletAddress,
+      mint,
+      reason: "stop_loss",
+      percent: 100,
+      createdAt: Date.now(),
+    });
+
+    return;
+  }
 }
+
 
 // ===================================================
 // 💾 PERSIST TP AI REVIEW CHECKPOINT STATE
@@ -3637,7 +3682,11 @@ LOG.info(
 // ===================================================
 // 🛡️ DYNAMIC STOP AFTER TP — ALWAYS ACTIVE
 // ===================================================
-if (info.tpStage > 0 && info.dynamicStopLoss != null) {
+if (
+  !trailingShouldBeActive &&
+  info.tpStage > 0 &&
+  info.dynamicStopLoss != null
+) {
   if (change <= info.dynamicStopLoss) {
     LOG.info(
       { walletAddress, mint, change, dynamicStopLoss: info.dynamicStopLoss },
@@ -3689,119 +3738,194 @@ if (Date.now() - info._lastTrailLogAt > 15_000) {
   );
 }
 
-// ===================================================
-// 📉 TRAILING STOP — AI REVIEW
+
+ // ===================================================
+// 📈 MILESTONE TRAILING STOP — DIRECT EXECUTION
 // ===================================================
 
 if (trailingShouldBeActive) {
+  const entryPrice = Number(entryPriceUsd);
+  const intervalPct = Number(trailingDistancePct);
 
-  const dropFromPeakPct =
-    ((walletHigh - price) / walletHigh) * 100;
+  if (
+    Number.isFinite(change) &&
+    Number.isFinite(entryPrice) &&
+    entryPrice > 0 &&
+    Number.isFinite(intervalPct) &&
+    intervalPct > 0
+  ) {
+    // The activation threshold is the first protected milestone.
+    const activationPct =
+      Number(profile.trailingActivationPercent ?? 5);
 
-  const trailingExitPrice =
-    walletHigh * (1 - trailingDistancePct / 100);
 
-  if (dropFromPeakPct >= trailingDistancePct) {
+// Restore the highest profit milestone already protected.
+let storedProtectedPct =
+  info.trailingProtectedPct !== undefined &&
+  info.trailingProtectedPct !== ""
+    ? Number(info.trailingProtectedPct)
+    : null;
 
-    LOG.info(
+// Capture whether protection existed BEFORE this cycle's recovery.
+const hadStoredProtectionBeforeRecovery =
+  storedProtectedPct !== null &&
+  Number.isFinite(storedProtectedPct);
+
+let hasStoredProtection =
+  hadStoredProtectionBeforeRecovery;
+
+// SAFEGUARD: an activated position must have a protection level.
+if (!hasStoredProtection) {
+  storedProtectedPct = activationPct;
+  hasStoredProtection = true;
+
+  // Set in-memory protection immediately.
+  info.trailingProtectedPct = storedProtectedPct;
+
+  try {
+    await redis.hset(positionKey(walletAddress, mint), {
+      trailingActivated: "true",
+      trailingProtectedPct: String(storedProtectedPct),
+      trailingProtectedAt: String(Date.now()),
+    });
+
+    LOG.warn(
       {
         walletAddress,
         mint,
-        entryPrice: entryPriceUsd,
-        walletHigh,
-        currentPrice: price,
-        trailingDistancePct,
-        dropFromPeakPct,
-        trailingExitPrice,
+        change,
+        trailingProtectedPct: storedProtectedPct,
       },
-      "📉 Trailing stop hit (AI review)"
+      "⚠️ Missing trailing milestone recovered using activation threshold"
     );
-
-    const exitRequest = buildExitTradeRequest({
-      walletAddress,
-
-      wallet: info.wallet,
-
-      user: info.user,
-
-      mint,
-
-      price,
-
-      entryPrice: entryPriceUsd,
-
-      highestPrice: walletHigh,
-
-      solAmount: info.solAmount,
-
-      buyTxid: info.buyTxid,
-
-      sourceChannel: info.sourceChannel,
-
-      slippageBps: info.slippageBps,
-
-      profile,
-
-      state,
-
-      info,
-
-      reason: "trailing",
-
-      percent: 100,
-
-      event: {
-
-        type: "TRAILING_STOP",
-
-        triggerPrice: price,
-
-        trailingDistancePct,
-
-        trailingExitPrice,
-
-        dropFromPeakPct,
-
+   } catch (err) {
+    LOG.error(
+      {
+        err,
+        walletAddress,
+        mint,
+        trailingProtectedPct: storedProtectedPct,
       },
+      "Failed to persist recovered trailing milestone"
+    );
+  }
+}
 
-    });
+    // Check the EXISTING protection before raising it.
+    // This prevents an exit on the same tick that establishes
+    // a new milestone.
+if (
+  wasTrailingActivated &&
+  hadStoredProtectionBeforeRecovery &&
+  change <= storedProtectedPct
+) {
 
-    const result =
-      await processExitDecision(
-        exitRequest
-      );
+      const protectedExitPrice =
+        entryPrice * (1 + storedProtectedPct / 100);
 
-    // ==========================================
-    // AI approved trailing exit
-    // ==========================================
-
-    if (
-      result?.success &&
-      result.action === "FULL_EXIT"
-    ) {
-
-      LOG.info(
+      LOG.warn(
         {
           walletAddress,
           mint,
+          change,
+          storedProtectedPct,
+          protectedExitPrice,
         },
-        "📉 AI approved trailing exit."
+        "📉 Trailing protection reached — queuing full exit"
       );
 
+      const locked =
+        await acquireSellLock(walletAddress, mint);
+
+      if (!locked) {
+        LOG.warn(
+          { walletAddress, mint },
+          "⏭️ Trailing exit skipped — sell lock unavailable"
+        );
+
+        return;
+      }
+
+      try {
+        await enqueueSellJob({
+          walletAddress,
+          mint,
+          reason: "trailing",
+          percent: 100,
+          createdAt: Date.now(),
+        });
+      } catch (err) {
+        // Allow a later monitoring cycle to retry if enqueueing
+        // fails, rather than leaving the position locked.
+        await releaseSellLock(walletAddress, mint);
+        throw err;
+      }
+
+      return;
     }
 
-    return;
+    // Establish protection only after trailing has activated.
+    if (change >= activationPct) {
+      const milestonesAboveActivation =
+        Math.floor(
+          (change - activationPct) / intervalPct
+        );
 
+      const candidateProtectedPct =
+        activationPct +
+        milestonesAboveActivation * intervalPct;
+
+      const nextProtectedPct =
+        hasStoredProtection
+          ? Math.max(
+              storedProtectedPct,
+              candidateProtectedPct
+            )
+          : candidateProtectedPct;
+
+      // Persist only when protection is first established
+      // or a higher milestone is reached.
+      if (
+        !hasStoredProtection ||
+        nextProtectedPct > storedProtectedPct
+      ) {
+        await redis.hset(
+          positionKey(walletAddress, mint),
+          {
+            trailingActivated: "true",
+            trailingProtectedPct:
+              String(nextProtectedPct),
+            trailingProtectedAt: String(Date.now()),
+          }
+        );
+
+        info.trailingActivated = true;
+        info.trailingProtectedPct = nextProtectedPct;
+
+        LOG.info(
+          {
+            walletAddress,
+            mint,
+            change,
+            previousProtectedPct:
+              hasStoredProtection
+                ? storedProtectedPct
+                : null,
+            trailingProtectedPct: nextProtectedPct,
+          },
+                    "📈 Trailing protection milestone updated"
+        );
+      }
+    }
   }
-
 }
 
-} // ✅ THIS closes monitorUser
+// ✅ THIS closes monitorUser
+}
 
 // ===================================================
 // BUILD EXIT TRADE REQUEST
 // ===================================================
-
 function buildExitTradeRequest({
 
     walletAddress,
@@ -6317,14 +6441,9 @@ if (info.entrySnapshot) {
   }
 }
 
-// ===================================================
+
+ // ===================================================
 // 🛡️ RESTORE DYNAMIC STOP-LOSS STATE
-// ===================================================
-//
-// Dynamic stop-loss is created after TP progression.
-// If Redis has it, restore it exactly.
-// If older positions do not have the field,
-// safely use null rather than inventing a value.
 // ===================================================
 
 let dynamicStopLoss = null;
@@ -6342,6 +6461,34 @@ if (
 }
 
 // ===================================================
+// 📈 RESTORE STICKY TRAILING ACTIVATION
+// ===================================================
+
+// Redis stores this field as the string "true".
+// Missing or false values mean trailing has not
+// previously been activated.
+const trailingActivated =
+  info.trailingActivated === true ||
+  info.trailingActivated === "true";
+
+// ===================================================
+// 📈 RESTORE TRAILING PROTECTED MILESTONE
+// ===================================================
+
+const parsedTrailingProtectedPct =
+  info.trailingProtectedPct !== undefined &&
+  info.trailingProtectedPct !== ""
+    ? Number(info.trailingProtectedPct)
+    : null;
+
+const trailingProtectedPct =
+  parsedTrailingProtectedPct !== null &&
+  Number.isFinite(parsedTrailingProtectedPct)
+    ? parsedTrailingProtectedPct
+    : null;
+
+
+// ===================================================
 // 👤 RESTORE USER POSITION INTO MONITOR STATE
 // ===================================================
 
@@ -6350,6 +6497,10 @@ state.users.set(
   {
     walletAddress,
     wallet: restoredWallet,
+
+    // 📈 Preserve trailing activation across restarts.
+    trailingActivated,
+    trailingProtectedPct,
 
     tpStage: Number(
       info.tpStage || 0
