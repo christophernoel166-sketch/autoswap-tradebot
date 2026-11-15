@@ -149,7 +149,12 @@ async function fetchCandlesFromBirdeye(tokenMint, timeframe = "5m", limit = 100)
   return candles;
 }
 
-export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
+export async function fetchCandles(
+  tokenMint,
+  timeframe = "5m",
+  limit = 100,
+  options = {}
+) {
   const cleanTokenMint = String(tokenMint || "").trim();
 
   if (!cleanTokenMint) {
@@ -157,9 +162,9 @@ export async function fetchCandles(tokenMint, timeframe = "5m", limit = 100) {
   }
 
   const cacheKey = `${cleanTokenMint}:${String(timeframe).toLowerCase()}:${limit}`;
-  const cached = candleCache.get(cacheKey);
+ const cached = candleCache.get(cacheKey);
 
-  if (cached) {
+if (!options.bypassCache && cached) {
     const cacheAge = Date.now() - cached.timestamp;
 
     if (cacheAge < CANDLE_CACHE_TTL_MS) {

@@ -1,0 +1,6 @@
+tokenMint,dataset,candleCount,firstTime,lastTime,selectedCanonical,reason
+CA8q2mkYWZnUNqYmf6pxyxAPZsmSe2EG9P7hHMW5pump,CA8q2mkYWZnUNqYmf6pxyxAPZsmSe2EG9P7hHMW5pump_1m_2026-10-25T13-09-04-052Z.json,500,1792903800000,1792933740000,true,Largest candle count; tie-break by time span
+CA8q2mkYWZnUNqYmf6pxyxAPZsmSe2EG9P7hHMW5pump,CA8q2mkYWZnUNqYmf6pxyxAPZsmSe2EG9P7hHMW5pump_1m_2026-10-25T12-37-35-108Z.json,120,1792924680000,1792931820000,false,Alternative same-token dataset; retained for audit
+CSocnzcRpgSCr1naKcNTieWZUxb6rABe45j844m7pump,CSocnzcRpgSCr1naKcNTieWZUxb6rABe45j844m7pump_1m_2026-10-25T21-38-32-000Z.json,500,1792932600000,1792964280000,true,Largest candle count; tie-break by time span
+H7VZNCBynDK5ikBS9krDJ2Tx8CUr1wxedV19ZgkWpump,H7VZNCBynDK5ikBS9krDJ2Tx8CUr1wxedV19ZgkWpump_1m_2026-10-25T21-32-54-075Z.json,500,1792933980000,1792963920000,true,Largest candle count; tie-break by time span
+H7VZNCBynDK5ikBS9krDJ2Tx8CUr1wxedV19ZgkWpump,H7VZNCBynDK5ikBS9krDJ2Tx8CUr1wxedV19ZgkWpump_1m_2026-10-25T21-35-23-378Z.json,500,1792934160000,1792964100000,false,Alternative same-token dataset; retained for audit

@@ -663,6 +663,11 @@ const onChartWatchUpdate = (payload) => {
 
 id:
   incomingWatchId,
+// READ-ONLY VOLUME MONITOR DATA
+  volumeSnapshot:
+    payload.volumeSnapshot ??
+    incomingWatch?.volumeSnapshot ??
+    null,
 
     // ==============================================
     // LATEST CHART ANALYSIS

@@ -467,23 +467,29 @@ export async function analyzeChartEntry(
   // FETCH CANDLES
   // ===================================================
 
+ 
   let candles;
 
-  try {
-    candles =
-      await fetchCandles(
+  // Use supplied historical candles for offline testing.
+  // Normal production calls continue fetching candles as before.
+  if (Array.isArray(options.candles)) {
+    candles = options.candles;
+  } else {
+    try {
+      candles = await fetchCandles(
         mintAddress,
         cfg.timeframe,
         cfg.limit
       );
-  } catch (error) {
-    return buildEmptyResult(
-      `Failed to fetch candles: ${
-        error?.message ||
-        String(error)
-      }`
-    );
+    } catch (error) {
+      return buildEmptyResult(
+        `Failed to fetch candles: ${
+          error?.message || String(error)
+        }`
+      );
+    }
   }
+
 
   // ===================================================
   // VALIDATE CANDLES
@@ -731,33 +737,99 @@ export async function analyzeChartEntry(
       i
     );
 
+
+  // ===================================================
+  // PRIOR UPWARD IMPULSE DETECTION
+  // ===================================================
+
+  // Use completed candles only. Find the most recent
+  // meaningful upward move rather than anchoring every
+  // pullback to the oldest low in the entire lookback.
+  const impulseLookback = 20;
+  const impulseLowLookback = 10;
+  const minImpulsePct = 5;
+
+  const impulseStartIndex =
+    Math.max(0, i - impulseLookback);
+
+  const impulseCandles =
+    clean.slice(impulseStartIndex, i);
+
+  let impulseLow = NaN;
+  let impulseHigh = NaN;
+  let impulseLowIndex = -1;
+  let impulseHighIndex = -1;
+  let impulseMovePct = 0;
+
+  // Search backward for the most recent qualifying
+  // upward move: a prior low followed by a later high.
+  for (
+    let highIndex = impulseCandles.length - 1;
+    highIndex >= 1;
+    highIndex--
+  ) {
+    const lowSearchStart =
+      Math.max(0, highIndex - impulseLowLookback);
+
+    let candidateLow = Infinity;
+    let candidateLowIndex = -1;
+
+    for (
+      let lowIndex = lowSearchStart;
+      lowIndex < highIndex;
+      lowIndex++
+    ) {
+      const candidate =
+        impulseCandles[lowIndex].low;
+
+      if (candidate < candidateLow) {
+        candidateLow = candidate;
+        candidateLowIndex = lowIndex;
+      }
+    }
+
+    const candidateHigh =
+      impulseCandles[highIndex].high;
+
+    if (
+      candidateLowIndex < 0 ||
+      !Number.isFinite(candidateLow) ||
+      !Number.isFinite(candidateHigh) ||
+      candidateLow <= 0 ||
+      candidateHigh <= candidateLow
+    ) {
+      continue;
+    }
+
+    const candidateMovePct =
+      percentDiff(candidateHigh, candidateLow);
+
+    if (candidateMovePct >= minImpulsePct) {
+      impulseLow = candidateLow;
+      impulseHigh = candidateHigh;
+      impulseLowIndex = candidateLowIndex;
+      impulseHighIndex = highIndex;
+      impulseMovePct = candidateMovePct;
+
+      break;
+    }
+  }
+
+    const hasOrderedImpulse =
+    impulseLowIndex >= 0 &&
+    impulseHighIndex > impulseLowIndex &&
+    Number.isFinite(impulseLow) &&
+    Number.isFinite(impulseHigh);
+
+  const hasUpwardImpulse =
+    hasOrderedImpulse &&
+    impulseMovePct >= minImpulsePct;
+
   const pullbackDepthPct =
-    percentDiff(
-      recentSwingHigh,
-      recentSwingLow
-    );
+    hasOrderedImpulse && impulseHigh > 0
+      ? ((impulseHigh - price) / impulseHigh) * 100
+      : null;
 
-  // ===================================================
-  // CANDLE INFORMATION
-  // ===================================================
-
-  const currentCandle =
-    clean[i];
-
-  const previousCandle =
-    clean[previousIndex];
-
-  const currentBullishCandle =
-    currentCandle.close >
-    currentCandle.open;
-
-  const currentBearishCandle =
-    currentCandle.close <
-    currentCandle.open;
-
-  const previousBullishCandle =
-    previousCandle.close >
-    previousCandle.open;
 
   // ===================================================
   // MOMENTUM
@@ -837,25 +909,63 @@ export async function analyzeChartEntry(
   // ===================================================
   // BREAKOUT DETECTION
   // ===================================================
+  const currentCandle = clean[i];
 
-  const breakoutBuffer =
-    breakoutLevel *
-    (cfg.breakoutBufferPct /
-      100);
+const previousCandle =
+  clean[Math.max(0, i - 1)];
 
-  const breakoutPrice =
-    breakoutLevel +
-    breakoutBuffer;
+const currentBullishCandle =
+  currentCandle.close > currentCandle.open;
 
-  const breakoutConfirmed =
-    price >
-      breakoutPrice &&
-    currentCandle.close >
-      currentCandle.open &&
-    currentCandle.close >
-      breakoutLevel &&
-    currentCandle.high >
-      breakoutLevel;
+const previousBullishCandle =
+  previousCandle.close > previousCandle.open;
+
+ 
+const breakoutBuffer =
+  breakoutLevel *
+  (cfg.breakoutBufferPct / 100);
+
+const breakoutPrice =
+  breakoutLevel +
+  breakoutBuffer;
+
+const breakoutExtensionPct =
+  percentDiff(price, breakoutLevel);
+
+// Compare the latest candle's volume against the preceding
+// candles. If volume is unavailable or the baseline is zero,
+// do not claim that volume confirmation has been established.
+const previousVolumeCandles = clean
+  .slice(
+    Math.max(0, i - 10),
+    i
+  )
+  .map(c => c.volume)
+  .filter(v => Number.isFinite(v) && v >= 0);
+
+const currentVolume = currentCandle.volume;
+
+const averagePreviousVolume =
+  previousVolumeCandles.length > 0
+    ? previousVolumeCandles.reduce((sum, v) => sum + v, 0) /
+      previousVolumeCandles.length
+    : null;
+
+const volumeConfirmed =
+  Number.isFinite(currentVolume) &&
+  currentVolume > 0 &&
+  Number.isFinite(averagePreviousVolume) &&
+  averagePreviousVolume > 0 &&
+  currentVolume >= averagePreviousVolume * 1.2;
+
+const breakoutConfirmed =
+  price > breakoutPrice &&
+  currentCandle.close > currentCandle.open &&
+  currentCandle.close > breakoutLevel &&
+  currentCandle.high > breakoutLevel &&
+  breakoutExtensionPct <= cfg.maxExtensionPct &&
+  volumeConfirmed;
+
 
   /*
    * Detect whether price is approaching resistance.
@@ -1034,31 +1144,22 @@ export async function analyzeChartEntry(
   // SETUP 1 — PULLBACK ENTRY
   // ===================================================
 
-  /*
-   * A pullback is not automatically an entry.
-   *
-   * We require:
-   *
-   * 1. Bullish structure
-   * 2. Price around EMA20
-   * 3. RSI still healthy enough
-   * 4. Price not overheated
-   *
-   * This is what allows:
-   *
-   * WAIT_PULLBACK
-   *       ↓
-   * ENTER_NOW
-   */
+ 
+const bullishRecoveryConfirmed =
+  currentBullishCandle &&
+  currentCandle.close > previousCandle.close;
 
-  const validPullbackEntry =
-    isBullish &&
-    priceInsidePullbackZone &&
-    !overheated &&
-    rsiVal >=
-      cfg.rsiEntryMin &&
-    trendStrength >=
-      cfg.minTrendStrengthForEntry;
+const validPullbackEntry =
+  isBullish &&
+  hasUpwardImpulse &&
+  priceInsidePullbackZone &&
+  !overheated &&
+  !overextended &&
+  pullbackMomentum &&
+  bullishRecoveryConfirmed &&
+  trendStrength >=
+    cfg.minTrendStrengthForEntry;
+
 
   // ===================================================
   // SETUP 2 — BREAKOUT ENTRY
@@ -1068,11 +1169,9 @@ export async function analyzeChartEntry(
     isBullish &&
     breakoutConfirmed &&
     !overheated &&
-    rsiVal >=
-      cfg.rsiPullbackMin &&
-    trendStrength >=
-      cfg.minTrendStrengthForEntry;
-
+    !overextended &&
+    rsiVal >= cfg.rsiPullbackMin &&
+    trendStrength >= cfg.minTrendStrengthForEntry;
   // ===================================================
   // PULLBACK WATCH
   // ===================================================

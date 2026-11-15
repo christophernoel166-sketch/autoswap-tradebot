@@ -234,44 +234,37 @@ router.post(
         setupType
       ) {
 
-        watch =
-          await createChartWatch({
-            walletAddress:
-              cleanWalletAddress,
+    
+          watch =
+            await createChartWatch({
+              walletAddress:
+                cleanWalletAddress,
 
-            token: {
-              mintAddress:
-                cleanTokenMint,
+              token: {
+                mintAddress: cleanTokenMint,
+                pairAddress: pairAddress || null,
+                symbol: req.body?.symbol || null,
+                name: req.body?.name || null,
+                marketCapUsd:
+                  req.body?.marketCapUsd ??
+                  req.body?.marketCap ??
+                  null,
+                priceUsd:
+                  chartEntry?.metrics?.currentPrice ?? null,
+              },
 
-              pairAddress:
-                pairAddress || null,
+              chartEntry,
 
-              symbol:
-                req.body?.symbol ||
+              forecast:
+                req.body?.forecast ||
                 null,
 
-              name:
-                req.body?.name ||
-                null,
+              autoTrade:
+                Boolean(
+                  req.body?.autoTrade
+                ),
+            });
 
-              priceUsd:
-                chartEntry
-                  ?.metrics
-                  ?.currentPrice ??
-                null,
-            },
-
-            chartEntry,
-
-            forecast:
-              req.body?.forecast ||
-              null,
-
-            autoTrade:
-              Boolean(
-                req.body?.autoTrade
-              ),
-          });
 
         console.log(
           "👁️ LIVE CHART WATCH CREATED:",

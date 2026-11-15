@@ -24,6 +24,10 @@ import {
   serializeChartWatch,
 } from "../services/chartWatchSerializer.js";
 
+import {
+  collectVolumeSnapshot,
+} from "../services/volumeMonitorService.js";
+
 const LOG = console;
 
 // =====================================================
@@ -32,6 +36,16 @@ const LOG = console;
 
 const CHECK_INTERVAL_MS = 30000;
 const AVOID_RECHECK_INTERVAL_MS = 4 * 60 * 1000;
+
+// =====================================================
+// READ-ONLY VOLUME MONITOR
+// =====================================================
+
+const VOLUME_COLLECTION_INTERVAL_MS = 60 * 1000;
+
+const volumeSnapshotByMint = new Map();
+const volumeLastAttemptByMint = new Map();
+
 
 let workerRunning = false;
 let cycleRunning = false;
@@ -52,7 +66,8 @@ let cycleRunning = false;
 
 function emitLiveChartWatchUpdate(
   watch,
-  result
+  result,
+  volumeSnapshot = null
 ) {
 
   if (!watch || !result) {
@@ -90,32 +105,19 @@ function emitLiveChartWatchUpdate(
   // ===================================================
 
   const payload = {
+    watch: serializedWatch,
 
-    watch:
-      serializedWatch,
+    // Latest chart analysis.
+    analysis: result.analysis || null,
 
-    // Latest complete chart analysis.
-    analysis:
-      result.analysis || null,
+    // Read-only volume monitoring data.
+    volumeSnapshot,
 
-    // Action transition information.
-    previousAction:
-      result.previousAction || null,
-
-    currentAction:
-      result.currentAction || null,
-
-    event:
-      result.event || null,
-
-    changed:
-      Boolean(
-        result.changed
-      ),
-
-    updatedAt:
-      new Date(),
-
+    previousAction: result.previousAction || null,
+    currentAction: result.currentAction || null,
+    event: result.event || null,
+    changed: Boolean(result.changed),
+    updatedAt: new Date(),
   };
 
   // ===================================================
@@ -406,7 +408,42 @@ if (systemWatches.length) {
       ] of grouped.entries()
     ) {
 
-      let latestAnalysis;
+
+  // ================================================
+  // READ-ONLY VOLUME COLLECTION
+  // ================================================
+
+  let volumeSnapshot =
+    volumeSnapshotByMint.get(tokenMint) || null;
+
+  const lastVolumeAttempt =
+    volumeLastAttemptByMint.get(tokenMint) || 0;
+
+  if (
+    Date.now() - lastVolumeAttempt >=
+    VOLUME_COLLECTION_INTERVAL_MS
+  ) {
+    volumeLastAttemptByMint.set(tokenMint, Date.now());
+
+    try {
+      volumeSnapshot =
+        await collectVolumeSnapshot(tokenMint);
+
+      volumeSnapshotByMint.set(
+        tokenMint,
+        volumeSnapshot
+      );
+    } catch (volumeError) {
+      LOG.warn(
+        `⚠️ Volume collection failed for ${tokenMint}:`,
+        volumeError?.message || volumeError
+      );
+
+      // Preserve the previous snapshot if collection fails.
+    }
+  }
+
+  let latestAnalysis;
 
       // ===============================================
       // RUN FRESH CHART ANALYSIS
@@ -611,9 +648,10 @@ if (
           // =========================================
 
           emitLiveChartWatchUpdate(
-            watch,
-            result
-          );
+  watch,
+  result,
+  volumeSnapshot
+);
 
           // =========================================
           // NO ACTION CHANGE

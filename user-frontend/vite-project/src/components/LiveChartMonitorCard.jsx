@@ -254,6 +254,39 @@ export default function LiveChartMonitorCard({
   const config =
     getActionConfig(action);
 
+
+  // ================================================
+  // READ-ONLY VOLUME MONITOR
+  // ================================================
+
+  const volumeSnapshot = watch.volumeSnapshot ?? null;
+
+  const rollingWindows = volumeSnapshot?.rollingWindows ?? {};
+
+  const volumeWindows = [
+    { key: "1m", label: "1 Minute", minutes: 1 },
+    { key: "2m", label: "2 Minutes", minutes: 2 },
+    { key: "3m", label: "3 Minutes", minutes: 3 },
+    { key: "5m", label: "5 Minutes", minutes: 5 },
+    { key: "10m", label: "10 Minutes", minutes: 10 },
+  ];
+
+  const volumeTrend = volumeSnapshot?.trend ?? null;
+
+  const formatVolume = (value) => {
+    const number = Number(value);
+
+    if (value == null || !Number.isFinite(number)) {
+      return "--";
+    }
+
+    return number.toLocaleString(undefined, {
+      maximumFractionDigits: 6,
+    });
+  };
+
+
+
   const normalizedConfidence = Math.max(
     0,
     Math.min(100, confidence)
@@ -489,6 +522,100 @@ export default function LiveChartMonitorCard({
           </div>
 
         </div>
+
+
+
+        {/* ==================================================
+            READ-ONLY VOLUME MONITOR
+        ================================================== */}
+
+        <div className="mt-4 rounded-xl border border-purple-500/20 bg-purple-500/5 p-4">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <div className="text-sm font-bold text-purple-300">
+                Volume Monitor
+              </div>
+
+              <div className="mt-1 text-xs text-gray-500">
+                Completed 1-minute candles · Read-only
+              </div>
+            </div>
+
+            <div className="rounded-full border border-gray-700/60 bg-gray-900/60 px-2 py-1 text-[10px] text-gray-400">
+              {volumeSnapshot?.updatedAt
+                ? `Updated ${new Date(
+                    volumeSnapshot.updatedAt
+                  ).toLocaleTimeString()}`
+                : "Waiting for data"}
+            </div>
+          </div>
+
+          {!volumeSnapshot ? (
+            <div className="mt-3 rounded-lg border border-gray-700/50 bg-gray-900/50 px-3 py-4 text-xs text-gray-400">
+              Collecting completed 1-minute candles. Volume readings will
+              appear when data becomes available.
+            </div>
+          ) : (
+            <>
+              <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
+                {volumeWindows.map((window) => {
+                  const reading = rollingWindows[window.key];
+                  const complete = reading?.complete === true;
+
+                  return (
+                    <div
+                      key={window.key}
+                      className="rounded-lg border border-gray-700/60 bg-gray-900/70 px-3 py-3"
+                    >
+                      <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                        {window.label}
+                      </div>
+
+                      <div className="mt-2 break-all text-sm font-semibold text-white">
+                        {formatVolume(reading?.volume)}
+                      </div>
+
+                      <div className="mt-2 text-[10px] text-gray-500">
+                        {reading
+                          ? `${reading.sampleCount ?? 0}/${window.minutes} candles`
+                          : `0/${window.minutes} candles`}
+                      </div>
+
+                      <div
+                        className={`mt-2 text-[10px] font-semibold ${
+                          complete
+                            ? "text-green-400"
+                            : "text-yellow-400"
+                        }`}
+                      >
+                        {complete ? "COMPLETE" : "INCOMPLETE"}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="mt-3 rounded-lg border border-gray-700/50 bg-gray-900/60 px-3 py-3">
+                <div className="text-[10px] uppercase tracking-wide text-gray-500">
+                  Volume Trend
+                </div>
+
+                <div className="mt-1 text-sm font-semibold text-purple-300">
+                  {volumeTrend?.description ||
+                    volumeTrend?.status ||
+                    "Insufficient data"}
+                </div>
+
+                <div className="mt-1 text-[10px] text-gray-500">
+                  {volumeSnapshot.volumeUnit ||
+                    "Provider-reported volume units"}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+
 
         {/* ==================================================
             ENTRY CONFIRMATION
